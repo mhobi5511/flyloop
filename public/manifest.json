@@ -1,0 +1,17 @@
+{
+  "name": "Flyloop",
+  "short_name": "Flyloop",
+  "description": "Discover joinable indoor skydiving opportunities.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0284c7",
+  "icons": [
+    {
+      "src": "/window.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

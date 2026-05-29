@@ -1,36 +1,115 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Flyloop
 
-## Getting Started
+Flyloop is a mobile-first web app for indoor skydiving opportunities. Flyers can follow coaches and tunnels, discover camps and Huck Jams, and send interest when spots are still available.
 
-First, run the development server:
+## Tech Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- Supabase-ready schema and client
+- Local test mode with browser storage and auth cookies
+- PWA-ready manifest
+
+## Local Setup
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The app runs locally without Supabase. To connect Supabase, copy `.env.example` to `.env.local` and add:
 
-## Learn More
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
 
-To learn more about Next.js, take a look at the following resources:
+Apply Supabase migrations from `supabase/migrations` in order. See `supabase/README.md`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Route Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `/` Public landing page
+- `/login` Login
+- `/signup` Signup
+- `/app` Logged-in opportunities feed
+- `/app/opportunities/opp-rafa-last-minute` Opportunity detail
+- `/app/coaches/coach-rafa` Coach profile
+- `/app/tunnels/tunnel-jochen` Tunnel profile
+- `/app/dashboard` Coach dashboard
+- `/app/admin` Admin tools
 
-## Deploy on Vercel
+## Testing Checklist
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Public and auth boundary
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Open `/` and confirm only marketing content is visible
+- Confirm the landing page CTAs go to `/signup` and `/login`
+- Open `/app` in a fresh browser session and confirm it redirects to `/login`
+- Log in as Athlete and confirm `/login` redirects to `/app` afterward
+
+### Flow 1: Athlete discovers opportunity
+
+- Go to `/login`
+- Continue as Athlete
+- Confirm `/app` shows last-minute opportunities first when available
+- Open `Rafa Last-Minute Dynamic Camp`
+- Click `I'm interested`
+- Confirm the success message appears
+- Click `Follow coach`
+- Click `Follow tunnel`
+- Open the notification bell and confirm notifications are listed
+
+### Flow 2: Coach posts opportunity
+
+- Go to `/login`
+- Continue as Coach
+- Open `/app/dashboard`
+- Click `Post Opportunity`
+- Select `Camp` or `Huck Jam`
+- Fill or keep the minimal fields
+- Click `Publish opportunity`
+- Confirm the opportunity appears on `/app`
+- Use a start date within 10 days and open spots greater than 0 to confirm it appears as last-minute
+
+### Flow 3: Coach handles interest
+
+- Open `/app/dashboard`
+- Confirm incoming interests show athlete name, country, phone, WhatsApp and Instagram
+- Change status to `Accepted`, `Declined` or `Waitlist`
+- Refresh the page and confirm the status persists locally
+
+### Flow 4: Admin tools
+
+- Go to `/login`
+- Continue as Admin
+- Open `/app/admin`
+- Switch visual mode between Athlete, Coach and Admin
+- View all opportunities
+- View all interests
+- Click `Reset demo data`
+- Confirm the app returns to seeded state
+
+## Verification
+
+Run:
+
+```bash
+npm run lint
+npm run build
+```
+
+Last-minute is never stored as a separate opportunity type. It is derived in frontend logic and in Supabase with `public.is_last_minute_opportunity(...)`.

@@ -1,0 +1,106 @@
+export type UserRole = "athlete" | "coach" | "admin";
+
+export type OpportunityType = "camp" | "huck_jam";
+
+export type OpportunityStatus = "draft" | "published" | "full" | "cancelled";
+
+export type InterestStatus = "pending" | "accepted" | "declined" | "waitlist";
+
+export type ContactMethod = "whatsapp" | "instagram" | "email";
+
+export type Athlete = {
+  id: string;
+  name: string;
+  country: string;
+  phone: string;
+  instagram: string;
+  homeTunnelId: string;
+  disciplines: string[];
+};
+
+export type Coach = {
+  id: string;
+  name: string;
+  country: string;
+  avatarUrl: string;
+  headline: string;
+  bio: string;
+  languages: string[];
+  disciplines: string[];
+  instagram: string;
+  whatsapp: string;
+  followers: number;
+};
+
+export type Tunnel = {
+  id: string;
+  name: string;
+  city: string;
+  country: string;
+  distanceKm: number;
+  imageUrl: string;
+  followers: number;
+  amenities: string[];
+};
+
+export type Opportunity = {
+  id: string;
+  type: OpportunityType;
+  title: string;
+  coachId?: string;
+  coachName?: string;
+  tunnelId: string;
+  tunnelName?: string;
+  tunnelCity?: string;
+  tunnelCountry?: string;
+  tunnelDistanceKm?: number;
+  isLastMinute?: boolean;
+  startDate: string;
+  endDate: string;
+  registrationDeadline: string;
+  price: number;
+  currency: string;
+  totalCapacity: number;
+  availableSpots: number;
+  minMinutesOrHours?: string;
+  description: string;
+  languages: string[];
+  disciplines: string[];
+  skillLevel: string;
+  status: OpportunityStatus;
+  contactMethod: ContactMethod;
+  createdBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type Interest = {
+  id: string;
+  opportunityId: string;
+  athleteId: string;
+  status: InterestStatus;
+  message?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type FollowTargetType = "coach" | "tunnel";
+
+export type Follow = {
+  id: string;
+  followerId: string;
+  targetType: FollowTargetType;
+  targetId: string;
+  createdAt: string;
+};
+
+export type Notification = {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  type: string;
+  opportunityId?: string;
+  read: boolean;
+  createdAt: string;
+};
