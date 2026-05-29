@@ -1,33 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { updateSupabaseSession } from "@/lib/supabase/proxy";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isLoggedIn = request.cookies.get("flyloop_session")?.value === "1";
-  const role = request.cookies.get("flyloop_role")?.value;
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
+  const { response, user, profile } = await updateSupabaseSession(request);
 
-  if (pathname.startsWith("/app") && !isLoggedIn) {
+  if (pathname.startsWith("/app") && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/app/admin") && role !== "admin") {
+  if (pathname.startsWith("/app/admin") && profile?.role !== "admin") {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  if (isAuthRoute && isLoggedIn) {
+  if (isAuthRoute && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
