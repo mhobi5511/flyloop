@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CalendarPlus, Compass, Home, LayoutDashboard, User } from "lucide-react";
-import { DemoModePill } from "./DemoModePill";
+import { LogoutButton } from "./LogoutButton";
 import { NotificationBell } from "./NotificationBell";
 
 type AppShellProps = {
@@ -29,7 +29,7 @@ export function AppShell({ children, active = "home" }: AppShellProps) {
           </Link>
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <DemoModePill />
+            <LogoutButton />
           </div>
         </div>
       </header>

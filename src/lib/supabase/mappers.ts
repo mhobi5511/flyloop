@@ -1,8 +1,6 @@
-import { getFeedSections } from "./opportunities";
-import { isSupabaseConfigured, supabase } from "./supabase";
-import type { Opportunity } from "./types";
+import type { Opportunity } from "@/lib/types";
 
-type HomeFeedRow = {
+export type HomeFeedRow = {
   id: string;
   type: "camp" | "huck_jam";
   title: string;
@@ -23,15 +21,17 @@ type HomeFeedRow = {
   status: "draft" | "published" | "full" | "cancelled";
   contact_method: "whatsapp" | "instagram" | "email" | string;
   created_by: string;
-  is_last_minute: boolean;
-  feed_priority: number;
-  tunnel_name: string | null;
-  tunnel_country: string | null;
-  tunnel_city: string | null;
-  coach_name: string | null;
+  created_at?: string;
+  updated_at?: string;
+  is_last_minute?: boolean;
+  feed_priority?: number;
+  tunnel_name?: string | null;
+  tunnel_country?: string | null;
+  tunnel_city?: string | null;
+  coach_name?: string | null;
 };
 
-function mapHomeFeedRow(row: HomeFeedRow): Opportunity {
+export function mapOpportunity(row: HomeFeedRow): Opportunity {
   return {
     id: row.id,
     type: row.type,
@@ -53,8 +53,8 @@ function mapHomeFeedRow(row: HomeFeedRow): Opportunity {
     availableSpots: row.available_spots,
     minMinutesOrHours: row.min_minutes_or_hours ?? undefined,
     description: row.description ?? "",
-    languages: row.languages,
-    disciplines: row.disciplines,
+    languages: row.languages ?? [],
+    disciplines: row.disciplines ?? [],
     skillLevel: row.skill_level ?? "All levels",
     status: row.status,
     contactMethod:
@@ -62,32 +62,7 @@ function mapHomeFeedRow(row: HomeFeedRow): Opportunity {
         ? row.contact_method
         : "whatsapp",
     createdBy: row.created_by,
-  };
-}
-
-export async function getHomeFeedSections() {
-  if (!isSupabaseConfigured || !supabase) {
-    return getFeedSections();
-  }
-
-  const { data, error } = await supabase.rpc("get_home_feed");
-
-  if (error || !data) {
-    console.warn("Supabase home feed fallback:", error?.message);
-    return getFeedSections();
-  }
-
-  const rows = data as HomeFeedRow[];
-  const opportunities = rows.map(mapHomeFeedRow);
-
-  return {
-    lastMinute: opportunities.filter((_, index) => rows[index].is_last_minute),
-    nearUser: opportunities.filter((_, index) => rows[index].feed_priority === 2),
-    followedCoaches: opportunities.filter(
-      (_, index) => rows[index].feed_priority === 3,
-    ),
-    followedTunnels: opportunities.filter(
-      (_, index) => rows[index].feed_priority === 4,
-    ),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

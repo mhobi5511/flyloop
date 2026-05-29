@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { AuthRoleCards } from "@/components/AuthRoleCards";
+import { Suspense } from "react";
+import { LoginForm } from "@/components/LoginForm";
 
 export default function AuthPage() {
   return (
@@ -14,9 +15,11 @@ export default function AuthPage() {
             Log in to Flyloop
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Choose your workspace to continue to the app.
+            Use your email and password to continue to the app.
           </p>
-          <AuthRoleCards />
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
           <p className="mt-5 text-center text-sm text-slate-600">
             New to Flyloop?{" "}
             <Link href="/signup" className="font-bold text-sky-700">

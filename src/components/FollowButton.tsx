@@ -1,9 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Check, Plus } from "lucide-react";
-import { currentAthlete } from "@/lib/demo-data";
-import { toggleFollow } from "@/lib/demo-store";
-import { useDemoState } from "@/lib/use-demo-state";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { FollowTargetType } from "@/lib/types";
 
 type FollowButtonProps = {
@@ -13,23 +12,73 @@ type FollowButtonProps = {
 };
 
 export function FollowButton({ targetType, targetId, label }: FollowButtonProps) {
-  const [state, setState] = useDemoState();
-  const isFollowing = state.follows.some(
-    (follow) =>
-      follow.followerId === currentAthlete.id &&
-      follow.targetType === targetType &&
-      follow.targetId === targetId,
-  );
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  function onClick() {
-    setState(toggleFollow(targetType, targetId));
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+
+    async function loadFollow() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return;
+      }
+
+      const { data } = await supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_id", user.id)
+        .eq("target_type", targetType)
+        .eq("target_id", targetId)
+        .maybeSingle();
+
+      setIsFollowing(Boolean(data));
+    }
+
+    void loadFollow();
+  }, [targetId, targetType]);
+
+  async function toggle() {
+    setIsLoading(true);
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (isFollowing) {
+      await supabase
+        .from("follows")
+        .delete()
+        .eq("follower_id", user.id)
+        .eq("target_type", targetType)
+        .eq("target_id", targetId);
+      setIsFollowing(false);
+    } else {
+      await supabase.from("follows").insert({
+        follower_id: user.id,
+        target_type: targetType,
+        target_id: targetId,
+      });
+      setIsFollowing(true);
+    }
+
+    setIsLoading(false);
   }
 
   return (
     <button
       type="button"
-      onClick={onClick}
-      className={`flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold ${
+      onClick={toggle}
+      disabled={isLoading}
+      className={`flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-60 ${
         isFollowing
           ? "border border-slate-200 bg-white text-slate-700"
           : "bg-sky-600 text-white"

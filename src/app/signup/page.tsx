@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AuthRoleCards } from "@/components/AuthRoleCards";
+import { SignupForm } from "@/components/SignupForm";
 
 export default function SignupPage() {
   return (
@@ -16,7 +16,7 @@ export default function SignupPage() {
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Create your Flyloop account as an athlete, coach or admin.
           </p>
-          <AuthRoleCards />
+          <SignupForm />
           <p className="mt-5 text-center text-sm text-slate-600">
             Already have an account?{" "}
             <Link href="/login" className="font-bold text-sky-700">

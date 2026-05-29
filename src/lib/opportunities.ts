@@ -1,10 +1,3 @@
-import {
-  followedCoachIds,
-  followedTunnelIds,
-  getCoach,
-  getTunnel,
-  opportunities,
-} from "./demo-data";
 import type { Opportunity } from "./types";
 
 const lastMinuteWindowDays = 10;
@@ -32,41 +25,14 @@ export function formatOpportunityType(type: Opportunity["type"]) {
 }
 
 export function opportunityViewModel(opportunity: Opportunity) {
-  const coach = getCoach(opportunity.coachId);
-  const tunnel = getTunnel(opportunity.tunnelId);
   return {
     ...opportunity,
-    coach,
-    tunnel,
-    coachDisplayName: coach?.name ?? opportunity.coachName,
-    tunnelDisplayName: tunnel?.name ?? opportunity.tunnelName,
-    tunnelDisplayDistanceKm:
-      tunnel?.distanceKm ?? opportunity.tunnelDistanceKm ?? null,
+    coachDisplayName: opportunity.coachName,
+    tunnelDisplayName: opportunity.tunnelName,
+    tunnelDisplayDistanceKm: opportunity.tunnelDistanceKm ?? null,
     isLastMinute:
       opportunity.isLastMinute ?? isLastMinuteOpportunity(opportunity),
     typeLabel: formatOpportunityType(opportunity.type),
-  };
-}
-
-export function getFeedSections() {
-  const published = opportunities
-    .filter((opportunity) => opportunity.status === "published")
-    .map(opportunityViewModel);
-
-  return {
-    lastMinute: published.filter((opportunity) => opportunity.isLastMinute),
-    nearUser: published
-      .filter((opportunity) => !opportunity.isLastMinute)
-      .sort(
-        (a, b) => (a.tunnel?.distanceKm ?? 9999) - (b.tunnel?.distanceKm ?? 9999),
-      ),
-    followedCoaches: published.filter(
-      (opportunity) =>
-        opportunity.coachId && followedCoachIds.includes(opportunity.coachId),
-    ),
-    followedTunnels: published.filter((opportunity) =>
-      followedTunnelIds.includes(opportunity.tunnelId),
-    ),
   };
 }
 

@@ -1,11 +1,19 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { createDemoOpportunity } from "@/lib/demo-store";
-import { coaches, tunnels } from "@/lib/demo-data";
-import { useDemoState } from "@/lib/use-demo-state";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { OpportunityType } from "@/lib/types";
+
+type CoachOption = {
+  id: string;
+  name: string;
+};
+
+type TunnelOption = {
+  id: string;
+  name: string;
+};
 
 function isoDateFromNow(days: number) {
   const date = new Date();
@@ -15,11 +23,10 @@ function isoDateFromNow(days: number) {
 
 export function CreateOpportunityForm() {
   const router = useRouter();
-  const [, setState] = useDemoState();
   const [type, setType] = useState<OpportunityType>("camp");
-  const [title, setTitle] = useState("Dynamic Camp with Rafa");
-  const [coachId, setCoachId] = useState("coach-rafa");
-  const [tunnelId, setTunnelId] = useState("tunnel-jochen");
+  const [title, setTitle] = useState("Dynamic Camp");
+  const [coachId, setCoachId] = useState("");
+  const [tunnelId, setTunnelId] = useState("");
   const [startDate, setStartDate] = useState(isoDateFromNow(5));
   const [endDate, setEndDate] = useState(isoDateFromNow(6));
   const [registrationDeadline, setRegistrationDeadline] = useState(
@@ -27,6 +34,53 @@ export function CreateOpportunityForm() {
   );
   const [price, setPrice] = useState(420);
   const [totalCapacity, setTotalCapacity] = useState(8);
+  const [coaches, setCoaches] = useState<CoachOption[]>([]);
+  const [tunnels, setTunnels] = useState<TunnelOption[]>([]);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+
+    async function loadOptions() {
+      const [{ data: coachRows }, { data: tunnelRows }] = await Promise.all([
+        supabase
+          .from("coach_profiles")
+          .select("id, profiles(full_name)")
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("tunnel_profiles")
+          .select("id, name")
+          .order("name", { ascending: true }),
+      ]);
+
+      const mappedCoaches =
+        coachRows?.map((row) => {
+          const profileRows = row.profiles as
+            | { full_name?: string }
+            | Array<{ full_name?: string }>
+            | null;
+
+          return {
+          id: row.id,
+          name:
+            Array.isArray(profileRows)
+              ? profileRows[0]?.full_name ?? "Coach"
+              : profileRows?.full_name ?? "Coach",
+          };
+        }) ?? [];
+
+      const mappedTunnels =
+        tunnelRows?.map((row) => ({ id: row.id, name: row.name })) ?? [];
+
+      setCoaches(mappedCoaches);
+      setTunnels(mappedTunnels);
+      setCoachId((current) => current || mappedCoaches[0]?.id || "");
+      setTunnelId((current) => current || mappedTunnels[0]?.id || "");
+    }
+
+    void loadOptions();
+  }, []);
 
   const willBeLastMinute = useMemo(() => {
     const start = new Date(`${startDate}T00:00:00.000Z`);
@@ -36,22 +90,77 @@ export function CreateOpportunityForm() {
     return daysUntilStart >= 0 && daysUntilStart <= 10 && totalCapacity > 0;
   }, [startDate, totalCapacity]);
 
-  function publish() {
-    setState(
-      createDemoOpportunity({
-        type,
-        title: title.trim() || "Untitled opportunity",
-        coachId,
-        tunnelId,
-        startDate,
-        endDate,
-        registrationDeadline,
-        price,
-        totalCapacity,
-        availableSpots: totalCapacity,
-      }),
-    );
+  async function publish() {
+    setError("");
+    setIsLoading(true);
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setError("Please log in again.");
+      setIsLoading(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile || !["coach", "admin"].includes(profile.role)) {
+      setError("Only coaches and admins can publish opportunities.");
+      setIsLoading(false);
+      return;
+    }
+
+    const finalCoachId = type === "camp" ? coachId : coachId || null;
+    if (type === "camp" && !finalCoachId) {
+      setError("Please select a coach for this camp.");
+      setIsLoading(false);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("opportunities").insert({
+      type,
+      title: title.trim() || "Untitled opportunity",
+      coach_id: finalCoachId,
+      tunnel_id: tunnelId,
+      start_date: startDate,
+      end_date: endDate,
+      registration_deadline: registrationDeadline,
+      price,
+      currency: "EUR",
+      total_capacity: totalCapacity,
+      available_spots: totalCapacity,
+      min_minutes_or_hours:
+        type === "camp" ? "45 min per athlete" : "10 min blocks",
+      description:
+        type === "camp"
+          ? "Camp published by a Flyloop coach."
+          : "Huck Jam published on Flyloop.",
+      languages: ["English"],
+      disciplines:
+        type === "camp"
+          ? ["Dynamic", "Angles"]
+          : ["Belly", "Backfly", "Dynamic"],
+      skill_level: type === "camp" ? "Intermediate" : "All levels",
+      status: "published",
+      contact_method: "whatsapp",
+      created_by: user.id,
+    });
+
+    setIsLoading(false);
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
     router.push("/app");
+    router.refresh();
   }
 
   return (
@@ -158,12 +267,19 @@ export function CreateOpportunityForm() {
         </Field>
       </div>
 
+      {error ? (
+        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+          {error}
+        </p>
+      ) : null}
+
       <button
         type="button"
         onClick={publish}
-        className="mt-2 h-12 rounded-xl bg-sky-600 text-sm font-bold text-white"
+        disabled={isLoading}
+        className="mt-2 h-12 rounded-xl bg-sky-600 text-sm font-bold text-white disabled:bg-slate-300"
       >
-        Publish opportunity
+        {isLoading ? "Publishing..." : "Publish opportunity"}
       </button>
     </form>
   );
