@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(searchParams.get("error") ?? "");
+  const [message] = useState(searchParams.get("message") ?? "");
   const [isLoading, setIsLoading] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -26,12 +26,16 @@ export function LoginForm() {
     setIsLoading(false);
 
     if (signInError) {
-      setError(signInError.message);
+      setError(
+        signInError.message === "Email not confirmed"
+          ? "Please confirm your email first, then try logging in again."
+          : signInError.message,
+      );
       return;
     }
 
-    router.push(searchParams.get("next") ?? "/app");
-    router.refresh();
+    const nextPath = searchParams.get("next") ?? "/app";
+    window.location.assign(nextPath);
   }
 
   return (
@@ -61,6 +65,11 @@ export function LoginForm() {
       {error ? (
         <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
           {error}
+        </p>
+      ) : null}
+      {!error && message ? (
+        <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
+          {message}
         </p>
       ) : null}
       <button

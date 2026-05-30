@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type FlyloopPurpose = "join" | "create" | "both";
@@ -14,7 +13,6 @@ function purposeFlags(purpose: FlyloopPurpose) {
 }
 
 export function SignupForm() {
-  const router = useRouter();
   const [purpose, setPurpose] = useState<FlyloopPurpose>("join");
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState("");
@@ -32,12 +30,15 @@ export function SignupForm() {
     setMessage("");
     setIsLoading(true);
 
-    const flags = purposeFlags(purpose);
     const supabase = createSupabaseBrowserClient();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo:
+          typeof window === "undefined"
+            ? undefined
+            : `${window.location.origin}/auth/callback?next=/app`,
         data: {
           full_name: fullName,
           country,
@@ -45,6 +46,7 @@ export function SignupForm() {
           whatsapp_number: phone,
           instagram_handle: instagram,
           flyloop_purpose: purpose,
+          ...purposeFlags(purpose),
         },
       },
     });
@@ -57,29 +59,15 @@ export function SignupForm() {
 
     if (!data.session || !data.user) {
       setIsLoading(false);
-      setMessage("Please confirm your email, then log in.");
+      setMessage(
+        "Account created. Please confirm your email, then log in.",
+      );
       return;
     }
-
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: data.user.id,
-      full_name: fullName,
-      country: country || null,
-      phone: phone || null,
-      whatsapp_number: phone || null,
-      instagram_handle: instagram || null,
-      ...flags,
-    });
 
     setIsLoading(false);
 
-    if (profileError) {
-      setError(profileError.message);
-      return;
-    }
-
-    router.push("/app");
-    router.refresh();
+    window.location.assign("/app");
   }
 
   return (

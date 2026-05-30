@@ -3,18 +3,25 @@ alter table public.profiles
   add column if not exists wants_to_create_opportunities boolean not null default false,
   add column if not exists is_admin boolean not null default false;
 
-update public.profiles
-set
-  is_admin = coalesce(role = 'admin', false),
-  wants_to_create_opportunities = coalesce(role in ('coach', 'admin'), false),
-  wants_to_join_opportunities = true
-where exists (
-  select 1
-  from pg_attribute
-  where attrelid = 'public.profiles'::regclass
-    and attname = 'role'
-    and not attisdropped
-);
+do $$
+begin
+  if exists (
+    select 1
+    from pg_attribute
+    where attrelid = 'public.profiles'::regclass
+      and attname = 'role'
+      and not attisdropped
+  ) then
+    execute $sql$
+      update public.profiles
+      set
+        is_admin = coalesce(role = 'admin', false),
+        wants_to_create_opportunities = coalesce(role in ('coach', 'admin'), false),
+        wants_to_join_opportunities = true
+    $sql$;
+  end if;
+end
+$$;
 
 drop trigger if exists profiles_guard_admin_fields on public.profiles;
 
@@ -60,15 +67,23 @@ alter table public.opportunities
 drop policy if exists "Admins manage profiles" on public.profiles;
 drop policy if exists "Users read own profile" on public.profiles;
 drop policy if exists "Coaches read athletes interested in own opportunities" on public.profiles;
+drop policy if exists "Organizers read interested user profiles" on public.profiles;
 drop policy if exists "Users insert own profile" on public.profiles;
 drop policy if exists "Users update own profile" on public.profiles;
 drop policy if exists "Coaches create own opportunities" on public.opportunities;
 drop policy if exists "Coaches update own opportunities" on public.opportunities;
 drop policy if exists "Coaches delete own opportunities" on public.opportunities;
+drop policy if exists "Organizers create own opportunities" on public.opportunities;
+drop policy if exists "Organizers update own opportunities" on public.opportunities;
+drop policy if exists "Organizers delete own opportunities" on public.opportunities;
 drop policy if exists "Athletes create interests for published opportunities" on public.opportunity_interests;
 drop policy if exists "Athletes read own interests" on public.opportunity_interests;
 drop policy if exists "Coaches read interests for own opportunities" on public.opportunity_interests;
 drop policy if exists "Coaches update interests for own opportunities" on public.opportunity_interests;
+drop policy if exists "Users create interests for published opportunities" on public.opportunity_interests;
+drop policy if exists "Users read own interests" on public.opportunity_interests;
+drop policy if exists "Organizers read interests for own opportunities" on public.opportunity_interests;
+drop policy if exists "Organizers update interests for own opportunities" on public.opportunity_interests;
 
 create policy "Admins manage profiles"
 on public.profiles for all
