@@ -1,7 +1,21 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { CreateOpportunityForm } from "@/components/CreateOpportunityForm";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default function CreateOpportunityPage() {
+export default async function CreateOpportunityPage() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("wants_to_create_opportunities,is_admin")
+    .eq("id", user?.id)
+    .maybeSingle();
+  const canCreate =
+    profile?.wants_to_create_opportunities === true || profile?.is_admin === true;
+
   return (
     <AppShell active="create">
       <div className="mx-auto max-w-3xl">
@@ -10,7 +24,25 @@ export default function CreateOpportunityPage() {
           Publish a camp or Huck Jam with just enough detail for athletes to
           discover it and send interest.
         </p>
-        <CreateOpportunityForm />
+        {canCreate ? (
+          <CreateOpportunityForm />
+        ) : (
+          <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-black tracking-tight">
+              Enable organizer tools
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Turn on creating opportunities in your profile to publish camps
+              or Huck Jams.
+            </p>
+            <Link
+              href="/app/onboarding"
+              className="mt-4 inline-flex h-11 items-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white"
+            >
+              Open profile
+            </Link>
+          </div>
+        )}
       </div>
     </AppShell>
   );

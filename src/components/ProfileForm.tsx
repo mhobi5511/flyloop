@@ -11,6 +11,8 @@ type ProfileFormProps = {
     phone: string | null;
     whatsapp_number: string | null;
     instagram_handle: string | null;
+    wants_to_join_opportunities: boolean;
+    wants_to_create_opportunities: boolean;
   };
 };
 
@@ -21,6 +23,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [whatsapp, setWhatsapp] = useState(profile.whatsapp_number ?? "");
   const [instagram, setInstagram] = useState(profile.instagram_handle ?? "");
+  const [wantsToJoin, setWantsToJoin] = useState(
+    profile.wants_to_join_opportunities,
+  );
+  const [wantsToCreate, setWantsToCreate] = useState(
+    profile.wants_to_create_opportunities,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -47,6 +55,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         phone,
         whatsapp_number: whatsapp,
         instagram_handle: instagram,
+        wants_to_join_opportunities: wantsToJoin,
+        wants_to_create_opportunities: wantsToCreate,
       })
       .eq("id", user.id);
 
@@ -100,6 +110,26 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           className="field"
         />
       </label>
+      <div className="grid gap-2 rounded-2xl bg-slate-50 p-4">
+        <label className="flex items-start gap-3 text-sm font-semibold text-slate-700">
+          <input
+            type="checkbox"
+            checked={wantsToJoin}
+            onChange={(event) => setWantsToJoin(event.target.checked)}
+            className="mt-1"
+          />
+          I want to join camps and Huck Jams
+        </label>
+        <label className="flex items-start gap-3 text-sm font-semibold text-slate-700">
+          <input
+            type="checkbox"
+            checked={wantsToCreate}
+            onChange={(event) => setWantsToCreate(event.target.checked)}
+            className="mt-1"
+          />
+          I want to create camps or Huck Jams
+        </label>
+      </div>
       {message ? (
         <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
           {message}

@@ -77,7 +77,7 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
     }
 
     setHasInterest(true);
-    setMessage("Your interest was sent. The coach can contact you directly.");
+    setMessage("Your interest was sent. The organizer can contact you directly.");
   }
 
   return (
@@ -94,8 +94,8 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
       <p className="mt-3 text-center text-sm leading-6 text-slate-600">
         {message ||
           (hasInterest
-            ? "Your interest was sent. The coach can contact you directly."
-            : "Share your contact details with the coach or organizer.")}
+            ? "Your interest was sent. The organizer can contact you directly."
+            : "Share your contact details with the organizer.")}
       </p>
       {error ? (
         <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">

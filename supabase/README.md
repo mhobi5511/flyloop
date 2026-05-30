@@ -11,6 +11,7 @@ Or paste the SQL files into the Supabase SQL editor in this order:
 1. `supabase/migrations/20260529120000_flyloop_schema.sql`
 2. `supabase/migrations/20260529121000_flyloop_seed.sql`
 3. `supabase/migrations/20260529123000_auth_profile_trigger.sql`
+4. `supabase/migrations/20260529230000_capability_profiles.sql`
 
 Then copy `.env.example` to `.env.local` and add:
 

@@ -13,7 +13,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/app/admin") && profile?.role !== "admin") {
+  if (pathname.startsWith("/app/admin") && profile?.is_admin !== true) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     url.search = "";

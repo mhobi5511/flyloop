@@ -35,11 +35,38 @@ type InterestRow = {
       }>;
 };
 
-export default async function CoachDashboardPage() {
+export default async function OrganizerDashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("wants_to_create_opportunities,is_admin")
+    .eq("id", user?.id)
+    .maybeSingle();
+
+  if (!profile?.wants_to_create_opportunities && !profile?.is_admin) {
+    return (
+      <AppShell active="dashboard">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h1 className="text-3xl font-black tracking-tight">
+            Organizer Dashboard
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Enable creating opportunities in your profile to access organizer
+            tools.
+          </p>
+          <Link
+            href="/app/onboarding"
+            className="mt-4 inline-flex h-11 items-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white"
+          >
+            Open profile
+          </Link>
+        </div>
+      </AppShell>
+    );
+  }
 
   const { data: opportunities } = await supabase
     .from("opportunities")
@@ -66,10 +93,10 @@ export default async function CoachDashboardPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="text-3xl font-black tracking-tight">
-                Coach dashboard
+                Organizer Dashboard
               </h1>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                See demand signals and contact interested athletes externally.
+                See demand signals and contact interested people externally.
               </p>
             </div>
             <Link
@@ -109,7 +136,7 @@ export default async function CoachDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-bold text-sky-700">Inbound interest</p>
-              <h2 className="text-2xl font-black tracking-tight">Athletes</h2>
+              <h2 className="text-2xl font-black tracking-tight">People</h2>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
               {interestRows.length}
@@ -135,10 +162,10 @@ export default async function CoachDashboardPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h3 className="font-bold text-slate-950">
-                        {athlete?.full_name ?? "Athlete"}
+                        {athlete?.full_name ?? "Interested user"}
                       </h3>
                       <p className="text-sm text-slate-600">
-                        {athlete?.country ?? "Country not set"} · {opportunity?.title}
+                        {athlete?.country ?? "Country not set"} - {opportunity?.title}
                       </p>
                     </div>
                     <InterestStatusSupabaseSelect

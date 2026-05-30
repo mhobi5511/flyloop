@@ -14,7 +14,7 @@ export default function SignupPage() {
             Start discovering opportunities.
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Create your Flyloop account as an athlete, coach or admin.
+            Create your account for joining, organizing, or both.
           </p>
           <SignupForm />
           <p className="mt-5 text-center text-sm text-slate-600">

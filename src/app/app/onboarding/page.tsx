@@ -9,7 +9,7 @@ export default async function OnboardingPage() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name,country,phone,whatsapp_number,instagram_handle")
+    .select("full_name,country,phone,whatsapp_number,instagram_handle,wants_to_join_opportunities,wants_to_create_opportunities")
     .eq("id", user?.id)
     .maybeSingle();
 
@@ -28,6 +28,8 @@ export default async function OnboardingPage() {
               phone: "",
               whatsapp_number: "",
               instagram_handle: "",
+              wants_to_join_opportunities: true,
+              wants_to_create_opportunities: false,
             }
           }
         />

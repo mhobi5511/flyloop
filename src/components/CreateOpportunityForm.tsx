@@ -5,11 +5,6 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { OpportunityType } from "@/lib/types";
 
-type CoachOption = {
-  id: string;
-  name: string;
-};
-
 type TunnelOption = {
   id: string;
   name: string;
@@ -25,7 +20,6 @@ export function CreateOpportunityForm() {
   const router = useRouter();
   const [type, setType] = useState<OpportunityType>("camp");
   const [title, setTitle] = useState("Dynamic Camp");
-  const [coachId, setCoachId] = useState("");
   const [tunnelId, setTunnelId] = useState("");
   const [startDate, setStartDate] = useState(isoDateFromNow(5));
   const [endDate, setEndDate] = useState(isoDateFromNow(6));
@@ -34,7 +28,6 @@ export function CreateOpportunityForm() {
   );
   const [price, setPrice] = useState(420);
   const [totalCapacity, setTotalCapacity] = useState(8);
-  const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [tunnels, setTunnels] = useState<TunnelOption[]>([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -43,39 +36,15 @@ export function CreateOpportunityForm() {
     const supabase = createSupabaseBrowserClient();
 
     async function loadOptions() {
-      const [{ data: coachRows }, { data: tunnelRows }] = await Promise.all([
-        supabase
-          .from("coach_profiles")
-          .select("id, profiles(full_name)")
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("tunnel_profiles")
-          .select("id, name")
-          .order("name", { ascending: true }),
-      ]);
-
-      const mappedCoaches =
-        coachRows?.map((row) => {
-          const profileRows = row.profiles as
-            | { full_name?: string }
-            | Array<{ full_name?: string }>
-            | null;
-
-          return {
-          id: row.id,
-          name:
-            Array.isArray(profileRows)
-              ? profileRows[0]?.full_name ?? "Coach"
-              : profileRows?.full_name ?? "Coach",
-          };
-        }) ?? [];
+      const { data: tunnelRows } = await supabase
+        .from("tunnel_profiles")
+        .select("id, name")
+        .order("name", { ascending: true });
 
       const mappedTunnels =
         tunnelRows?.map((row) => ({ id: row.id, name: row.name })) ?? [];
 
-      setCoaches(mappedCoaches);
       setTunnels(mappedTunnels);
-      setCoachId((current) => current || mappedCoaches[0]?.id || "");
       setTunnelId((current) => current || mappedTunnels[0]?.id || "");
     }
 
@@ -106,19 +75,12 @@ export function CreateOpportunityForm() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("wants_to_create_opportunities,is_admin")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!profile || !["coach", "admin"].includes(profile.role)) {
-      setError("Only coaches and admins can publish opportunities.");
-      setIsLoading(false);
-      return;
-    }
-
-    const finalCoachId = type === "camp" ? coachId : coachId || null;
-    if (type === "camp" && !finalCoachId) {
-      setError("Please select a coach for this camp.");
+    if (!profile?.wants_to_create_opportunities && !profile?.is_admin) {
+      setError("Enable creating opportunities in your profile first.");
       setIsLoading(false);
       return;
     }
@@ -126,7 +88,7 @@ export function CreateOpportunityForm() {
     const { error: insertError } = await supabase.from("opportunities").insert({
       type,
       title: title.trim() || "Untitled opportunity",
-      coach_id: finalCoachId,
+      coach_id: null,
       tunnel_id: tunnelId,
       start_date: startDate,
       end_date: endDate,
@@ -139,7 +101,7 @@ export function CreateOpportunityForm() {
         type === "camp" ? "45 min per athlete" : "10 min blocks",
       description:
         type === "camp"
-          ? "Camp published by a Flyloop coach."
+          ? "Camp published by a Flyloop organizer."
           : "Huck Jam published on Flyloop.",
       languages: ["English"],
       disciplines:
@@ -192,20 +154,6 @@ export function CreateOpportunityForm() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Coach">
-          <select
-            className="field"
-            value={coachId}
-            onChange={(event) => setCoachId(event.target.value)}
-          >
-            {type === "huck_jam" ? <option value="">Organizer-led</option> : null}
-            {coaches.map((coach) => (
-              <option key={coach.id} value={coach.id}>
-                {coach.name}
-              </option>
-            ))}
-          </select>
-        </Field>
         <Field label="Tunnel">
           <select
             className="field"

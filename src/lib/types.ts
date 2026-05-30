@@ -1,5 +1,3 @@
-export type UserRole = "athlete" | "coach" | "admin";
-
 export type OpportunityType = "camp" | "huck_jam";
 
 export type OpportunityStatus = "draft" | "published" | "full" | "cancelled";

@@ -3,13 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { UserRole } from "@/lib/types";
+
+type FlyloopPurpose = "join" | "create" | "both";
+
+function purposeFlags(purpose: FlyloopPurpose) {
+  return {
+    wants_to_join_opportunities: purpose === "join" || purpose === "both",
+    wants_to_create_opportunities: purpose === "create" || purpose === "both",
+  };
+}
 
 export function SignupForm() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole>("athlete");
+  const [purpose, setPurpose] = useState<FlyloopPurpose>("join");
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState("");
+  const [phone, setPhone] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,6 +32,7 @@ export function SignupForm() {
     setMessage("");
     setIsLoading(true);
 
+    const flags = purposeFlags(purpose);
     const supabase = createSupabaseBrowserClient();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
@@ -30,7 +41,10 @@ export function SignupForm() {
         data: {
           full_name: fullName,
           country,
-          role,
+          phone,
+          whatsapp_number: phone,
+          instagram_handle: instagram,
+          flyloop_purpose: purpose,
         },
       },
     });
@@ -49,53 +63,65 @@ export function SignupForm() {
 
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: data.user.id,
-      role,
       full_name: fullName,
-      country,
-      disciplines: [],
+      country: country || null,
+      phone: phone || null,
+      whatsapp_number: phone || null,
+      instagram_handle: instagram || null,
+      ...flags,
     });
 
+    setIsLoading(false);
+
     if (profileError) {
-      setIsLoading(false);
       setError(profileError.message);
       return;
     }
 
-    if (role === "coach") {
-      await supabase
-        .from("coach_profiles")
-        .upsert(
-          {
-            user_id: data.user.id,
-            bio: "",
-            disciplines: [],
-            languages: [],
-            achievements: [],
-            coaching_tunnels: [],
-          },
-          { onConflict: "user_id" },
-        );
-    }
-
-    setIsLoading(false);
     router.push("/app");
     router.refresh();
   }
 
   return (
     <form onSubmit={submit} className="mt-6 grid gap-4">
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Account type
-        <select
-          value={role}
-          onChange={(event) => setRole(event.target.value as UserRole)}
-          className="field"
-        >
-          <option value="athlete">Athlete</option>
-          <option value="coach">Coach</option>
-          <option value="admin">Admin</option>
-        </select>
-      </label>
+      <fieldset className="grid gap-2">
+        <legend className="text-sm font-bold text-slate-700">
+          What do you want to use Flyloop for?
+        </legend>
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">
+          <input
+            type="radio"
+            name="purpose"
+            value="join"
+            checked={purpose === "join"}
+            onChange={() => setPurpose("join")}
+            className="mt-1"
+          />
+          Join camps and Huck Jams
+        </label>
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">
+          <input
+            type="radio"
+            name="purpose"
+            value="create"
+            checked={purpose === "create"}
+            onChange={() => setPurpose("create")}
+            className="mt-1"
+          />
+          Create camps or Huck Jams
+        </label>
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">
+          <input
+            type="radio"
+            name="purpose"
+            value="both"
+            checked={purpose === "both"}
+            onChange={() => setPurpose("both")}
+            className="mt-1"
+          />
+          Both
+        </label>
+      </fieldset>
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Full name
         <input
@@ -113,6 +139,24 @@ export function SignupForm() {
           value={country}
           onChange={(event) => setCountry(event.target.value)}
           placeholder="Germany"
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        WhatsApp or phone
+        <input
+          className="field"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          placeholder="+49..."
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        Instagram
+        <input
+          className="field"
+          value={instagram}
+          onChange={(event) => setInstagram(event.target.value)}
+          placeholder="yourhandle"
         />
       </label>
       <label className="grid gap-1 text-sm font-bold text-slate-700">
