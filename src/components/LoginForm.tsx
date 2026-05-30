@@ -58,22 +58,31 @@ export function LoginForm() {
     }
 
     setIsLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      email,
-      {
-        redirectTo: getAppUrl("/auth/callback?next=/reset-password"),
-      },
-    );
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo: getAppUrl(
+            "/auth/callback?next=/reset-password",
+            window.location.origin,
+          ),
+        },
+      );
 
-    setIsLoading(false);
+      if (resetError) {
+        console.error("Password reset request failed", resetError);
+        setError("Could not send password reset email. Please try again.");
+        return;
+      }
 
-    if (resetError) {
-      setError(resetError.message);
-      return;
+      setMessage("Password reset email sent.");
+    } catch (resetError) {
+      console.error("Password reset request failed", resetError);
+      setError("Could not send password reset email. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-
-    setMessage("Password reset email sent.");
   }
 
   return (

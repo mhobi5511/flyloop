@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const nextPath = getSafeNextPath(requestUrl.searchParams.get("next"));
   const { url, anonKey } = getSupabaseConfigOrThrow();
   const cookieStore = await cookies();
-  const redirectUrl = new URL(nextPath, getSiteUrl());
+  const redirectUrl = new URL(nextPath, getSiteUrl(requestUrl.origin));
   const response = NextResponse.redirect(redirectUrl);
 
   const supabase = createServerClient(url, anonKey, {
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const loginUrl = new URL("/login", getSiteUrl());
+  const loginUrl = new URL("/login", getSiteUrl(requestUrl.origin));
   loginUrl.searchParams.set("error", "We could not confirm your sign-in link.");
   return NextResponse.redirect(loginUrl);
 }

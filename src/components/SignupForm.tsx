@@ -31,41 +31,50 @@ export function SignupForm() {
     setMessage("");
     setIsLoading(true);
 
-    const supabase = createSupabaseBrowserClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: getAppUrl("/auth/callback?next=/app"),
-        data: {
-          full_name: fullName,
-          country,
-          phone,
-          whatsapp_number: phone,
-          instagram_handle: instagram,
-          flyloop_purpose: purpose,
-          ...purposeFlags(purpose),
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: getAppUrl(
+            "/auth/callback?next=/app",
+            window.location.origin,
+          ),
+          data: {
+            full_name: fullName,
+            country,
+            phone,
+            whatsapp_number: phone,
+            instagram_handle: instagram,
+            flyloop_purpose: purpose,
+            ...purposeFlags(purpose),
+          },
         },
-      },
-    });
+      });
 
-    if (signUpError) {
+      if (signUpError) {
+        console.error("Signup failed", signUpError);
+        setError(
+          signUpError.message === "User already registered"
+            ? "This email is already registered. Please log in instead."
+            : "Could not create account. Please check your details and try again.",
+        );
+        return;
+      }
+
+      if (!data.session || !data.user) {
+        setMessage("Account created. Please confirm your email, then log in.");
+        return;
+      }
+
+      window.location.assign("/app");
+    } catch (signupError) {
+      console.error("Signup request failed", signupError);
+      setError("Could not create account. Please try again in a moment.");
+    } finally {
       setIsLoading(false);
-      setError(signUpError.message);
-      return;
     }
-
-    if (!data.session || !data.user) {
-      setIsLoading(false);
-      setMessage(
-        "Account created. Please confirm your email, then log in.",
-      );
-      return;
-    }
-
-    setIsLoading(false);
-
-    window.location.assign("/app");
   }
 
   return (
