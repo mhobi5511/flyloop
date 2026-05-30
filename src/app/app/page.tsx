@@ -4,7 +4,7 @@ import { Section } from "@/components/Section";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { distanceKm, parseCoordinate } from "@/lib/location";
-import type { Opportunity } from "@/lib/types";
+import type { InterestStatus, Opportunity } from "@/lib/types";
 
 type HomeProfile = {
   full_name: string | null;
@@ -18,6 +18,11 @@ type FollowedCoach = {
   id: string;
   full_name: string;
   country: string | null;
+};
+
+type InterestRow = {
+  opportunity_id: string;
+  status: InterestStatus;
 };
 
 export default async function AppHomePage() {
@@ -42,6 +47,15 @@ export default async function AppHomePage() {
       .eq("target_type", "coach"),
   ]);
   const followedCoachIds = (followRows ?? []).map((follow) => follow.target_id);
+  const opportunityIds = ((data ?? []) as HomeFeedRow[]).map((row) => row.id);
+  const { data: interestRows } =
+    user && opportunityIds.length > 0
+      ? await supabase
+          .from("opportunity_interests")
+          .select("opportunity_id,status")
+          .eq("athlete_id", user.id)
+          .in("opportunity_id", opportunityIds)
+      : { data: [] };
   const { data: followedCoachRows } =
     followedCoachIds.length > 0
       ? await supabase
@@ -53,6 +67,12 @@ export default async function AppHomePage() {
 
   const homeProfile = profile as HomeProfile | null;
   const rows = (data ?? []) as HomeFeedRow[];
+  const interestByOpportunityId = new Map(
+    ((interestRows ?? []) as InterestRow[]).map((interest) => [
+      interest.opportunity_id,
+      interest.status,
+    ]),
+  );
   const mapped = rows.map((row) => {
     const location = classifyLocation(row, homeProfile);
     return {
@@ -60,6 +80,7 @@ export default async function AppHomePage() {
         ...mapOpportunity(row),
         tunnelDistanceKm: location.distanceKm ?? undefined,
         locationLabel: location.label,
+        viewerInterestStatus: interestByOpportunityId.get(row.id),
       },
       isNearby: location.isNearby,
       isLastMinute: row.is_last_minute ?? false,
@@ -96,17 +117,13 @@ export default async function AppHomePage() {
 
   return (
     <AppShell active="home">
-      <div className="rounded-3xl bg-gradient-to-br from-sky-600 to-cyan-500 p-5 text-white shadow-sm">
+      <div className="rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-500 px-4 py-4 text-white shadow-sm sm:px-5">
         <p className="text-sm font-bold text-sky-100">
           Good to see you{homeProfile?.full_name ? `, ${homeProfile.full_name}` : ""}
         </p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight">
-          Find flying you can still join.
+        <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
+          Find flying opportunities you can still join.
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50">
-          Last-minute opportunities appear first automatically when dates,
-          deadline and open capacity line up.
-        </p>
       </div>
 
       {lastMinute.length > 0 ? (

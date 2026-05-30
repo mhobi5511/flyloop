@@ -23,6 +23,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 
 `NEXT_PUBLIC_SITE_URL` must be the canonical Flyloop production HTTPS origin configured in Vercel. Auth links are generated from this value, and the app rejects non-HTTPS site URLs.
 
+For local development, set `NEXT_PUBLIC_SITE_URL=http://localhost:3000` in `.env.local`. Production must use the deployed HTTPS domain, never a localhost URL.
+
 ## Supabase Auth Checklist
 
 - Site URL: the exact `NEXT_PUBLIC_SITE_URL` production origin.
@@ -38,6 +40,37 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 - Additional redirect origins for preview or development deployments: none.
 - Admin accounts: created manually in Supabase only.
 - Tunnel records: created and managed by admins only.
+
+## Email Branding
+
+Supabase Auth emails are controlled in both places:
+
+- Supabase Dashboard controls the actual email template HTML, subject, logo, colors, button styles and wording.
+- Flyloop application code controls the redirect URL sent to Supabase through `emailRedirectTo` / `redirectTo`.
+
+Change Supabase email templates in Supabase Dashboard: Authentication -> Emails -> Templates.
+
+Use these templates:
+
+- Confirm signup: keep the action link pointed at Supabase's `{{ .ConfirmationURL }}`.
+- Password recovery: use Supabase's recovery action link.
+- Magic link, if enabled: use Supabase's magic-link action link.
+
+Change email styling in the Supabase template editor:
+
+- Logo: replace the image or brand mark in the template HTML.
+- Colors: update inline CSS/background/text colors in the template HTML.
+- Button styles: update the CTA anchor styles in the template HTML.
+- Wording: update the template subject and body copy in Supabase Dashboard.
+
+Change redirect destinations in application code:
+
+- Signup confirmation redirect: `src/components/SignupForm.tsx`
+- Password reset redirect: `src/components/LoginForm.tsx`
+- Callback route after Supabase confirms the code: `src/app/auth/callback/route.ts`
+- Shared URL resolver: `src/lib/site-url.ts`
+
+Production email redirects use `NEXT_PUBLIC_SITE_URL`. Local development may use `http://localhost:3000`, but production must set `NEXT_PUBLIC_SITE_URL` to the deployed HTTPS Flyloop domain and Supabase Auth Redirect URLs must match it.
 
 ## Database Checklist
 

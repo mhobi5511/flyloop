@@ -15,6 +15,7 @@ type OpportunityCardProps = {
 
 export function OpportunityCard({ opportunity, compact = false }: OpportunityCardProps) {
   const view = opportunityViewModel(opportunity);
+  const location = formatCardLocation(opportunity);
 
   return (
     <Link
@@ -30,16 +31,24 @@ export function OpportunityCard({ opportunity, compact = false }: OpportunityCar
             {view.isLastMinute ? (
               <Badge tone="amber">Last-minute opportunity</Badge>
             ) : null}
+            {opportunity.viewerInterestStatus ? (
+              <Badge tone={statusTone(opportunity.viewerInterestStatus)}>
+                {statusLabel(opportunity.viewerInterestStatus)}
+              </Badge>
+            ) : null}
           </div>
           <h3 className="text-lg font-bold tracking-tight text-slate-950">
             {opportunity.title}
           </h3>
-          <p className="mt-1 text-sm text-slate-600">
-            {view.coachDisplayName ?? "Organizer-led"} at{" "}
-            {view.tunnelDisplayName ?? "selected tunnel"}
-          </p>
+          <div className="mt-1 grid gap-0.5 text-sm text-slate-600">
+            <p>{view.coachDisplayName ?? "Organizer-led"}</p>
+            <p className="font-semibold text-slate-700">
+              {view.tunnelDisplayName ?? "Tunnel"}
+            </p>
+            <p>{location}</p>
+          </div>
         </div>
-        <div className="rounded-xl bg-sky-50 px-3 py-2 text-right">
+        <div className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-right">
           <div className="text-sm font-bold text-sky-800">
             {formatPrice(opportunity.price, opportunity.currency)}
           </div>
@@ -53,19 +62,14 @@ export function OpportunityCard({ opportunity, compact = false }: OpportunityCar
         </p>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-semibold text-slate-600">
+      <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
         <div className="flex items-center gap-1.5">
           <CalendarDays size={15} className="text-sky-600" />
           <span>{formatDateRange(opportunity.startDate, opportunity.endDate)}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <MapPin size={15} className="text-sky-600" />
-          <span>
-            {opportunity.locationLabel ??
-              (view.tunnelDisplayDistanceKm === null
-                ? opportunity.tunnelRegion ?? "Browse"
-                : `${Math.round(view.tunnelDisplayDistanceKm)} km away`)}
-          </span>
+          <span>{location}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Users size={15} className="text-sky-600" />
@@ -74,4 +78,45 @@ export function OpportunityCard({ opportunity, compact = false }: OpportunityCar
       </div>
     </Link>
   );
+}
+
+function formatCardLocation(opportunity: Opportunity) {
+  const city = opportunity.tunnelCity?.trim();
+  const country = opportunity.tunnelCountry?.trim();
+
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+
+  if (city) {
+    return city;
+  }
+
+  if (country) {
+    return country;
+  }
+
+  return "Location to be confirmed";
+}
+
+function statusLabel(status: NonNullable<Opportunity["viewerInterestStatus"]>) {
+  return status === "waitlist"
+    ? "Waitlist"
+    : status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function statusTone(status: NonNullable<Opportunity["viewerInterestStatus"]>) {
+  if (status === "accepted") {
+    return "green";
+  }
+
+  if (status === "declined") {
+    return "red";
+  }
+
+  if (status === "waitlist") {
+    return "amber";
+  }
+
+  return "slate";
 }

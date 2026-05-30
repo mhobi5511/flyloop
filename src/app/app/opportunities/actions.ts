@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { InterestStatus } from "@/lib/types";
 
 type ActionResult =
-  | { ok: true; message: string }
+  | { ok: true; message: string; status?: InterestStatus }
   | { ok: false; message: string };
 
 export async function sendOpportunityInterest(
@@ -46,6 +47,26 @@ export async function sendOpportunityInterest(
     return { ok: false, message: "This opportunity is already full." };
   }
 
+  const { data: existingInterest, error: existingError } = await supabase
+    .from("opportunity_interests")
+    .select("status")
+    .eq("opportunity_id", opportunityId)
+    .eq("athlete_id", user.id)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Interest duplicate lookup failed", existingError);
+    return { ok: false, message: "Could not send interest. Please try again." };
+  }
+
+  if (existingInterest) {
+    return {
+      ok: true,
+      message: `You already applied. Current status: ${formatInterestStatus(existingInterest.status)}.`,
+      status: existingInterest.status as InterestStatus,
+    };
+  }
+
   const { error } = await supabase.from("opportunity_interests").insert({
     opportunity_id: opportunityId,
     athlete_id: user.id,
@@ -67,7 +88,14 @@ export async function sendOpportunityInterest(
   return {
     ok: true,
     message: "Your interest was sent. The organizer can contact you directly.",
+    status: "pending",
   };
+}
+
+function formatInterestStatus(status: string) {
+  return status === "waitlist"
+    ? "Waitlist"
+    : status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 export async function cancelOpportunity(

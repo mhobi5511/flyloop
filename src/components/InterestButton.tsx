@@ -4,14 +4,22 @@ import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sendOpportunityInterest } from "@/app/app/opportunities/actions";
+import type { InterestStatus } from "@/lib/types";
 
 type InterestButtonProps = {
   opportunityId: string;
   disabled?: boolean;
+  initialStatus?: InterestStatus;
 };
 
-export function InterestButton({ opportunityId, disabled }: InterestButtonProps) {
-  const [hasInterest, setHasInterest] = useState(false);
+export function InterestButton({
+  opportunityId,
+  disabled,
+  initialStatus,
+}: InterestButtonProps) {
+  const [interestStatus, setInterestStatus] = useState<InterestStatus | null>(
+    initialStatus ?? null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -30,16 +38,18 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
 
       const { data } = await supabase
         .from("opportunity_interests")
-        .select("id")
+        .select("status")
         .eq("opportunity_id", opportunityId)
         .eq("athlete_id", user.id)
         .maybeSingle();
 
-      setHasInterest(Boolean(data));
+      setInterestStatus((data?.status as InterestStatus | undefined) ?? null);
     }
 
-    void loadInterest();
-  }, [opportunityId]);
+    if (!initialStatus) {
+      void loadInterest();
+    }
+  }, [initialStatus, opportunityId]);
 
   async function sendInterest() {
     setIsLoading(true);
@@ -55,9 +65,16 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
       return;
     }
 
-    setHasInterest(true);
+    setInterestStatus(result.status ?? "pending");
     setMessage(result.message);
   }
+
+  const hasInterest = Boolean(interestStatus);
+  const buttonLabel = interestStatus
+    ? statusButtonLabel(interestStatus)
+    : isLoading
+      ? "Sending..."
+      : "I'm interested";
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -68,12 +85,12 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
         className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
       >
         <Send size={18} />
-        {hasInterest ? "Interest sent" : isLoading ? "Sending..." : "I'm interested"}
+        {buttonLabel}
       </button>
       <p className="mt-3 text-center text-sm leading-6 text-slate-600">
         {message ||
-          (hasInterest
-            ? "Your interest was sent. The organizer can contact you directly."
+          (interestStatus
+            ? statusHint(interestStatus)
             : "Share your contact details with the organizer.")}
       </p>
       {error ? (
@@ -83,4 +100,36 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
       ) : null}
     </div>
   );
+}
+
+function statusButtonLabel(status: InterestStatus) {
+  if (status === "accepted") {
+    return "Accepted";
+  }
+
+  if (status === "declined") {
+    return "Declined";
+  }
+
+  if (status === "waitlist") {
+    return "Waitlist";
+  }
+
+  return "Pending";
+}
+
+function statusHint(status: InterestStatus) {
+  if (status === "accepted") {
+    return "You already applied and were accepted.";
+  }
+
+  if (status === "declined") {
+    return "You already applied. This application was declined.";
+  }
+
+  if (status === "waitlist") {
+    return "You already applied and are on the waitlist.";
+  }
+
+  return "You already applied. Your application is pending.";
 }

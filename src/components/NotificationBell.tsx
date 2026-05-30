@@ -33,6 +33,19 @@ export function NotificationBell() {
     }
 
     void loadNotifications();
+
+    const channel = supabase
+      .channel("notification-bell")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        () => void loadNotifications(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, []);
 
   async function markRead() {
@@ -46,6 +59,7 @@ export function NotificationBell() {
     setNotifications((current) =>
       current.map((notification) => ({ ...notification, read: true })),
     );
+    window.dispatchEvent(new Event("flyloop-notifications-read"));
   }
 
   return (
@@ -79,7 +93,9 @@ export function NotificationBell() {
               <Link
                 key={notification.id}
                 href={
-                  notification.opportunity_id
+                  notification.opportunity_id && notification.type === "new_interest"
+                    ? `/app/organizer/opportunities/${notification.opportunity_id}`
+                    : notification.opportunity_id
                     ? `/app/opportunities/${notification.opportunity_id}`
                     : "/app"
                 }

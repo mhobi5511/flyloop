@@ -69,6 +69,7 @@ export type Opportunity = {
   disciplines: string[];
   skillLevel: string | null;
   status: OpportunityStatus;
+  viewerInterestStatus?: InterestStatus;
   contactMethod: ContactMethod;
   createdBy: string;
   createdAt?: string;

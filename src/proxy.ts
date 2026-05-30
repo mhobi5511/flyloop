@@ -38,6 +38,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (
+    pathname.startsWith("/app/applications") &&
+    profile?.wants_to_join_opportunities === false
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/app";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";

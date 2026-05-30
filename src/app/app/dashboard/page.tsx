@@ -16,8 +16,8 @@ type OrganizerOpportunityRow = {
   total_capacity: number;
   available_spots: number;
   tunnel_profiles:
-    | { name: string }
-    | Array<{ name: string }>
+    | { name: string; city: string | null; country: string | null }
+    | Array<{ name: string; city: string | null; country: string | null }>
     | null;
   opportunity_interests:
     | Array<{ status: InterestStatus }>
@@ -60,7 +60,7 @@ export default async function OrganizerDashboardPage() {
 
   const { data: opportunities } = await supabase
     .from("opportunities")
-    .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,tunnel_profiles(name),opportunity_interests(status)")
+    .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,tunnel_profiles(name,city,country),opportunity_interests(status)")
     .eq("created_by", user?.id)
     .order("start_date", { ascending: true });
   const opportunityRows = (opportunities ?? []) as OrganizerOpportunityRow[];
@@ -113,13 +113,14 @@ export default async function OrganizerDashboardPage() {
                 {opportunity.title}
               </h2>
               <p className="mt-2 text-sm font-semibold text-slate-600">
-                {tunnel?.name ?? "Tunnel"} -{" "}
+                {tunnel?.name ?? "Tunnel"}
+                {tunnel ? `, ${formatLocation(tunnel.city, tunnel.country)}` : ""} -{" "}
                 {formatDateRange(opportunity.start_date, opportunity.end_date)}
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 {opportunity.available_spots} / {opportunity.total_capacity} spots open
               </p>
-              <div className="mt-4 grid grid-cols-5 gap-2 text-center">
+              <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
                 <Count label="Total" value={interests.length} />
                 <Count label="Pending" value={counts.pending} />
                 <Count label="Accepted" value={counts.accepted} />
@@ -138,6 +139,14 @@ export default async function OrganizerDashboardPage() {
       ) : null}
     </AppShell>
   );
+}
+
+function formatLocation(city?: string | null, country?: string | null) {
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+
+  return city ?? country ?? "Location to be confirmed";
 }
 
 function Count({ label, value }: { label: string; value: number }) {

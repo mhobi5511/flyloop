@@ -15,6 +15,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import type { ReactNode } from "react";
+import type { InterestStatus } from "@/lib/types";
 
 export default async function OpportunityDetailPage({
   params,
@@ -38,6 +39,17 @@ export default async function OpportunityDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
   const opportunity = mapOpportunity(row as HomeFeedRow);
+  const { data: viewerInterest } =
+    user && user.id !== opportunity.createdBy
+      ? await supabase
+          .from("opportunity_interests")
+          .select("status")
+          .eq("opportunity_id", opportunity.id)
+          .eq("athlete_id", user.id)
+          .maybeSingle()
+      : { data: null };
+  const viewerInterestStatus =
+    (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const isOrganizer = user?.id === opportunity.createdBy;
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
@@ -82,6 +94,9 @@ export default async function OpportunityDetailPage({
               <Link className="text-sky-700" href={`/app/tunnels/${opportunity.tunnelId}`}>
                 {opportunity.tunnelName}
               </Link>
+              <span className="block text-slate-600">
+                {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
+              </span>
             </Info>
             <Info icon={<Users size={18} />} label="Availability">
               {opportunity.availableSpots} of {opportunity.totalCapacity} spots open
@@ -150,7 +165,11 @@ export default async function OpportunityDetailPage({
           {isOrganizer ? (
             <OrganizerOpportunityActions opportunityId={opportunity.id} />
           ) : (
-            <InterestButton opportunityId={opportunity.id} disabled={isUnavailable} />
+            <InterestButton
+              opportunityId={opportunity.id}
+              disabled={isUnavailable}
+              initialStatus={viewerInterestStatus}
+            />
           )}
           {!isOrganizer ? (
             <FollowButton
@@ -163,6 +182,14 @@ export default async function OpportunityDetailPage({
       </div>
     </AppShell>
   );
+}
+
+function formatLocation(city?: string, country?: string) {
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+
+  return city ?? country ?? "Location to be confirmed";
 }
 
 function getMeaningfulDescription(description: string) {

@@ -259,7 +259,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
 
   return (
     <form
-      className="mt-5 grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+      className="mt-5 grid w-full max-w-full gap-6 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
@@ -311,13 +311,13 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
         </Field>
         <button
           type="button"
-          className="justify-self-start text-sm font-bold text-sky-700"
+          className="max-w-full justify-self-start text-left text-sm font-bold text-sky-700"
           onClick={() => setShowTunnelForm((current) => !current)}
         >
           If your tunnel is missing, add it here.
         </button>
         {showTunnelForm ? (
-          <div className="grid gap-4 border-l-2 border-sky-100 pl-4">
+          <div className="grid min-w-0 gap-4 border-l-2 border-sky-100 pl-3 sm:pl-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Tunnel name" required>
                 <input
@@ -383,7 +383,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
               type="button"
               disabled={isPending}
               onClick={submitTunnel}
-              className="h-11 justify-self-start rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:bg-slate-300"
+              className="h-11 w-full justify-self-start rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:bg-slate-300 sm:w-auto"
             >
               {isPending ? "Saving..." : "Add new tunnel"}
             </button>
@@ -523,7 +523,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
       <button
         type="submit"
         disabled={isPending}
-        className="h-12 rounded-xl bg-sky-600 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+        className="h-12 w-full rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
       >
         {isPending ? "Publishing..." : "Publish opportunity"}
       </button>
@@ -554,7 +554,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-bold text-slate-700">
+    <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
       <span>
         {label}
         {required ? <span className="text-rose-600"> *</span> : null}

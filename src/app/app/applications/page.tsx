@@ -17,7 +17,10 @@ type ApplicationRow = {
         type: OpportunityType;
         start_date: string;
         end_date: string;
-        tunnel_profiles: { name: string } | Array<{ name: string }> | null;
+        tunnel_profiles:
+          | { name: string; city: string | null; country: string | null }
+          | Array<{ name: string; city: string | null; country: string | null }>
+          | null;
         coach_profiles:
           | {
               profiles: { full_name: string } | Array<{ full_name: string }> | null;
@@ -37,7 +40,10 @@ type ApplicationRow = {
         type: OpportunityType;
         start_date: string;
         end_date: string;
-        tunnel_profiles: { name: string } | Array<{ name: string }> | null;
+        tunnel_profiles:
+          | { name: string; city: string | null; country: string | null }
+          | Array<{ name: string; city: string | null; country: string | null }>
+          | null;
         coach_profiles:
           | {
               profiles: { full_name: string } | Array<{ full_name: string }> | null;
@@ -68,22 +74,23 @@ export default async function ApplicationsPage() {
   const [{ data: profile }, { data: applications }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("wants_to_create_opportunities")
+      .select("wants_to_join_opportunities,wants_to_create_opportunities")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("id,status,created_at,opportunities(id,title,type,start_date,end_date,tunnel_profiles(name),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
+      .select("id,status,created_at,opportunities(id,title,type,start_date,end_date,tunnel_profiles(name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
   ]);
   const rows = (applications ?? []) as ApplicationRow[];
   const canCreate = profile?.wants_to_create_opportunities === true;
+  const canJoin = profile?.wants_to_join_opportunities !== false;
 
   return (
-    <AppShell active="applications" canCreate={canCreate}>
+    <AppShell active="applications" canCreate={canCreate} canJoin={canJoin}>
       <div>
-        <h1 className="text-3xl font-black tracking-tight">My Applications</h1>
+        <h1 className="text-3xl font-black tracking-tight">Applications</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           Track the opportunities where you have sent interest.
         </p>
@@ -135,7 +142,10 @@ export default async function ApplicationsPage() {
               </Link>
               <div className="mt-3 grid gap-1 text-sm text-slate-600">
                 <p>Organizer: {organizerName}</p>
-                <p>Tunnel: {tunnel?.name ?? "Tunnel"}</p>
+                <p>
+                  Tunnel: {tunnel?.name ?? "Tunnel"}
+                  {tunnel ? `, ${formatLocation(tunnel.city, tunnel.country)}` : ""}
+                </p>
                 <p>Date: {formatDateRange(opportunity.start_date, opportunity.end_date)}</p>
                 <p>Sent: {formatSubmittedDate(application.created_at)}</p>
               </div>
@@ -159,6 +169,14 @@ export default async function ApplicationsPage() {
       ) : null}
     </AppShell>
   );
+}
+
+function formatLocation(city?: string | null, country?: string | null) {
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+
+  return city ?? country ?? "Location to be confirmed";
 }
 
 function formatSubmittedDate(value: string) {

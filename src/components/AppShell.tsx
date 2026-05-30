@@ -10,12 +10,14 @@ import {
 } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { NotificationBell } from "./NotificationBell";
+import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type AppShellProps = {
   children: ReactNode;
   active?: "home" | "create" | "dashboard" | "applications" | "profile";
   canCreate?: boolean;
+  canJoin?: boolean;
 };
 
 const baseNavItems = [
@@ -29,7 +31,7 @@ const organizerNavItems = [
 
 const applicationNavItem = {
   href: "/app/applications",
-  label: "My Applications",
+  label: "Applications",
   id: "applications",
   icon: ClipboardList,
 } as const;
@@ -41,35 +43,53 @@ const profileNavItem = {
   icon: User,
 } as const;
 
-async function getCanCreate() {
+async function getShellState() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return false;
+    return {
+      canCreate: false,
+      canJoin: true,
+      organizerUnreadCount: 0,
+    };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("wants_to_create_opportunities")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { count: organizerUnreadCount }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("wants_to_join_opportunities,wants_to_create_opportunities")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("read", false)
+      .eq("type", "new_interest"),
+  ]);
 
-  return profile?.wants_to_create_opportunities === true;
+  return {
+    canCreate: profile?.wants_to_create_opportunities === true,
+    canJoin: profile?.wants_to_join_opportunities !== false,
+    organizerUnreadCount: organizerUnreadCount ?? 0,
+  };
 }
 
 export async function AppShell({
   children,
   active = "home",
   canCreate,
+  canJoin,
 }: AppShellProps) {
-  const userCanCreate = canCreate ?? (await getCanCreate());
+  const shellState = await getShellState();
+  const userCanCreate = canCreate ?? shellState.canCreate;
+  const userCanJoin = canJoin ?? shellState.canJoin;
   const navItems = [
     ...baseNavItems,
     ...(userCanCreate ? organizerNavItems : []),
-    applicationNavItem,
+    ...(userCanJoin ? [applicationNavItem] : []),
     profileNavItem,
   ];
 
@@ -97,7 +117,10 @@ export async function AppShell({
                   }`}
                 >
                   <Icon size={17} />
-                  {item.label}
+                  <span className="whitespace-nowrap">{item.label}</span>
+                  {item.id === "dashboard" ? (
+                    <OrganizerNavBadge initialCount={shellState.organizerUnreadCount} />
+                  ) : null}
                 </Link>
               );
             })}
@@ -125,12 +148,15 @@ export async function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold ${
+                className={`relative flex min-w-0 flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-[0.68rem] font-semibold ${
                   selected ? "bg-sky-50 text-sky-700" : "text-slate-500"
                 }`}
               >
                 <Icon size={19} />
-                {item.label}
+                <span className="max-w-full whitespace-nowrap leading-none">{item.label}</span>
+                {item.id === "dashboard" ? (
+                  <OrganizerNavBadge initialCount={shellState.organizerUnreadCount} compact />
+                ) : null}
               </Link>
             );
           })}

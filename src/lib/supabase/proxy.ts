@@ -34,7 +34,7 @@ export async function updateSupabaseSession(request: NextRequest) {
   const { data: profile } = user
     ? await supabase
         .from("profiles")
-        .select("is_admin,wants_to_create_opportunities")
+        .select("is_admin,wants_to_join_opportunities,wants_to_create_opportunities")
         .eq("id", user.id)
         .maybeSingle()
     : { data: null };
