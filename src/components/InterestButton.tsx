@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { sendOpportunityInterest } from "@/app/app/opportunities/actions";
 
 type InterestButtonProps = {
   opportunityId: string;
@@ -45,40 +46,17 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
     setError("");
     setMessage("");
 
-    const supabase = createSupabaseBrowserClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setError("Please log in again.");
-      setIsLoading(false);
-      return;
-    }
-
-    const { error: insertError } = await supabase
-      .from("opportunity_interests")
-      .insert({
-        opportunity_id: opportunityId,
-        athlete_id: user.id,
-        status: "pending",
-      });
+    const result = await sendOpportunityInterest(opportunityId);
 
     setIsLoading(false);
 
-    if (insertError) {
-      if (insertError.code === "23505") {
-        setHasInterest(true);
-        setMessage("Your interest was already sent.");
-        return;
-      }
-      console.error("Interest creation failed", insertError);
-      setError("Could not send interest. Please try again.");
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
 
     setHasInterest(true);
-    setMessage("Your interest was sent. The organizer can contact you directly.");
+    setMessage(result.message);
   }
 
   return (

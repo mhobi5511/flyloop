@@ -55,7 +55,7 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
     description: row.description ?? "",
     languages: row.languages ?? [],
     disciplines: row.disciplines ?? [],
-    skillLevel: row.skill_level ?? "All levels",
+    skillLevel: row.skill_level ?? null,
     status: row.status,
     contactMethod:
       row.contact_method === "instagram" || row.contact_method === "email"

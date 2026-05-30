@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
+import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
 import {
   formatDateRange,
   formatPrice,
@@ -33,11 +34,22 @@ export default async function OpportunityDetailPage({
     notFound();
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const opportunity = mapOpportunity(row as HomeFeedRow);
+  const isOrganizer = user?.id === opportunity.createdBy;
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
   const isLastMinute =
     opportunity.isLastMinute ?? isLastMinuteOpportunity(opportunity);
+  const description = getMeaningfulDescription(opportunity.description);
+  const detailRows = getDetailRows({
+    skillLevel: opportunity.skillLevel,
+    disciplines: opportunity.disciplines,
+    minMinutesOrHours: opportunity.minMinutesOrHours,
+    registrationDeadline: opportunity.registrationDeadline,
+  });
 
   return (
     <AppShell active="home">
@@ -56,9 +68,11 @@ export default async function OpportunityDetailPage({
           <h1 className="mt-4 text-4xl font-black leading-tight tracking-tight">
             {opportunity.title}
           </h1>
-          <p className="mt-3 text-base leading-7 text-slate-600">
-            {opportunity.description}
-          </p>
+          {description ? (
+            <p className="mt-3 text-base leading-7 text-slate-600">
+              {description}
+            </p>
+          ) : null}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <Info icon={<CalendarDays size={18} />} label="Dates">
@@ -72,24 +86,28 @@ export default async function OpportunityDetailPage({
             <Info icon={<Users size={18} />} label="Availability">
               {opportunity.availableSpots} of {opportunity.totalCapacity} spots open
             </Info>
-            <Info icon={<Globe2 size={18} />} label="Languages">
-              {opportunity.languages.join(", ")}
-            </Info>
+            {opportunity.languages.length > 0 ? (
+              <Info icon={<Globe2 size={18} />} label="Languages">
+                {opportunity.languages.join(", ")}
+              </Info>
+            ) : null}
           </div>
 
           <div className="mt-6 rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-bold text-slate-700">Details</p>
-            <div className="mt-3 grid gap-2 text-sm text-slate-600">
-              <p>Skill level: {opportunity.skillLevel}</p>
-              <p>Disciplines: {opportunity.disciplines.join(", ")}</p>
-              <p>
-                Minimum time: {opportunity.minMinutesOrHours ?? "Organizer confirms"}
+            {detailRows.length > 0 ? (
+              <div className="mt-3 grid gap-2 text-sm text-slate-600">
+                {detailRows.map((row) => (
+                  <p key={row.label}>
+                    {row.label}: {row.value}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Please speak with the coach or organizer for details.
               </p>
-              <p>
-                Registration deadline:{" "}
-                {opportunity.registrationDeadline ?? "Organizer confirms"}
-              </p>
-            </div>
+            )}
           </div>
 
           {opportunity.coachId ? (
@@ -130,16 +148,68 @@ export default async function OpportunityDetailPage({
               {opportunity.contactMethod === "whatsapp" ? "WhatsApp" : "Instagram"}.
             </p>
           </div>
-          <InterestButton opportunityId={opportunity.id} disabled={isUnavailable} />
-          <FollowButton
-            targetType="tunnel"
-            targetId={opportunity.tunnelId}
-            label="Follow tunnel"
-          />
+          {isOrganizer ? (
+            <OrganizerOpportunityActions opportunityId={opportunity.id} />
+          ) : (
+            <InterestButton opportunityId={opportunity.id} disabled={isUnavailable} />
+          )}
+          {!isOrganizer ? (
+            <FollowButton
+              targetType="tunnel"
+              targetId={opportunity.tunnelId}
+              label="Follow tunnel"
+            />
+          ) : null}
         </aside>
       </div>
     </AppShell>
   );
+}
+
+function getMeaningfulDescription(description: string) {
+  const trimmed = description.trim();
+
+  if (
+    !trimmed ||
+    trimmed === "Camp published by a Flyloop organizer." ||
+    trimmed === "Huck Jam published on Flyloop."
+  ) {
+    return "";
+  }
+
+  return trimmed;
+}
+
+function getDetailRows({
+  skillLevel,
+  disciplines,
+  minMinutesOrHours,
+  registrationDeadline,
+}: {
+  skillLevel: string | null;
+  disciplines: string[];
+  minMinutesOrHours?: string;
+  registrationDeadline: string | null;
+}) {
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (skillLevel?.trim()) {
+    rows.push({ label: "Skill level", value: skillLevel });
+  }
+
+  if (disciplines.length > 0) {
+    rows.push({ label: "Disciplines", value: disciplines.join(", ") });
+  }
+
+  if (minMinutesOrHours?.trim()) {
+    rows.push({ label: "Minimum time", value: minMinutesOrHours });
+  }
+
+  if (registrationDeadline) {
+    rows.push({ label: "Registration deadline", value: registrationDeadline });
+  }
+
+  return rows;
 }
 
 function Info({

@@ -46,13 +46,13 @@ function cleanText(value: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function parseCsv(value: string, fallback: string[]) {
+function parseCsv(value: string) {
   const items = value
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
 
-  return items.length > 0 ? items : fallback;
+  return items;
 }
 
 function isValidDate(value: string) {
@@ -184,24 +184,11 @@ export async function publishOpportunity(
       currency: input.currency,
       total_capacity: input.totalCapacity,
       available_spots: input.totalCapacity,
-      min_minutes_or_hours:
-        cleanText(input.minMinutesOrHours) ??
-        (input.type === "camp" ? "45 min per athlete" : "10 min blocks"),
-      description:
-        cleanText(input.description) ??
-        (input.type === "camp"
-          ? "Camp published by a Flyloop organizer."
-          : "Huck Jam published on Flyloop."),
-      languages: parseCsv(input.languages, ["English"]),
-      disciplines: parseCsv(
-        input.disciplines,
-        input.type === "camp"
-          ? ["Dynamic", "Angles"]
-          : ["Belly", "Backfly", "Dynamic"],
-      ),
-      skill_level:
-        cleanText(input.skillLevel) ??
-        (input.type === "camp" ? "Intermediate" : "All levels"),
+      min_minutes_or_hours: cleanText(input.minMinutesOrHours),
+      description: cleanText(input.description),
+      languages: parseCsv(input.languages),
+      disciplines: parseCsv(input.disciplines),
+      skill_level: cleanText(input.skillLevel),
       status: "published",
       contact_method: "whatsapp",
       created_by: user.id,
