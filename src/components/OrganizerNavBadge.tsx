@@ -56,15 +56,14 @@ export function OrganizerNavBadge({
 
   if (compact) {
     return (
-      <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-sky-600 px-1 text-[0.62rem] font-black leading-4 text-white">
+      <span className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-sky-600 px-1 text-[0.62rem] font-black leading-4 text-white shadow-sm ring-2 ring-white">
         {count}
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-xs font-black text-sky-700">
-      <span className="size-1.5 rounded-full bg-sky-600" />
+    <span className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-sky-600 px-1 text-[0.62rem] font-black leading-4 text-white shadow-sm ring-2 ring-white">
       {count}
     </span>
   );

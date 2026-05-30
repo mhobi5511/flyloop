@@ -1,24 +1,18 @@
 import { AppShell } from "@/components/AppShell";
 import { OpportunityCard } from "@/components/OpportunityCard";
-import { Section } from "@/components/Section";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { distanceKm, parseCoordinate } from "@/lib/location";
 import type { InterestStatus, Opportunity } from "@/lib/types";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 type HomeProfile = {
   full_name: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
-  region: string | null;
+  use_location_recommendations: boolean | null;
   preferred_radius_km: number | null;
-};
-
-type FollowedCoach = {
-  id: string;
-  full_name: string;
-  country: string | null;
 };
 
 type InterestRow = {
@@ -26,7 +20,18 @@ type InterestRow = {
   status: InterestStatus;
 };
 
-export default async function AppHomePage() {
+type HomeSearchParams = {
+  country?: string;
+  month?: string;
+  view?: string;
+};
+
+export default async function AppHomePage({
+  searchParams,
+}: {
+  searchParams?: Promise<HomeSearchParams>;
+}) {
+  const filters = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -36,21 +41,16 @@ export default async function AppHomePage() {
     redirect("/login?next=/app");
   }
 
-  const [profileResult, opportunitiesResult, followsResult] = await Promise.all([
+  const [profileResult, opportunitiesResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name,latitude,longitude,region,preferred_radius_km")
+      .select("full_name,latitude,longitude,use_location_recommendations,preferred_radius_km")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("published_opportunities_with_context")
       .select("*")
       .order("start_date", { ascending: true }),
-    supabase
-      .from("follows")
-      .select("target_id")
-      .eq("follower_id", user.id)
-      .eq("target_type", "coach"),
   ]);
 
   if (profileResult.error) {
@@ -61,18 +61,20 @@ export default async function AppHomePage() {
     console.error("Home opportunities lookup failed", opportunitiesResult.error);
   }
 
-  if (followsResult.error) {
-    console.error("Home follows lookup failed", followsResult.error);
-  }
-
-  const followRows = followsResult.error ? [] : followsResult.data ?? [];
-  const followedCoachIds = followRows
-    .map((follow) => follow.target_id)
-    .filter((id): id is string => typeof id === "string" && id.length > 0);
-  const opportunityRows = opportunitiesResult.error
+  const allRows = opportunitiesResult.error
     ? []
     : ((opportunitiesResult.data ?? []) as HomeFeedRow[]);
-  const opportunityIds = opportunityRows.map((row) => row.id);
+  const countryOptions = getCountryOptions(allRows);
+  const monthOptions = getMonthOptions(allRows);
+  const filteredRows = allRows.filter((row) => {
+    const countryMatches =
+      !filters.country || row.tunnel_country === filters.country;
+    const monthMatches =
+      !filters.month || row.start_date?.slice(0, 7) === filters.month;
+
+    return countryMatches && monthMatches;
+  });
+  const opportunityIds = filteredRows.map((row) => row.id);
   const { data: interestRows } =
     opportunityIds.length > 0
       ? await supabase
@@ -81,19 +83,10 @@ export default async function AppHomePage() {
           .eq("athlete_id", user.id)
           .in("opportunity_id", opportunityIds)
       : { data: [] };
-  const { data: followedCoachRows } =
-    followedCoachIds.length > 0
-      ? await supabase
-          .from("profiles")
-          .select("id,full_name,country")
-          .in("id", followedCoachIds)
-      : { data: [] };
-  const followedCoachProfiles = (followedCoachRows ?? []) as FollowedCoach[];
-
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);
-  const rows = opportunityRows;
+  const rows = filteredRows;
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
@@ -116,31 +109,24 @@ export default async function AppHomePage() {
   });
 
   const lastMinute: Opportunity[] = [];
-  const nearbyUpcoming: Opportunity[] = [];
-  const allUpcoming: Opportunity[] = [];
+  const recommended: Opportunity[] = [];
   const followedCoaches: Opportunity[] = [];
 
   for (const item of mapped) {
-    if (item.isNearby && item.isLastMinute) {
+    if (item.isLastMinute) {
       lastMinute.push(item.opportunity);
     }
 
     if (item.isNearby && !item.isLastMinute) {
-      nearbyUpcoming.push(item.opportunity);
-    }
-
-    if (!item.isLastMinute) {
-      allUpcoming.push(item.opportunity);
+      recommended.push(item.opportunity);
     }
 
     if (item.isFollowedCoach) {
       followedCoaches.push(item.opportunity);
     }
   }
-  const hasLocationPreference = Boolean(
-    parseCoordinate(homeProfile?.latitude) !== null &&
-      parseCoordinate(homeProfile?.longitude) !== null,
-  ) || Boolean(homeProfile?.region);
+  const currentView = filters.view ?? "";
+  const hasFilters = Boolean(filters.country || filters.month);
 
   return (
     <AppShell active="home">
@@ -153,80 +139,82 @@ export default async function AppHomePage() {
         </h1>
       </div>
 
-      {lastMinute.length > 0 ? (
-        <Section title="Last-minute near you" eyebrow="Auto detected">
-          {lastMinute.map((opportunity) => (
-            <OpportunityCard key={opportunity.id} opportunity={opportunity} />
-          ))}
-        </Section>
-      ) : null}
-
-      {!hasLocationPreference ? (
-        <div className="mt-5 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
-          <h2 className="font-black text-slate-950">
-            Set your location to see opportunities near you.
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Add coordinates or choose a region in your profile. Until then,
-            browse all opportunities below.
-          </p>
-        </div>
-      ) : null}
-
-      <Section title="Upcoming opportunities near you">
-        {nearbyUpcoming.length > 0 ? (
-          nearbyUpcoming.map((opportunity) => (
-            <OpportunityCard key={opportunity.id} opportunity={opportunity} />
-          ))
-        ) : (
-          <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            No nearby opportunities match your current location settings.
-          </p>
-        )}
-      </Section>
-
-      {followedCoaches.length > 0 ? (
-        <Section title="From followed coaches">
-          {followedCoaches.map((opportunity) => (
-            <OpportunityCard key={opportunity.id} opportunity={opportunity} compact />
-          ))}
-        </Section>
-      ) : null}
-
-      {followedCoachProfiles.length > 0 ? (
-        <Section title="Coaches you follow">
-          <div className="grid gap-3 md:grid-cols-2">
-            {followedCoachProfiles.map((coach) => (
-              <div
-                key={coach.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <p className="font-black text-slate-950">{coach.full_name}</p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {coach.country ?? "Coach"}
-                </p>
-              </div>
+      <form className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
+        <label className="grid gap-1 text-sm font-bold text-slate-700">
+          Country
+          <select name="country" defaultValue={filters.country ?? ""} className="field">
+            <option value="">All</option>
+            {countryOptions.map((country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
             ))}
-          </div>
-        </Section>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold text-slate-700">
+          Month
+          <select name="month" defaultValue={filters.month ?? ""} className="field">
+            <option value="">All</option>
+            {monthOptions.map((month) => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          className="h-12 self-end rounded-xl bg-slate-950 px-4 text-sm font-bold text-white"
+        >
+          Apply
+        </button>
+      </form>
+
+      {hasFilters ? (
+        <Link
+          href="/app"
+          className="mt-3 inline-flex text-sm font-bold text-sky-700"
+        >
+          Clear filters
+        </Link>
       ) : null}
 
-      <Section title="All Opportunities">
-        {allUpcoming.length > 0 ? (
-          allUpcoming.map((opportunity) => (
-            <OpportunityCard key={opportunity.id} opportunity={opportunity} compact />
-          ))
-        ) : (
-          <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            No published opportunities yet.
-          </p>
-        )}
-      </Section>
+      <HomeSection
+        title={currentView === "last-minute" ? "All last-minute opportunities" : "Last-minute opportunities"}
+        opportunities={lastMinute}
+        compact={false}
+        viewHref={buildViewHref(filters, "last-minute")}
+        showAll={currentView === "last-minute"}
+      />
+
+      <HomeSection
+        title={currentView === "recommended" ? "All recommended opportunities" : "Recommended opportunities"}
+        opportunities={recommended}
+        compact={false}
+        viewHref={buildViewHref(filters, "recommended")}
+        showAll={currentView === "recommended"}
+      />
+
+      <HomeSection
+        title={currentView === "followed" ? "All followed coach opportunities" : "Followed coaches"}
+        opportunities={followedCoaches}
+        compact
+        viewHref={buildViewHref(filters, "followed")}
+        showAll={currentView === "followed"}
+      />
     </AppShell>
   );
 }
 
 function classifyLocation(row: HomeFeedRow, profile: HomeProfile | null) {
+  if (!profile?.use_location_recommendations) {
+    return {
+      isNearby: true,
+      distanceKm: null,
+      label: row.tunnel_region ?? undefined,
+    };
+  }
+
   const userLat = parseCoordinate(profile?.latitude);
   const userLon = parseCoordinate(profile?.longitude);
   const tunnelLat = parseCoordinate(row.tunnel_latitude);
@@ -255,18 +243,103 @@ function classifyLocation(row: HomeFeedRow, profile: HomeProfile | null) {
     };
   }
 
-  if (profile?.region && row.tunnel_region) {
-    const sameRegion = profile.region === row.tunnel_region;
-    return {
-      isNearby: sameRegion,
-      distanceKm: null,
-      label: sameRegion ? "Same region" : row.tunnel_region,
-    };
-  }
-
   return {
-    isNearby: false,
+    isNearby: true,
     distanceKm: null,
     label: row.tunnel_region ?? undefined,
   };
+}
+
+function HomeSection({
+  title,
+  opportunities,
+  compact,
+  viewHref,
+  showAll,
+}: {
+  title: string;
+  opportunities: Opportunity[];
+  compact: boolean;
+  viewHref: string;
+  showAll: boolean;
+}) {
+  const visible = showAll ? opportunities : opportunities.slice(0, 4);
+
+  return (
+    <section className="mt-8">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold tracking-tight text-slate-950">
+          {title}
+        </h2>
+        {!showAll && opportunities.length > 4 ? (
+          <Link
+            href={viewHref}
+            className="shrink-0 text-sm font-bold text-sky-700"
+          >
+            View all
+          </Link>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {visible.length > 0 ? (
+          visible.map((opportunity) => (
+            <OpportunityCard
+              key={opportunity.id}
+              opportunity={opportunity}
+              compact={compact}
+            />
+          ))
+        ) : (
+          <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+            No matching opportunities yet.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function buildViewHref(filters: HomeSearchParams, view: string) {
+  const params = new URLSearchParams();
+
+  if (filters.country) {
+    params.set("country", filters.country);
+  }
+
+  if (filters.month) {
+    params.set("month", filters.month);
+  }
+
+  params.set("view", view);
+  return `/app?${params.toString()}`;
+}
+
+function getCountryOptions(rows: HomeFeedRow[]) {
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => row.tunnel_country)
+        .filter((country): country is string => Boolean(country)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+function getMonthOptions(rows: HomeFeedRow[]) {
+  const formatter = new Intl.DateTimeFormat("en", {
+    month: "long",
+    year: "numeric",
+  });
+
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => row.start_date?.slice(0, 7))
+        .filter((month): month is string => Boolean(month)),
+    ),
+  )
+    .sort()
+    .map((value) => ({
+      value,
+      label: formatter.format(new Date(`${value}-01T00:00:00.000Z`)),
+    }));
 }

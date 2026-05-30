@@ -63,7 +63,7 @@ async function getShellState() {
       await Promise.all([
         supabase
           .from("profiles")
-          .select("wants_to_join_opportunities,wants_to_create_opportunities")
+          .select("is_organizer,wants_to_create_opportunities")
           .eq("id", user.id)
           .maybeSingle(),
         supabase
@@ -81,9 +81,13 @@ async function getShellState() {
       console.error("App shell notification count failed", notificationResult.error);
     }
 
+    const canCreate =
+      profile?.is_organizer === true ||
+      profile?.wants_to_create_opportunities === true;
+
     return {
-      canCreate: profile?.wants_to_create_opportunities === true,
-      canJoin: profile?.wants_to_join_opportunities !== false,
+      canCreate,
+      canJoin: true,
       organizerUnreadCount: notificationResult.count ?? 0,
     };
   } catch (error) {
@@ -136,11 +140,15 @@ export async function AppShell({
                     selected ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  <Icon size={17} />
+                  <span className="relative grid size-[17px] place-items-center">
+                    <Icon size={17} />
+                    {item.id === "dashboard" ? (
+                      <OrganizerNavBadge
+                        initialCount={shellState.organizerUnreadCount}
+                      />
+                    ) : null}
+                  </span>
                   <span className="whitespace-nowrap">{item.label}</span>
-                  {item.id === "dashboard" ? (
-                    <OrganizerNavBadge initialCount={shellState.organizerUnreadCount} />
-                  ) : null}
                 </Link>
               );
             })}
@@ -172,11 +180,16 @@ export async function AppShell({
                   selected ? "bg-sky-50 text-sky-700" : "text-slate-500"
                 }`}
               >
-                <Icon size={19} />
+                <span className="relative grid size-[19px] place-items-center">
+                  <Icon size={19} />
+                  {item.id === "dashboard" ? (
+                    <OrganizerNavBadge
+                      initialCount={shellState.organizerUnreadCount}
+                      compact
+                    />
+                  ) : null}
+                </span>
                 <span className="max-w-full whitespace-nowrap leading-none">{item.label}</span>
-                {item.id === "dashboard" ? (
-                  <OrganizerNavBadge initialCount={shellState.organizerUnreadCount} compact />
-                ) : null}
               </Link>
             );
           })}

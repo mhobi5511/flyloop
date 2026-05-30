@@ -4,17 +4,7 @@ import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAppUrl } from "@/lib/site-url";
 
-type FlyloopPurpose = "join" | "create" | "both";
-
-function purposeFlags(purpose: FlyloopPurpose) {
-  return {
-    wants_to_join_opportunities: purpose === "join" || purpose === "both",
-    wants_to_create_opportunities: purpose === "create" || purpose === "both",
-  };
-}
-
 export function SignupForm() {
-  const [purpose, setPurpose] = useState<FlyloopPurpose>("join");
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState("");
@@ -47,8 +37,9 @@ export function SignupForm() {
             phone,
             whatsapp_number: phone,
             instagram_handle: instagram,
-            flyloop_purpose: purpose,
-            ...purposeFlags(purpose),
+            is_organizer: false,
+            wants_to_join_opportunities: true,
+            wants_to_create_opportunities: false,
           },
         },
       });
@@ -79,44 +70,6 @@ export function SignupForm() {
 
   return (
     <form onSubmit={submit} className="mt-6 grid gap-4">
-      <fieldset className="grid gap-2">
-        <legend className="text-sm font-bold text-slate-700">
-          What do you want to use Flyloop for?
-        </legend>
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">
-          <input
-            type="radio"
-            name="purpose"
-            value="join"
-            checked={purpose === "join"}
-            onChange={() => setPurpose("join")}
-            className="mt-1"
-          />
-          Join camps and Huck Jams
-        </label>
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">
-          <input
-            type="radio"
-            name="purpose"
-            value="create"
-            checked={purpose === "create"}
-            onChange={() => setPurpose("create")}
-            className="mt-1"
-          />
-          Create camps or Huck Jams
-        </label>
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">
-          <input
-            type="radio"
-            name="purpose"
-            value="both"
-            checked={purpose === "both"}
-            onChange={() => setPurpose("both")}
-            className="mt-1"
-          />
-          Both
-        </label>
-      </fieldset>
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Full name
         <input

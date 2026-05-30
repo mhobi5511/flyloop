@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, MapPin, Users } from "lucide-react";
+import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { Badge } from "./Badge";
 import {
   formatDateRange,
@@ -25,16 +26,14 @@ export function OpportunityCard({ opportunity, compact = false }: OpportunityCar
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap gap-2">
+            {opportunity.viewerInterestStatus ? (
+              <ApplicationStatusBadge status={opportunity.viewerInterestStatus} />
+            ) : null}
             <Badge tone={view.type === "camp" ? "blue" : "green"}>
               {view.typeLabel}
             </Badge>
             {view.isLastMinute ? (
               <Badge tone="amber">Last-minute opportunity</Badge>
-            ) : null}
-            {opportunity.viewerInterestStatus ? (
-              <Badge tone={statusTone(opportunity.viewerInterestStatus)}>
-                {statusLabel(opportunity.viewerInterestStatus)}
-              </Badge>
             ) : null}
           </div>
           <h3 className="text-lg font-bold tracking-tight text-slate-950">
@@ -97,26 +96,4 @@ function formatCardLocation(opportunity: Opportunity) {
   }
 
   return "Location to be confirmed";
-}
-
-function statusLabel(status: NonNullable<Opportunity["viewerInterestStatus"]>) {
-  return status === "waitlist"
-    ? "Waitlist"
-    : status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function statusTone(status: NonNullable<Opportunity["viewerInterestStatus"]>) {
-  if (status === "accepted") {
-    return "green";
-  }
-
-  if (status === "declined") {
-    return "red";
-  }
-
-  if (status === "waitlist") {
-    return "amber";
-  }
-
-  return "slate";
 }

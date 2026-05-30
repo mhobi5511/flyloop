@@ -43,9 +43,15 @@ export function NotificationBell() {
 
     void loadNotifications();
 
+    function handleRead() {
+      void loadNotifications();
+    }
+
+    window.addEventListener("flyloop-notifications-read", handleRead);
     const interval = window.setInterval(() => void loadNotifications(), 15_000);
 
     return () => {
+      window.removeEventListener("flyloop-notifications-read", handleRead);
       window.clearInterval(interval);
     };
   }, []);

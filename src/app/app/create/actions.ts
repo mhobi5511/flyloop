@@ -119,7 +119,7 @@ async function getAuthenticatedOrganizer() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name,wants_to_create_opportunities")
+    .select("full_name,is_organizer,wants_to_create_opportunities")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -135,10 +135,13 @@ export async function publishOpportunity(
     return { ok: false, message: "Please log in again before publishing." };
   }
 
-  if (profile?.wants_to_create_opportunities !== true) {
+  if (
+    profile?.is_organizer !== true &&
+    profile?.wants_to_create_opportunities !== true
+  ) {
     return {
       ok: false,
-      message: "Enable creating opportunities in your profile first.",
+      message: "Enable organizer mode in your profile first.",
     };
   }
 
@@ -253,10 +256,13 @@ export async function addTunnel(
     return { ok: false, message: "Please log in again before adding a tunnel." };
   }
 
-  if (profile?.wants_to_create_opportunities !== true) {
+  if (
+    profile?.is_organizer !== true &&
+    profile?.wants_to_create_opportunities !== true
+  ) {
     return {
       ok: false,
-      message: "Enable creating opportunities in your profile before adding a tunnel.",
+      message: "Enable organizer mode in your profile before adding a tunnel.",
     };
   }
 

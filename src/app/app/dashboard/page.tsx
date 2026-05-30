@@ -33,10 +33,12 @@ export default async function OrganizerDashboardPage() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("wants_to_create_opportunities")
+    .select("is_organizer,wants_to_create_opportunities")
     .eq("id", user?.id)
     .maybeSingle();
-  const canCreate = profile?.wants_to_create_opportunities === true;
+  const canCreate =
+    profile?.is_organizer === true ||
+    profile?.wants_to_create_opportunities === true;
 
   if (!canCreate) {
     return (
@@ -44,8 +46,7 @@ export default async function OrganizerDashboardPage() {
         <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <h1 className="text-3xl font-black tracking-tight">Organizer</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Enable creating opportunities in your profile to access organizer
-            tools.
+            Enable organizer mode in your profile to access organizer tools.
           </p>
           <Link
             href="/app/onboarding"

@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import { AtSign, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
+import {
+  ApplicationStatusBadge,
+  applicantBorderClass,
+} from "@/components/ApplicationStatusBadge";
 import { Badge } from "@/components/Badge";
+import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
@@ -56,7 +61,7 @@ export default async function OrganizerOpportunityPage({
   const [{ data: profile }, { data: opportunity }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("wants_to_create_opportunities")
+      .select("is_organizer,wants_to_create_opportunities")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
@@ -71,12 +76,22 @@ export default async function OrganizerOpportunityPage({
     notFound();
   }
 
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", user?.id)
+    .eq("opportunity_id", id)
+    .eq("type", "new_interest")
+    .eq("read", false);
+
   const { data: applicants } = await supabase
     .from("opportunity_interests")
     .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(full_name,country,phone,whatsapp_number,instagram_handle)")
     .eq("opportunity_id", id)
     .order("created_at", { ascending: false });
-  const canCreate = profile?.wants_to_create_opportunities === true;
+  const canCreate =
+    profile?.is_organizer === true ||
+    profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
   const tunnel = Array.isArray(currentOpportunity.tunnel_profiles)
     ? currentOpportunity.tunnel_profiles[0]
@@ -85,6 +100,7 @@ export default async function OrganizerOpportunityPage({
 
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
+      <NotificationReadSignal />
       <Link href="/app/dashboard" className="text-sm font-bold text-sky-700">
         Back to Organizer
       </Link>
@@ -129,7 +145,7 @@ export default async function OrganizerOpportunityPage({
             return (
               <article
                 key={applicant.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${applicantBorderClass(applicant.status)}`}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -137,9 +153,7 @@ export default async function OrganizerOpportunityPage({
                       <h3 className="font-black text-slate-950">
                         {profile?.full_name ?? "Applicant"}
                       </h3>
-                      <Badge tone={statusTone(applicant.status)}>
-                        {statusLabel(applicant.status)}
-                      </Badge>
+                      <ApplicationStatusBadge status={applicant.status} />
                     </div>
                     <div className="mt-2 grid gap-1 text-sm text-slate-600">
                       <p>{profile?.country ?? "Country not set"}</p>
@@ -190,26 +204,4 @@ function formatSubmittedDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function statusLabel(status: InterestStatus) {
-  return status === "waitlist"
-    ? "Waitlist"
-    : status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function statusTone(status: InterestStatus) {
-  if (status === "accepted") {
-    return "green";
-  }
-
-  if (status === "declined") {
-    return "red";
-  }
-
-  if (status === "waitlist") {
-    return "amber";
-  }
-
-  return "slate";
 }

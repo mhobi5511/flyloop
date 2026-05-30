@@ -30,20 +30,11 @@ export async function proxy(request: NextRequest) {
 
   if (
     (pathname.startsWith("/app/create") || pathname.startsWith("/app/dashboard")) &&
+    profile?.is_organizer !== true &&
     profile?.wants_to_create_opportunities !== true
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/app/onboarding";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  if (
-    pathname.startsWith("/app/applications") &&
-    profile?.wants_to_join_opportunities === false
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/app";
     url.search = "";
     return NextResponse.redirect(url);
   }

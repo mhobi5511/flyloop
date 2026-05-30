@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ApplicationStatusBadge } from "@/components/ApplicationStatusBadge";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
@@ -59,13 +60,6 @@ type ApplicationRow = {
       }>;
 };
 
-const statusLabels: Record<InterestStatus, string> = {
-  pending: "Pending",
-  accepted: "Accepted",
-  declined: "Declined",
-  waitlist: "Waitlist",
-};
-
 export default async function ApplicationsPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -74,7 +68,7 @@ export default async function ApplicationsPage() {
   const [{ data: profile }, { data: applications }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("wants_to_join_opportunities,wants_to_create_opportunities")
+      .select("is_organizer,wants_to_create_opportunities")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
@@ -84,11 +78,12 @@ export default async function ApplicationsPage() {
       .order("created_at", { ascending: false }),
   ]);
   const rows = (applications ?? []) as ApplicationRow[];
-  const canCreate = profile?.wants_to_create_opportunities === true;
-  const canJoin = profile?.wants_to_join_opportunities !== false;
+  const canCreate =
+    profile?.is_organizer === true ||
+    profile?.wants_to_create_opportunities === true;
 
   return (
-    <AppShell active="applications" canCreate={canCreate} canJoin={canJoin}>
+    <AppShell active="applications" canCreate={canCreate} canJoin>
       <div>
         <h1 className="text-3xl font-black tracking-tight">Applications</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -127,11 +122,9 @@ export default async function ApplicationsPage() {
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
               <div className="flex flex-wrap items-center gap-2">
+                <ApplicationStatusBadge status={application.status} />
                 <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
                   {formatOpportunityType(opportunity.type)}
-                </Badge>
-                <Badge tone={statusTone(application.status)}>
-                  {statusLabels[application.status]}
                 </Badge>
               </div>
               <Link
@@ -185,22 +178,6 @@ function formatSubmittedDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function statusTone(status: InterestStatus) {
-  if (status === "accepted") {
-    return "green";
-  }
-
-  if (status === "declined") {
-    return "red";
-  }
-
-  if (status === "waitlist") {
-    return "amber";
-  }
-
-  return "slate";
 }
 
 function contactHint(status: InterestStatus) {

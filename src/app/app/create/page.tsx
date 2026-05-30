@@ -15,7 +15,7 @@ export default async function CreateOpportunityPage() {
   const [{ data: profile }, { data: tunnelRows }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("wants_to_create_opportunities")
+      .select("is_organizer,wants_to_create_opportunities")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
@@ -23,7 +23,9 @@ export default async function CreateOpportunityPage() {
       .select("id,name,city,country")
       .order("name", { ascending: true }),
   ]);
-  const canCreate = profile?.wants_to_create_opportunities === true;
+  const canCreate =
+    profile?.is_organizer === true ||
+    profile?.wants_to_create_opportunities === true;
   const tunnels = ((tunnelRows ?? []) as TunnelOption[]).map((tunnel) => ({
     id: tunnel.id,
     name: tunnel.name,
@@ -44,11 +46,10 @@ export default async function CreateOpportunityPage() {
         ) : (
           <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-black tracking-tight">
-              Enable organizer tools
+              Enable organizer mode
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Turn on creating opportunities in your profile to publish camps
-              or Huck Jams.
+              Turn on organizer mode in your profile to publish camps or Huck Jams.
             </p>
             <Link
               href="/app/onboarding"
