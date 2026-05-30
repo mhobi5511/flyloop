@@ -32,7 +32,11 @@ export async function updateSupabaseSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { data: profile } = user
-    ? await supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle()
+    ? await supabase
+        .from("profiles")
+        .select("is_admin,wants_to_create_opportunities")
+        .eq("id", user.id)
+        .maybeSingle()
     : { data: null };
 
   return { response, user, profile };

@@ -27,13 +27,32 @@ export function AppShell({ children, active = "home" }: AppShellProps) {
             </span>
             <span className="text-lg font-bold tracking-tight">Flyloop</span>
           </Link>
+          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const selected = active === item.id;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={selected ? "page" : undefined}
+                  className={`inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-bold ${
+                    selected ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <Icon size={17} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
           <div className="flex items-center gap-2">
             <NotificationBell />
             <LogoutButton />
           </div>
         </div>
       </header>
-      <main className="mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5">
+      <main className="mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5 md:pb-8">
         {children}
       </main>
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">

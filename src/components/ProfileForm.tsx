@@ -31,37 +31,84 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  function optionalText(value: string) {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     setMessage("");
+    setError("");
 
     const supabase = createSupabaseBrowserClient();
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (userError || !user) {
       setIsLoading(false);
+      setError("Please log in again before saving your profile.");
       return;
     }
 
-    await supabase
+    const fallbackName = user.email?.split("@")[0] ?? "Flyloop user";
+    const cleanFullName = fullName.trim() || fallbackName;
+    const profileValues = {
+      full_name: cleanFullName,
+      country: optionalText(country),
+      phone: optionalText(phone),
+      whatsapp_number: optionalText(whatsapp),
+      instagram_handle: optionalText(instagram),
+      wants_to_join_opportunities: wantsToJoin,
+      wants_to_create_opportunities: wantsToCreate,
+    };
+    const profileSelect =
+      "full_name,country,phone,whatsapp_number,instagram_handle,wants_to_join_opportunities,wants_to_create_opportunities";
+    let { data, error: saveError } = await supabase
       .from("profiles")
-      .update({
-        full_name: fullName,
-        country,
-        phone,
-        whatsapp_number: whatsapp,
-        instagram_handle: instagram,
-        wants_to_join_opportunities: wantsToJoin,
-        wants_to_create_opportunities: wantsToCreate,
-      })
-      .eq("id", user.id);
+      .update(profileValues)
+      .eq("id", user.id)
+      .select(profileSelect)
+      .maybeSingle();
+
+    if (!saveError && !data) {
+      const insertResult = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          ...profileValues,
+        })
+        .select(profileSelect)
+        .maybeSingle();
+
+      data = insertResult.data;
+      saveError = insertResult.error;
+    }
 
     setIsLoading(false);
-    setMessage("Profile saved.");
+    if (saveError) {
+      setError(saveError.message);
+      return;
+    }
+
+    if (!data) {
+      setError("Profile was not saved because Supabase did not return an updated profile.");
+      return;
+    }
+
+    setFullName(data.full_name ?? "");
+    setCountry(data.country ?? "");
+    setPhone(data.phone ?? "");
+    setWhatsapp(data.whatsapp_number ?? "");
+    setInstagram(data.instagram_handle ?? "");
+    setWantsToJoin(data.wants_to_join_opportunities);
+    setWantsToCreate(data.wants_to_create_opportunities);
+    setMessage("Profile saved successfully.");
     router.refresh();
   }
 
@@ -133,6 +180,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       {message ? (
         <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
           {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+          {error}
         </p>
       ) : null}
       <button

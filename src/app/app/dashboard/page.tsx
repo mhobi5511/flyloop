@@ -42,11 +42,11 @@ export default async function OrganizerDashboardPage() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("wants_to_create_opportunities,is_admin")
+    .select("wants_to_create_opportunities")
     .eq("id", user?.id)
     .maybeSingle();
 
-  if (!profile?.wants_to_create_opportunities && !profile?.is_admin) {
+  if (!profile?.wants_to_create_opportunities) {
     return (
       <AppShell active="dashboard">
         <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">

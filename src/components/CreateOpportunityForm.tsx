@@ -75,11 +75,11 @@ export function CreateOpportunityForm() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("wants_to_create_opportunities,is_admin")
+      .select("wants_to_create_opportunities")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!profile?.wants_to_create_opportunities && !profile?.is_admin) {
+    if (!profile?.wants_to_create_opportunities) {
       setError("Enable creating opportunities in your profile first.");
       setIsLoading(false);
       return;

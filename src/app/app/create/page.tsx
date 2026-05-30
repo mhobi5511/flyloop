@@ -10,11 +10,10 @@ export default async function CreateOpportunityPage() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("wants_to_create_opportunities,is_admin")
+    .select("wants_to_create_opportunities")
     .eq("id", user?.id)
     .maybeSingle();
-  const canCreate =
-    profile?.wants_to_create_opportunities === true || profile?.is_admin === true;
+  const canCreate = profile?.wants_to_create_opportunities === true;
 
   return (
     <AppShell active="create">

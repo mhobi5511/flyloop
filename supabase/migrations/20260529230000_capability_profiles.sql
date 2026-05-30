@@ -123,7 +123,7 @@ with check (
   and exists (
     select 1 from public.profiles
     where id = auth.uid()
-      and (wants_to_create_opportunities = true or is_admin = true)
+      and wants_to_create_opportunities = true
   )
 );
 

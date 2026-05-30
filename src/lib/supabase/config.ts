@@ -4,9 +4,7 @@ export function getSupabaseConfig() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const hasValidUrl = Boolean(
-    url?.startsWith("https://") ||
-      url?.startsWith("http://localhost") ||
-      url?.startsWith("http://127.0.0.1"),
+    url?.startsWith("https://"),
   );
 
   return {

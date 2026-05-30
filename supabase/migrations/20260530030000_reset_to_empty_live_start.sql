@@ -1,0 +1,2 @@
+-- Production no-op.
+-- Never wipe auth users or application data from a deployable migration.

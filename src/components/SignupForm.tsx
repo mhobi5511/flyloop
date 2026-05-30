@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getAppUrl } from "@/lib/site-url";
 
 type FlyloopPurpose = "join" | "create" | "both";
 
@@ -35,10 +36,7 @@ export function SignupForm() {
       email,
       password,
       options: {
-        emailRedirectTo:
-          typeof window === "undefined"
-            ? undefined
-            : `${window.location.origin}/auth/callback?next=/app`,
+        emailRedirectTo: getAppUrl("/auth/callback?next=/app"),
         data: {
           full_name: fullName,
           country,

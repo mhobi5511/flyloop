@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseConfigOrThrow } from "@/lib/supabase/config";
+import { getSiteUrl } from "@/lib/site-url";
 
 function getSafeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
   const nextPath = getSafeNextPath(requestUrl.searchParams.get("next"));
   const { url, anonKey } = getSupabaseConfigOrThrow();
   const cookieStore = await cookies();
-  const redirectUrl = new URL(nextPath, request.url);
+  const redirectUrl = new URL(nextPath, getSiteUrl());
   const response = NextResponse.redirect(redirectUrl);
 
   const supabase = createServerClient(url, anonKey, {
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = new URL("/login", getSiteUrl());
   loginUrl.searchParams.set("error", "We could not confirm your sign-in link.");
   return NextResponse.redirect(loginUrl);
 }
