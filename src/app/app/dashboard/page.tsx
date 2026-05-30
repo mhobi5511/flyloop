@@ -59,12 +59,25 @@ export default async function OrganizerDashboardPage() {
     );
   }
 
-  const { data: opportunities } = await supabase
-    .from("opportunities")
-    .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,tunnel_profiles(name,city,country),opportunity_interests(status)")
-    .eq("created_by", user?.id)
-    .order("start_date", { ascending: true });
+  const [{ data: opportunities }, { data: unreadNotifications }] = await Promise.all([
+    supabase
+      .from("opportunities")
+      .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,tunnel_profiles(name,city,country),opportunity_interests(status)")
+      .eq("created_by", user?.id)
+      .order("start_date", { ascending: true }),
+    supabase
+      .from("notifications")
+      .select("opportunity_id")
+      .eq("user_id", user?.id)
+      .eq("type", "new_interest")
+      .eq("read", false),
+  ]);
   const opportunityRows = (opportunities ?? []) as OrganizerOpportunityRow[];
+  const unreadOpportunityIds = new Set(
+    (unreadNotifications ?? [])
+      .map((notification) => notification.opportunity_id)
+      .filter((id): id is string => Boolean(id)),
+  );
 
   return (
     <AppShell active="dashboard" canCreate>
@@ -83,7 +96,7 @@ export default async function OrganizerDashboardPage() {
         </Link>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mt-5 grid gap-2">
         {opportunityRows.map((opportunity) => {
           const tunnel = Array.isArray(opportunity.tunnel_profiles)
             ? opportunity.tunnel_profiles[0]
@@ -94,39 +107,51 @@ export default async function OrganizerDashboardPage() {
               status,
               interests.filter((interest) => interest.status === status).length,
             ]),
-          ) as Record<InterestStatus, number>;
+          ) as Record<(typeof statuses)[number], number>;
+          const hasUnread = unreadOpportunityIds.has(opportunity.id);
 
           return (
             <Link
               key={opportunity.id}
               href={`/app/organizer/opportunities/${opportunity.id}`}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className={`rounded-2xl border bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                hasUnread
+                  ? "border-l-4 border-l-sky-500 border-sky-200"
+                  : "border-slate-200"
+              }`}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
-                  {formatOpportunityType(opportunity.type)}
-                </Badge>
-                <Badge tone={opportunity.status === "published" ? "slate" : "red"}>
-                  {opportunity.status}
-                </Badge>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
+                      {formatOpportunityType(opportunity.type)}
+                    </Badge>
+                    <Badge tone={opportunity.status === "published" ? "slate" : "red"}>
+                      {opportunity.status}
+                    </Badge>
+                    {hasUnread ? <Badge tone="blue">New applicants</Badge> : null}
+                  </div>
+                  <h2 className="mt-2 line-clamp-1 text-base font-black tracking-tight">
+                    {opportunity.title}
+                  </h2>
+                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-600">
+                    {tunnel?.name ?? "Tunnel"}
+                    {tunnel ? `, ${formatLocation(tunnel.city, tunnel.country)}` : ""} -{" "}
+                    {formatDateRange(opportunity.start_date, opportunity.end_date)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {opportunity.available_spots} / {opportunity.total_capacity} spots open
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs font-bold text-sky-700">
+                  {interests.length} total
+                </span>
               </div>
-              <h2 className="mt-3 text-xl font-black tracking-tight">
-                {opportunity.title}
-              </h2>
-              <p className="mt-2 text-sm font-semibold text-slate-600">
-                {tunnel?.name ?? "Tunnel"}
-                {tunnel ? `, ${formatLocation(tunnel.city, tunnel.country)}` : ""} -{" "}
-                {formatDateRange(opportunity.start_date, opportunity.end_date)}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {opportunity.available_spots} / {opportunity.total_capacity} spots open
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
-                <Count label="Total" value={interests.length} />
+              <div className="mt-3 grid grid-cols-4 gap-1.5 text-center">
                 <Count label="Pending" value={counts.pending} />
                 <Count label="Accepted" value={counts.accepted} />
-                <Count label="Declined" value={counts.declined} />
                 <Count label="Waitlist" value={counts.waitlist} />
+                <Count label="Declined" value={counts.declined} />
               </div>
             </Link>
           );
@@ -152,9 +177,9 @@ function formatLocation(city?: string | null, country?: string | null) {
 
 function Count({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-2 py-2">
-      <p className="text-base font-black text-slate-950">{value}</p>
-      <p className="text-[0.68rem] font-bold text-slate-500">{label}</p>
+    <div className="rounded-lg bg-slate-50 px-1.5 py-1.5">
+      <p className="text-sm font-black text-slate-950">{value}</p>
+      <p className="truncate text-[0.62rem] font-bold text-slate-500">{label}</p>
     </div>
   );
 }

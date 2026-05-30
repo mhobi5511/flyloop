@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CalendarDays, Globe2, MapPin, Users } from "lucide-react";
 import { ApplicationStatusBadge } from "@/components/ApplicationStatusBadge";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
-import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
 import {
   formatDateRange,
   formatPrice,
@@ -52,6 +51,10 @@ export default async function OpportunityDetailPage({
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const isOrganizer = user?.id === opportunity.createdBy;
+  if (isOrganizer) {
+    redirect(`/app/organizer/opportunities/${opportunity.id}`);
+  }
+
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
   const isLastMinute =
@@ -128,19 +131,20 @@ export default async function OpportunityDetailPage({
             <p className="mt-0.5 text-2xl font-black text-slate-950">
               {formatPrice(opportunity.price, opportunity.currency)}
             </p>
+            <p className="text-xs font-semibold text-sky-700">
+              {opportunity.type === "huck_jam"
+                ? "shared flying time"
+                : "per hour incl. coaching"}
+            </p>
           </div>
 
           <div className="mt-3">
-            {isOrganizer ? (
-              <OrganizerOpportunityActions opportunityId={opportunity.id} />
-            ) : (
-              <InterestButton
-                opportunityId={opportunity.id}
-                disabled={isUnavailable}
-                initialStatus={viewerInterestStatus}
-                compact
-              />
-            )}
+            <InterestButton
+              opportunityId={opportunity.id}
+              disabled={isUnavailable}
+              initialStatus={viewerInterestStatus}
+              compact
+            />
           </div>
 
           <div className="mt-5 rounded-2xl bg-slate-50 p-4">

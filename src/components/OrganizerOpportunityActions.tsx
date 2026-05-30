@@ -18,6 +18,14 @@ export function OrganizerOpportunityActions({
   const [error, setError] = useState("");
 
   function cancel() {
+    const confirmed = window.confirm(
+      "Cancel this opportunity? It will stop appearing as open, but applicant history stays available.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setMessage("");
     setError("");
 
@@ -30,6 +38,7 @@ export function OrganizerOpportunityActions({
       }
 
       setMessage(result.message);
+      router.push("/app/dashboard");
       router.refresh();
     });
   }
@@ -37,10 +46,10 @@ export function OrganizerOpportunityActions({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <Link
-        href="/app/dashboard"
+        href={`/app/organizer/opportunities/${opportunityId}/edit`}
         className="flex h-12 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700"
       >
-        Edit in Organizer
+        Edit opportunity
       </Link>
       <button
         type="button"

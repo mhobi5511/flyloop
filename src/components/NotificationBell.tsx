@@ -93,14 +93,14 @@ export function NotificationBell() {
           </span>
         ) : null}
       </summary>
-      <div className="absolute right-0 top-12 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+      <div className="fixed inset-x-3 top-16 z-40 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-xl sm:absolute sm:inset-auto sm:right-0 sm:top-12 sm:w-[min(22rem,calc(100vw-2rem))]">
         <div className="mb-2 flex items-center justify-between">
           <p className="font-bold text-slate-950">Notifications</p>
           <span className="text-xs font-semibold text-slate-500">
             {notifications.length} total
           </span>
         </div>
-        <div className="grid max-h-80 gap-2 overflow-auto">
+        <div className="grid max-h-[calc(100dvh-10rem)] gap-2 overflow-auto sm:max-h-80">
           {notifications.length === 0 ? (
             <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
               No notifications yet.
@@ -116,12 +116,12 @@ export function NotificationBell() {
                     ? `/app/opportunities/${notification.opportunity_id}`
                     : "/app"
                 }
-                className="rounded-xl border border-slate-100 p-3 hover:bg-sky-50"
+                className="min-w-0 rounded-xl border border-slate-100 p-3 hover:bg-sky-50"
               >
-                <p className="text-sm font-bold text-slate-900">
+                <p className="break-words text-sm font-bold text-slate-900">
                   {notification.title}
                 </p>
-                <p className="mt-1 text-xs leading-5 text-slate-600">
+                <p className="mt-1 break-words text-xs leading-5 text-slate-600">
                   {notification.body}
                 </p>
               </Link>

@@ -2,7 +2,12 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { addTunnel, publishOpportunity } from "@/app/app/create/actions";
+import {
+  addTunnel,
+  publishOpportunity,
+  updateOpportunity,
+  type OpportunityFormInput,
+} from "@/app/app/create/actions";
 import { regions } from "@/lib/location";
 import type { OpportunityType } from "@/lib/types";
 
@@ -15,6 +20,8 @@ export type TunnelOption = {
 
 type CreateOpportunityFormProps = {
   tunnels: TunnelOption[];
+  initialOpportunity?: OpportunityFormInput & { id: string };
+  mode?: "create" | "edit";
 };
 
 const currencies = ["EUR", "CHF", "USD", "PLN", "GBP"];
@@ -104,24 +111,45 @@ function validateOpportunity(values: {
   return "";
 }
 
-export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
+export function CreateOpportunityForm({
+  tunnels,
+  initialOpportunity,
+  mode = "create",
+}: CreateOpportunityFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [type, setType] = useState<OpportunityType>("camp");
-  const [title, setTitle] = useState("");
-  const [tunnelId, setTunnelId] = useState("");
-  const [startDate, setStartDate] = useState(isoDateFromNow(5));
-  const [endDate, setEndDate] = useState(addDays(isoDateFromNow(5), 5));
-  const [endDateTouched, setEndDateTouched] = useState(false);
-  const [registrationDeadline, setRegistrationDeadline] = useState("");
-  const [price, setPrice] = useState("420");
-  const [currency, setCurrency] = useState("EUR");
-  const [totalCapacity, setTotalCapacity] = useState("8");
-  const [minMinutesOrHours, setMinMinutesOrHours] = useState("");
-  const [description, setDescription] = useState("");
-  const [languages, setLanguages] = useState("");
-  const [disciplines, setDisciplines] = useState("");
-  const [skillLevel, setSkillLevel] = useState("");
+  const [type, setType] = useState<OpportunityType>(
+    initialOpportunity?.type ?? "camp",
+  );
+  const [title, setTitle] = useState(initialOpportunity?.title ?? "");
+  const [tunnelId, setTunnelId] = useState(initialOpportunity?.tunnelId ?? "");
+  const [startDate, setStartDate] = useState(
+    initialOpportunity?.startDate ?? isoDateFromNow(5),
+  );
+  const [endDate, setEndDate] = useState(
+    initialOpportunity?.endDate ??
+      addDays(initialOpportunity?.startDate ?? isoDateFromNow(5), 5),
+  );
+  const [endDateTouched, setEndDateTouched] = useState(Boolean(initialOpportunity));
+  const [registrationDeadline, setRegistrationDeadline] = useState(
+    initialOpportunity?.registrationDeadline ?? "",
+  );
+  const [price, setPrice] = useState(String(initialOpportunity?.price ?? "420"));
+  const [currency, setCurrency] = useState(initialOpportunity?.currency ?? "EUR");
+  const [totalCapacity, setTotalCapacity] = useState(
+    String(initialOpportunity?.totalCapacity ?? "8"),
+  );
+  const [minMinutesOrHours, setMinMinutesOrHours] = useState(
+    initialOpportunity?.minMinutesOrHours ?? "",
+  );
+  const [description, setDescription] = useState(
+    initialOpportunity?.description ?? "",
+  );
+  const [languages, setLanguages] = useState(initialOpportunity?.languages ?? "");
+  const [disciplines, setDisciplines] = useState(
+    initialOpportunity?.disciplines ?? "",
+  );
+  const [skillLevel, setSkillLevel] = useState(initialOpportunity?.skillLevel ?? "");
   const [availableTunnels, setAvailableTunnels] = useState(tunnels);
   const [showTunnelForm, setShowTunnelForm] = useState(false);
   const [tunnelName, setTunnelName] = useState("");
@@ -183,7 +211,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
     }
 
     startTransition(async () => {
-      const result = await publishOpportunity({
+      const values = {
         type,
         title,
         tunnelId,
@@ -198,14 +226,22 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
         languages,
         disciplines,
         skillLevel,
-      });
+      };
+      const result =
+        mode === "edit" && initialOpportunity
+          ? await updateOpportunity(initialOpportunity.id, values)
+          : await publishOpportunity(values);
 
       if (!result.ok) {
         setError(result.message);
         return;
       }
 
-      router.push("/app");
+      router.push(
+        mode === "edit" && initialOpportunity
+          ? `/app/organizer/opportunities/${initialOpportunity.id}`
+          : "/app",
+      );
       router.refresh();
     });
   }
@@ -525,7 +561,13 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
         disabled={isPending}
         className="h-12 w-full rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
       >
-        {isPending ? "Publishing..." : "Publish opportunity"}
+        {isPending
+          ? mode === "edit"
+            ? "Saving..."
+            : "Publishing..."
+          : mode === "edit"
+            ? "Save changes"
+            : "Publish opportunity"}
       </button>
     </form>
   );

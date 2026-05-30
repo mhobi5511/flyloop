@@ -10,7 +10,13 @@ import {
 import { Badge } from "@/components/Badge";
 import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
-import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
+import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
+import {
+  formatDateRange,
+  formatOpportunityType,
+  formatPrice,
+  formatPriceLabel,
+} from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
@@ -23,8 +29,13 @@ type OrganizerOpportunity = {
   end_date: string;
   total_capacity: number;
   available_spots: number;
+  price: number | string;
+  currency: string;
   description: string | null;
-  tunnel_profiles: { name: string } | Array<{ name: string }> | null;
+  tunnel_profiles:
+    | { name: string; city: string | null; country: string | null }
+    | Array<{ name: string; city: string | null; country: string | null }>
+    | null;
 };
 
 type ApplicantRow = {
@@ -69,7 +80,7 @@ export default async function OrganizerOpportunityPage({
       .maybeSingle(),
     supabase
       .from("opportunities")
-      .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,description,tunnel_profiles(name)")
+      .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,price,currency,description,tunnel_profiles(name,city,country)")
       .eq("id", id)
       .eq("created_by", user?.id)
       .maybeSingle(),
@@ -108,25 +119,49 @@ export default async function OrganizerOpportunityPage({
         Back to Organizer
       </Link>
       <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={currentOpportunity.type === "camp" ? "blue" : "green"}>
-            {formatOpportunityType(currentOpportunity.type)}
-          </Badge>
-          <Badge tone={currentOpportunity.status === "published" ? "slate" : "red"}>
-            {currentOpportunity.status}
-          </Badge>
-        </div>
-        <h1 className="mt-3 text-3xl font-black tracking-tight">
-          {currentOpportunity.title}
-        </h1>
-        <div className="mt-4 grid gap-2 text-sm font-semibold text-slate-600 sm:grid-cols-2">
-          <p>Tunnel: {tunnel?.name ?? "Tunnel"}</p>
-          <p>Date: {formatDateRange(currentOpportunity.start_date, currentOpportunity.end_date)}</p>
-          <p>
-            Spots: {currentOpportunity.available_spots} /{" "}
-            {currentOpportunity.total_capacity} open
-          </p>
-          <p>Applicants: {applicantRows.length}</p>
+        <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={currentOpportunity.type === "camp" ? "blue" : "green"}>
+                {formatOpportunityType(currentOpportunity.type)}
+              </Badge>
+              <Badge tone={currentOpportunity.status === "published" ? "slate" : "red"}>
+                {currentOpportunity.status}
+              </Badge>
+            </div>
+            <h1 className="mt-3 text-3xl font-black tracking-tight">
+              {currentOpportunity.title}
+            </h1>
+            <div className="mt-4 grid gap-2 text-sm font-semibold text-slate-600 sm:grid-cols-2">
+              <p>Tunnel: {tunnel?.name ?? "Tunnel"}</p>
+              <p>
+                Location:{" "}
+                {tunnel
+                  ? formatLocation(tunnel.city, tunnel.country)
+                  : "Location to be confirmed"}
+              </p>
+              <p>
+                Date:{" "}
+                {formatDateRange(
+                  currentOpportunity.start_date,
+                  currentOpportunity.end_date,
+                )}
+              </p>
+              <p>
+                Availability: {currentOpportunity.available_spots} /{" "}
+                {currentOpportunity.total_capacity} open
+              </p>
+              <p>
+                Price:{" "}
+                {formatPrice(
+                  Number(currentOpportunity.price),
+                  currentOpportunity.currency,
+                )}
+              </p>
+              <p>{formatPriceLabel(currentOpportunity.type)}</p>
+            </div>
+          </div>
+          <OrganizerOpportunityActions opportunityId={currentOpportunity.id} />
         </div>
         {currentOpportunity.description ? (
           <p className="mt-4 text-sm leading-6 text-slate-600">
@@ -216,4 +251,12 @@ function formatSubmittedDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatLocation(city?: string | null, country?: string | null) {
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+
+  return city ?? country ?? "Location to be confirmed";
 }

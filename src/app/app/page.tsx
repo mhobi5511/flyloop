@@ -214,6 +214,7 @@ export default async function AppHomePage({
           compact={false}
           viewHref={buildViewHref(filters, "last-minute")}
           showAll={currentView === "last-minute"}
+          currentUserId={user.id}
         />
       ) : null}
 
@@ -231,6 +232,7 @@ export default async function AppHomePage({
         compact={false}
         viewHref={buildViewHref(filters, "recommended")}
         showAll={currentView === "recommended"}
+        currentUserId={user.id}
       />
 
       <HomeSection
@@ -240,6 +242,7 @@ export default async function AppHomePage({
         viewHref={buildViewHref(filters, "followed-coaches")}
         showAll={currentView === "followed-coaches"}
         hideWhenEmpty
+        currentUserId={user.id}
       />
 
       <HomeSection
@@ -249,6 +252,7 @@ export default async function AppHomePage({
         viewHref={buildViewHref(filters, "followed-tunnels")}
         showAll={currentView === "followed-tunnels"}
         hideWhenEmpty
+        currentUserId={user.id}
       />
     </AppShell>
   );
@@ -305,6 +309,7 @@ function HomeSection({
   viewHref,
   showAll,
   hideWhenEmpty = false,
+  currentUserId,
 }: {
   title: string;
   opportunities: Opportunity[];
@@ -312,6 +317,7 @@ function HomeSection({
   viewHref: string;
   showAll: boolean;
   hideWhenEmpty?: boolean;
+  currentUserId: string;
 }) {
   const visible = showAll ? opportunities : opportunities.slice(0, 4);
 
@@ -341,6 +347,7 @@ function HomeSection({
               key={opportunity.id}
               opportunity={opportunity}
               compact={compact}
+              currentUserId={currentUserId}
             />
           ))
         ) : (

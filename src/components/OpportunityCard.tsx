@@ -5,23 +5,37 @@ import { Badge } from "./Badge";
 import {
   formatDateRange,
   formatPrice,
+  formatPriceLabel,
   opportunityViewModel,
 } from "@/lib/opportunities";
 import type { Opportunity } from "@/lib/types";
+import { applicantBorderClass } from "./ApplicationStatusBadge";
 
 type OpportunityCardProps = {
   opportunity: Opportunity;
   compact?: boolean;
+  currentUserId?: string;
 };
 
-export function OpportunityCard({ opportunity, compact = false }: OpportunityCardProps) {
+export function OpportunityCard({
+  opportunity,
+  compact = false,
+  currentUserId,
+}: OpportunityCardProps) {
   const view = opportunityViewModel(opportunity);
   const location = formatCardLocation(opportunity);
+  const href =
+    currentUserId && currentUserId === opportunity.createdBy
+      ? `/app/organizer/opportunities/${opportunity.id}`
+      : `/app/opportunities/${opportunity.id}`;
+  const statusBorder = opportunity.viewerInterestStatus
+    ? applicantBorderClass(opportunity.viewerInterestStatus)
+    : "";
 
   return (
     <Link
-      href={`/app/opportunities/${opportunity.id}`}
-      className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      href={href}
+      className={`block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusBorder}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -51,7 +65,9 @@ export function OpportunityCard({ opportunity, compact = false }: OpportunityCar
           <div className="text-sm font-bold text-sky-800">
             {formatPrice(opportunity.price, opportunity.currency)}
           </div>
-          <div className="text-xs text-sky-600">from</div>
+          <div className="max-w-24 text-xs leading-4 text-sky-600">
+            {formatPriceLabel(opportunity.type)}
+          </div>
         </div>
       </div>
 

@@ -6,6 +6,7 @@ const labels: Record<InterestStatus, string> = {
   pending: "Pending",
   waitlist: "Waitlist",
   declined: "Declined",
+  withdrawn: "Withdrawn",
 };
 
 const icons: Record<InterestStatus, string> = {
@@ -13,6 +14,7 @@ const icons: Record<InterestStatus, string> = {
   pending: "!",
   waitlist: "i",
   declined: "x",
+  withdrawn: "-",
 };
 
 export function ApplicationStatusBadge({ status }: { status: InterestStatus }) {
@@ -37,6 +39,10 @@ export function applicationStatusTone(status: InterestStatus) {
     return "blue";
   }
 
+  if (status === "withdrawn") {
+    return "slate";
+  }
+
   return "amber";
 }
 
@@ -55,6 +61,10 @@ export function applicantBorderClass(status: InterestStatus) {
 
   if (status === "waitlist") {
     return "border-l-4 border-l-sky-500";
+  }
+
+  if (status === "withdrawn") {
+    return "border-l-4 border-l-slate-400";
   }
 
   return "border-l-4 border-l-amber-400";

@@ -29,6 +29,8 @@ type PublishOpportunityInput = {
   skillLevel: string;
 };
 
+export type OpportunityFormInput = PublishOpportunityInput;
+
 type AddTunnelInput = {
   name: string;
   city: string;
@@ -245,6 +247,155 @@ export async function publishOpportunity(
   revalidatePath("/app/dashboard");
 
   return { ok: true, data: { id: data.id } };
+}
+
+export async function updateOpportunity(
+  opportunityId: string,
+  input: PublishOpportunityInput,
+): Promise<ActionResult<{ id: string }>> {
+  const { supabase, user, profile } = await getAuthenticatedOrganizer();
+
+  if (!user) {
+    return { ok: false, message: "Please log in again before saving." };
+  }
+
+  if (
+    profile?.is_organizer !== true &&
+    profile?.wants_to_create_opportunities !== true
+  ) {
+    return {
+      ok: false,
+      message: "Enable organizer mode in your profile first.",
+    };
+  }
+
+  if (!uuidPattern.test(opportunityId)) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  if (input.type !== "camp" && input.type !== "huck_jam") {
+    return { ok: false, message: "Please choose an opportunity type." };
+  }
+
+  if (!uuidPattern.test(input.tunnelId)) {
+    return { ok: false, message: "Please select a tunnel before saving." };
+  }
+
+  if (!isValidDate(input.startDate) || !isValidDate(input.endDate)) {
+    return { ok: false, message: "Please select valid dates." };
+  }
+
+  if (new Date(input.endDate) < new Date(input.startDate)) {
+    return {
+      ok: false,
+      message: "End date must be the same as or after the start date.",
+    };
+  }
+
+  if (
+    input.registrationDeadline &&
+    (!isValidDate(input.registrationDeadline) ||
+      new Date(input.registrationDeadline) > new Date(input.startDate))
+  ) {
+    return {
+      ok: false,
+      message: "Registration deadline must be on or before the start date.",
+    };
+  }
+
+  if (!Number.isFinite(input.price) || input.price < 0) {
+    return { ok: false, message: "Please enter a valid price." };
+  }
+
+  if (!isSupportedCurrency(input.currency)) {
+    return { ok: false, message: "Please choose a valid currency." };
+  }
+
+  if (!Number.isInteger(input.totalCapacity) || input.totalCapacity < 1) {
+    return { ok: false, message: "Please enter a valid capacity." };
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("opportunities")
+    .select("id,created_by,total_capacity,available_spots")
+    .eq("id", opportunityId)
+    .eq("created_by", user.id)
+    .maybeSingle();
+
+  if (existingError) {
+    return { ok: false, message: friendlyPublishError(existingError) };
+  }
+
+  if (!existing) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  const { data: tunnel, error: tunnelError } = await supabase
+    .from("tunnel_profiles")
+    .select("id,name")
+    .eq("id", input.tunnelId)
+    .maybeSingle();
+
+  if (tunnelError) {
+    return { ok: false, message: friendlyPublishError(tunnelError) };
+  }
+
+  if (!tunnel) {
+    return { ok: false, message: "Please select a tunnel before saving." };
+  }
+
+  const acceptedResult = await supabase
+    .from("opportunity_interests")
+    .select("*", { count: "exact", head: true })
+    .eq("opportunity_id", opportunityId)
+    .eq("status", "accepted");
+  const acceptedCount = acceptedResult.count ?? 0;
+
+  if (input.totalCapacity < acceptedCount) {
+    return {
+      ok: false,
+      message: `Capacity cannot be lower than ${acceptedCount} accepted applicants.`,
+    };
+  }
+
+  const title = input.title.trim()
+    ? input.title.trim()
+    : input.type === "camp"
+      ? `Camp with ${profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"}`
+      : `Huck Jam at ${tunnel.name}`;
+
+  const { error } = await supabase
+    .from("opportunities")
+    .update({
+      type: input.type,
+      title,
+      tunnel_id: input.tunnelId,
+      start_date: input.startDate,
+      end_date: input.endDate,
+      registration_deadline: input.registrationDeadline || null,
+      price: input.price,
+      currency: input.currency,
+      total_capacity: input.totalCapacity,
+      available_spots: Math.max(input.totalCapacity - acceptedCount, 0),
+      min_minutes_or_hours: cleanText(input.minMinutesOrHours),
+      description: cleanText(input.description),
+      languages: parseCsv(input.languages),
+      disciplines: parseCsv(input.disciplines),
+      skill_level: cleanText(input.skillLevel),
+    })
+    .eq("id", opportunityId)
+    .eq("created_by", user.id);
+
+  if (error) {
+    return { ok: false, message: friendlyPublishError(error) };
+  }
+
+  revalidatePath("/app");
+  revalidatePath("/app/dashboard");
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+
+  return { ok: true, data: { id: opportunityId } };
 }
 
 export async function addTunnel(

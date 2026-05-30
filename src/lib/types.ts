@@ -2,7 +2,12 @@ export type OpportunityType = "camp" | "huck_jam";
 
 export type OpportunityStatus = "draft" | "published" | "full" | "cancelled";
 
-export type InterestStatus = "pending" | "accepted" | "declined" | "waitlist";
+export type InterestStatus =
+  | "pending"
+  | "accepted"
+  | "declined"
+  | "waitlist"
+  | "withdrawn";
 
 export type ContactMethod = "whatsapp" | "instagram" | "email";
 

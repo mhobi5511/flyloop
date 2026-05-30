@@ -125,6 +125,7 @@ export async function cancelOpportunity(
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
   revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
 
   return { ok: true, message: "Opportunity cancelled." };
 }

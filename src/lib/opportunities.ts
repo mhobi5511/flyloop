@@ -74,6 +74,10 @@ export function formatPrice(price: number, currency: string) {
   }).format(price)} ${currency}`;
 }
 
+export function formatPriceLabel(type: Opportunity["type"]) {
+  return type === "huck_jam" ? "shared flying time" : "per hour incl. coaching";
+}
+
 function parseDate(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
