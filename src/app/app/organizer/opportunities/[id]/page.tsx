@@ -8,6 +8,7 @@ import {
   applicantBorderClass,
 } from "@/components/ApplicationStatusBadge";
 import { Badge } from "@/components/Badge";
+import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -37,13 +38,15 @@ type ApplicantRow = {
         phone: string | null;
         whatsapp_number: string | null;
         instagram_handle: string | null;
+        profile_image_url: string | null;
       }
     | Array<{
         full_name: string;
         country: string | null;
         phone: string | null;
         whatsapp_number: string | null;
-        instagram_handle: string | null;
+          instagram_handle: string | null;
+          profile_image_url: string | null;
       }>
     | null;
 };
@@ -86,7 +89,7 @@ export default async function OrganizerOpportunityPage({
 
   const { data: applicants } = await supabase
     .from("opportunity_interests")
-    .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(full_name,country,phone,whatsapp_number,instagram_handle)")
+    .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
     .order("created_at", { ascending: false });
   const canCreate =
@@ -148,17 +151,26 @@ export default async function OrganizerOpportunityPage({
                 className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${applicantBorderClass(applicant.status)}`}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-black text-slate-950">
-                        {profile?.full_name ?? "Applicant"}
-                      </h3>
-                      <ApplicationStatusBadge status={applicant.status} />
-                    </div>
-                    <div className="mt-2 grid gap-1 text-sm text-slate-600">
-                      <p>{profile?.country ?? "Country not set"}</p>
-                      <p>Submitted: {formatSubmittedDate(applicant.created_at)}</p>
-                      <p>Phone: {phone || "Not provided"}</p>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 gap-3">
+                      <Avatar
+                        name={profile?.full_name}
+                        imageUrl={profile?.profile_image_url}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-black text-slate-950">
+                            {profile?.full_name ?? "Applicant"}
+                          </h3>
+                          <ApplicationStatusBadge status={applicant.status} />
+                        </div>
+                        <div className="mt-2 grid gap-1 text-sm text-slate-600">
+                          <p>{profile?.country ?? "Country not set"}</p>
+                          <p>Submitted: {formatSubmittedDate(applicant.created_at)}</p>
+                          <p>Phone: {phone || "Not provided"}</p>
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {phone ? (

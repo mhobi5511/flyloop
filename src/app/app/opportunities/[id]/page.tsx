@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Globe2, MapPin, Users } from "lucide-react";
+import { ApplicationStatusBadge } from "@/components/ApplicationStatusBadge";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
@@ -56,6 +57,8 @@ export default async function OpportunityDetailPage({
   const isLastMinute =
     opportunity.isLastMinute ?? isLastMinuteOpportunity(opportunity);
   const description = getMeaningfulDescription(opportunity.description);
+  const personLabel =
+    opportunity.type === "camp" && opportunity.coachName ? "Coach" : "Organizer";
   const detailRows = getDetailRows({
     skillLevel: opportunity.skillLevel,
     disciplines: opportunity.disciplines,
@@ -65,9 +68,12 @@ export default async function OpportunityDetailPage({
 
   return (
     <AppShell active="home">
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap gap-2">
+            {viewerInterestStatus ? (
+              <ApplicationStatusBadge status={viewerInterestStatus} />
+            ) : null}
             <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
               {formatOpportunityType(opportunity.type)}
             </Badge>
@@ -77,39 +83,73 @@ export default async function OpportunityDetailPage({
             </Badge>
           </div>
 
-          <h1 className="mt-4 text-4xl font-black leading-tight tracking-tight">
+          <h1 className="mt-3 text-2xl font-black leading-tight tracking-tight sm:text-4xl">
             {opportunity.title}
           </h1>
-          {description ? (
-            <p className="mt-3 text-base leading-7 text-slate-600">
-              {description}
-            </p>
-          ) : null}
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <Info icon={<CalendarDays size={18} />} label="Dates">
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Info compact icon={<CalendarDays size={16} />} label="Date">
               {formatDateRange(opportunity.startDate, opportunity.endDate)}
             </Info>
-            <Info icon={<MapPin size={18} />} label="Tunnel">
-              <Link className="text-sky-700" href={`/app/tunnels/${opportunity.tunnelId}`}>
-                {opportunity.tunnelName}
-              </Link>
-              <span className="block text-slate-600">
-                {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
-              </span>
-            </Info>
-            <Info icon={<Users size={18} />} label="Availability">
+            <Info compact icon={<Users size={16} />} label="Availability">
               {opportunity.availableSpots} of {opportunity.totalCapacity} spots open
             </Info>
-            {opportunity.languages.length > 0 ? (
-              <Info icon={<Globe2 size={18} />} label="Languages">
-                {opportunity.languages.join(", ")}
-              </Info>
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-slate-200 p-3">
+            <div className="flex items-start gap-2 text-sky-700">
+              <MapPin size={17} />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase text-slate-400">Tunnel</p>
+                <Link
+                  className="mt-0.5 block font-black text-slate-900"
+                  href={`/app/tunnels/${opportunity.tunnelId}`}
+                >
+                  {opportunity.tunnelName}
+                </Link>
+                <p className="mt-0.5 text-sm font-semibold text-slate-600">
+                  {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
+                </p>
+              </div>
+            </div>
+            {!isOrganizer ? (
+              <div className="mt-3">
+                <FollowButton
+                  targetType="tunnel"
+                  targetId={opportunity.tunnelId}
+                  label="Follow tunnel"
+                />
+              </div>
             ) : null}
           </div>
 
-          <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+          <div className="mt-3 rounded-2xl bg-sky-50 p-3">
+            <p className="text-xs font-bold uppercase text-sky-700">Price</p>
+            <p className="mt-0.5 text-2xl font-black text-slate-950">
+              {formatPrice(opportunity.price, opportunity.currency)}
+            </p>
+          </div>
+
+          <div className="mt-3">
+            {isOrganizer ? (
+              <OrganizerOpportunityActions opportunityId={opportunity.id} />
+            ) : (
+              <InterestButton
+                opportunityId={opportunity.id}
+                disabled={isUnavailable}
+                initialStatus={viewerInterestStatus}
+                compact
+              />
+            )}
+          </div>
+
+          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-bold text-slate-700">Details</p>
+            {description ? (
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {description}
+              </p>
+            ) : null}
             {detailRows.length > 0 ? (
               <div className="mt-3 grid gap-2 text-sm text-slate-600">
                 {detailRows.map((row) => (
@@ -125,6 +165,14 @@ export default async function OpportunityDetailPage({
             )}
           </div>
 
+          {opportunity.languages.length > 0 ? (
+            <div className="mt-3">
+              <Info icon={<Globe2 size={18} />} label="Languages">
+                {opportunity.languages.join(", ")}
+              </Info>
+            </div>
+          ) : null}
+
           {opportunity.coachFollowId ? (
             <div className="mt-5 rounded-2xl border border-slate-200 p-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -133,9 +181,11 @@ export default async function OpportunityDetailPage({
                     {opportunity.coachName?.slice(0, 1) ?? "O"}
                   </div>
                   <div>
-                    <p className="text-sm text-slate-500">Organizer</p>
+                    <p className="text-sm text-slate-500">
+                      {personLabel === "Coach" ? "About the coach" : "Organizer"}
+                    </p>
                     <p className="font-bold text-slate-900">
-                      {opportunity.coachName ?? "Organizer"}
+                      {opportunity.coachName ?? personLabel}
                     </p>
                   </div>
                 </div>
@@ -143,7 +193,7 @@ export default async function OpportunityDetailPage({
                   <FollowButton
                     targetType="coach"
                     targetId={opportunity.coachFollowId}
-                    label="Follow organizer"
+                    label={personLabel === "Coach" ? "Follow coach" : "Follow organizer"}
                   />
                 ) : null}
               </div>
@@ -151,33 +201,14 @@ export default async function OpportunityDetailPage({
           ) : null}
         </article>
 
-        <aside className="grid content-start gap-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-slate-500">Price</p>
-            <p className="mt-1 text-3xl font-black">
-              {formatPrice(opportunity.price, opportunity.currency)}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
+        <aside className="hidden content-start gap-4 lg:grid">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-bold text-slate-500">Contact</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               Contact happens outside Flyloop via{" "}
               {opportunity.contactMethod === "whatsapp" ? "WhatsApp" : "Instagram"}.
             </p>
           </div>
-          {isOrganizer ? (
-            <OrganizerOpportunityActions opportunityId={opportunity.id} />
-          ) : (
-            <InterestButton
-              opportunityId={opportunity.id}
-              disabled={isUnavailable}
-              initialStatus={viewerInterestStatus}
-            />
-          )}
-          {!isOrganizer ? (
-            <FollowButton
-              targetType="tunnel"
-              targetId={opportunity.tunnelId}
-              label="Follow tunnel"
-            />
-          ) : null}
         </aside>
       </div>
     </AppShell>
@@ -242,15 +273,17 @@ function Info({
   icon,
   label,
   children,
+  compact = false,
 }: {
   icon: ReactNode;
   label: string;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 p-4">
+    <div className={`rounded-2xl border border-slate-200 ${compact ? "p-3" : "p-4"}`}>
       <div className="flex items-center gap-2 text-sky-700">{icon}</div>
-      <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+      <p className="mt-1 text-xs font-bold uppercase text-slate-400">
         {label}
       </p>
       <div className="mt-1 text-sm font-bold text-slate-800">{children}</div>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AtSign } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { Avatar } from "@/components/Avatar";
 import { FollowButton } from "@/components/FollowButton";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -19,11 +20,13 @@ type CoachProfileRow = {
         full_name: string;
         country: string | null;
         instagram_handle: string | null;
+        profile_image_url: string | null;
       }
     | Array<{
         full_name: string;
         country: string | null;
         instagram_handle: string | null;
+        profile_image_url: string | null;
       }>;
 };
 
@@ -36,7 +39,7 @@ export default async function CoachProfilePage({
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("coach_profiles")
-    .select("id,user_id,bio,disciplines,languages,achievements,instagram_handle,profiles(full_name,country,instagram_handle)")
+    .select("id,user_id,bio,disciplines,languages,achievements,instagram_handle,profiles(full_name,country,instagram_handle,profile_image_url)")
     .eq("id", id)
     .maybeSingle();
 
@@ -60,9 +63,11 @@ export default async function CoachProfilePage({
     <AppShell active="profile">
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-4">
-          <div className="grid size-24 place-items-center rounded-3xl bg-sky-50 text-3xl font-black text-sky-700">
-            {profile?.full_name?.slice(0, 1) ?? "C"}
-          </div>
+          <Avatar
+            name={profile?.full_name}
+            imageUrl={profile?.profile_image_url}
+            size="lg"
+          />
           <div>
             <p className="text-sm font-bold text-sky-700">
               {profile?.country ?? "Coach"}

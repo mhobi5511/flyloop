@@ -1,9 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 import {
   ClipboardList,
   CalendarPlus,
-  Compass,
   Home,
   LayoutDashboard,
   User,
@@ -122,9 +122,14 @@ export async function AppShell({
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <Link href="/app" className="flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-xl bg-sky-600 text-white">
-              <Compass size={18} />
-            </span>
+            <Image
+              src="/flyloop-icon-192.png"
+              alt=""
+              width={36}
+              height={36}
+              priority
+              className="size-9 rounded-xl shadow-sm"
+            />
             <span className="text-lg font-bold tracking-tight">Flyloop</span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">

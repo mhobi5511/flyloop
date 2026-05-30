@@ -9,10 +9,10 @@ const labels: Record<InterestStatus, string> = {
 };
 
 const icons: Record<InterestStatus, string> = {
-  accepted: "✓",
+  accepted: "+",
   pending: "!",
-  waitlist: "•",
-  declined: "×",
+  waitlist: "i",
+  declined: "x",
 };
 
 export function ApplicationStatusBadge({ status }: { status: InterestStatus }) {

@@ -41,7 +41,7 @@ export default async function AppHomePage({
     redirect("/login?next=/app");
   }
 
-  const [profileResult, opportunitiesResult] = await Promise.all([
+  const [profileResult, opportunitiesResult, followsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("full_name,latitude,longitude,use_location_recommendations,preferred_radius_km")
@@ -51,6 +51,10 @@ export default async function AppHomePage({
       .from("published_opportunities_with_context")
       .select("*")
       .order("start_date", { ascending: true }),
+    supabase
+      .from("follows")
+      .select("target_id,target_type")
+      .eq("follower_id", user.id),
   ]);
 
   if (profileResult.error) {
@@ -59,6 +63,10 @@ export default async function AppHomePage({
 
   if (opportunitiesResult.error) {
     console.error("Home opportunities lookup failed", opportunitiesResult.error);
+  }
+
+  if (followsResult.error) {
+    console.error("Home follows lookup failed", followsResult.error);
   }
 
   const allRows = opportunitiesResult.error
@@ -75,6 +83,12 @@ export default async function AppHomePage({
     return countryMatches && monthMatches;
   });
   const opportunityIds = filteredRows.map((row) => row.id);
+  const followRows = followsResult.error ? [] : followsResult.data ?? [];
+  const followedTunnelIds = new Set(
+    followRows
+      .filter((follow) => follow.target_type === "tunnel")
+      .map((follow) => follow.target_id),
+  );
   const { data: interestRows } =
     opportunityIds.length > 0
       ? await supabase
@@ -111,6 +125,7 @@ export default async function AppHomePage({
   const lastMinute: Opportunity[] = [];
   const recommended: Opportunity[] = [];
   const followedCoaches: Opportunity[] = [];
+  const followedTunnels: Opportunity[] = [];
 
   for (const item of mapped) {
     if (item.isLastMinute) {
@@ -124,9 +139,14 @@ export default async function AppHomePage({
     if (item.isFollowedCoach) {
       followedCoaches.push(item.opportunity);
     }
+
+    if (followedTunnelIds.has(item.opportunity.tunnelId)) {
+      followedTunnels.push(item.opportunity);
+    }
   }
   const currentView = filters.view ?? "";
   const hasFilters = Boolean(filters.country || filters.month);
+  const recommendationsEnabled = homeProfile?.use_location_recommendations === true;
 
   return (
     <AppShell active="home">
@@ -139,11 +159,15 @@ export default async function AppHomePage({
         </h1>
       </div>
 
-      <form className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
-        <label className="grid gap-1 text-sm font-bold text-slate-700">
-          Country
-          <select name="country" defaultValue={filters.country ?? ""} className="field">
-            <option value="">All</option>
+      <form className="mt-4 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        <label className="shrink-0">
+          <span className="sr-only">Country</span>
+          <select
+            name="country"
+            defaultValue={filters.country ?? ""}
+            className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm outline-none"
+          >
+            <option value="">All countries</option>
             {countryOptions.map((country) => (
               <option key={country} value={country}>
                 {country}
@@ -151,10 +175,14 @@ export default async function AppHomePage({
             ))}
           </select>
         </label>
-        <label className="grid gap-1 text-sm font-bold text-slate-700">
-          Month
-          <select name="month" defaultValue={filters.month ?? ""} className="field">
-            <option value="">All</option>
+        <label className="shrink-0">
+          <span className="sr-only">Month</span>
+          <select
+            name="month"
+            defaultValue={filters.month ?? ""}
+            className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm outline-none"
+          >
+            <option value="">All months</option>
             {monthOptions.map((month) => (
               <option key={month.value} value={month.value}>
                 {month.label}
@@ -164,7 +192,7 @@ export default async function AppHomePage({
         </label>
         <button
           type="submit"
-          className="h-12 self-end rounded-xl bg-slate-950 px-4 text-sm font-bold text-white"
+          className="h-9 shrink-0 rounded-full bg-slate-950 px-4 text-xs font-bold text-white shadow-sm"
         >
           Apply
         </button>
@@ -179,16 +207,26 @@ export default async function AppHomePage({
         </Link>
       ) : null}
 
-      <HomeSection
-        title={currentView === "last-minute" ? "All last-minute opportunities" : "Last-minute opportunities"}
-        opportunities={lastMinute}
-        compact={false}
-        viewHref={buildViewHref(filters, "last-minute")}
-        showAll={currentView === "last-minute"}
-      />
+      {lastMinute.length > 0 ? (
+        <HomeSection
+          title={currentView === "last-minute" ? "All last-minute opportunities" : "Last-minute opportunities"}
+          opportunities={lastMinute}
+          compact={false}
+          viewHref={buildViewHref(filters, "last-minute")}
+          showAll={currentView === "last-minute"}
+        />
+      ) : null}
 
       <HomeSection
-        title={currentView === "recommended" ? "All recommended opportunities" : "Recommended opportunities"}
+        title={
+          currentView === "recommended"
+            ? recommendationsEnabled
+              ? "All opportunities near you"
+              : "All recommended opportunities"
+            : recommendationsEnabled
+              ? "Opportunities near you"
+              : "Recommended opportunities"
+        }
         opportunities={recommended}
         compact={false}
         viewHref={buildViewHref(filters, "recommended")}
@@ -196,11 +234,21 @@ export default async function AppHomePage({
       />
 
       <HomeSection
-        title={currentView === "followed" ? "All followed coach opportunities" : "Followed coaches"}
+        title={currentView === "followed-coaches" ? "All followed coach opportunities" : "From followed coaches"}
         opportunities={followedCoaches}
         compact
-        viewHref={buildViewHref(filters, "followed")}
-        showAll={currentView === "followed"}
+        viewHref={buildViewHref(filters, "followed-coaches")}
+        showAll={currentView === "followed-coaches"}
+        hideWhenEmpty
+      />
+
+      <HomeSection
+        title={currentView === "followed-tunnels" ? "All followed tunnel opportunities" : "From followed tunnels"}
+        opportunities={followedTunnels}
+        compact
+        viewHref={buildViewHref(filters, "followed-tunnels")}
+        showAll={currentView === "followed-tunnels"}
+        hideWhenEmpty
       />
     </AppShell>
   );
@@ -256,17 +304,23 @@ function HomeSection({
   compact,
   viewHref,
   showAll,
+  hideWhenEmpty = false,
 }: {
   title: string;
   opportunities: Opportunity[];
   compact: boolean;
   viewHref: string;
   showAll: boolean;
+  hideWhenEmpty?: boolean;
 }) {
   const visible = showAll ? opportunities : opportunities.slice(0, 4);
 
+  if (hideWhenEmpty && visible.length === 0) {
+    return null;
+  }
+
   return (
-    <section className="mt-8">
+    <section className="mt-6">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold tracking-tight text-slate-950">
           {title}

@@ -10,12 +10,14 @@ type InterestButtonProps = {
   opportunityId: string;
   disabled?: boolean;
   initialStatus?: InterestStatus;
+  compact?: boolean;
 };
 
 export function InterestButton({
   opportunityId,
   disabled,
   initialStatus,
+  compact = false,
 }: InterestButtonProps) {
   const [interestStatus, setInterestStatus] = useState<InterestStatus | null>(
     initialStatus ?? null,
@@ -77,7 +79,7 @@ export function InterestButton({
       : "I'm interested";
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={compact ? "" : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"}>
       <button
         type="button"
         disabled={disabled || hasInterest || isLoading}
@@ -87,7 +89,7 @@ export function InterestButton({
         <Send size={18} />
         {buttonLabel}
       </button>
-      <p className="mt-3 text-center text-sm leading-6 text-slate-600">
+      <p className={`${compact ? "mt-2" : "mt-3 text-center"} text-sm leading-6 text-slate-600`}>
         {message ||
           (interestStatus
             ? statusHint(interestStatus)
