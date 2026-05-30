@@ -12,6 +12,7 @@ import { LogoutButton } from "./LogoutButton";
 import { NotificationBell } from "./NotificationBell";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { unstable_rethrow } from "next/navigation";
 
 type AppShellProps = {
   children: ReactNode;
@@ -44,37 +45,56 @@ const profileNavItem = {
 } as const;
 
 async function getShellState() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
+    if (!user) {
+      return {
+        canCreate: false,
+        canJoin: true,
+        organizerUnreadCount: 0,
+      };
+    }
+
+    const [{ data: profile, error: profileError }, notificationResult] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("wants_to_join_opportunities,wants_to_create_opportunities")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("read", false)
+          .eq("type", "new_interest"),
+      ]);
+
+    if (profileError) {
+      console.error("App shell profile lookup failed", profileError);
+    }
+
+    if (notificationResult.error) {
+      console.error("App shell notification count failed", notificationResult.error);
+    }
+
+    return {
+      canCreate: profile?.wants_to_create_opportunities === true,
+      canJoin: profile?.wants_to_join_opportunities !== false,
+      organizerUnreadCount: notificationResult.count ?? 0,
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("App shell state failed", error);
     return {
       canCreate: false,
       canJoin: true,
       organizerUnreadCount: 0,
     };
   }
-
-  const [{ data: profile }, { count: organizerUnreadCount }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("wants_to_join_opportunities,wants_to_create_opportunities")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("notifications")
-      .select("*", { count: "exact", head: true })
-      .eq("read", false)
-      .eq("type", "new_interest"),
-  ]);
-
-  return {
-    canCreate: profile?.wants_to_create_opportunities === true,
-    canJoin: profile?.wants_to_join_opportunities !== false,
-    organizerUnreadCount: organizerUnreadCount ?? 0,
-  };
 }
 
 export async function AppShell({

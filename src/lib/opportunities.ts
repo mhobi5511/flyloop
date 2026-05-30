@@ -45,13 +45,36 @@ export function formatDateRange(startDate: string, endDate: string) {
     month: "short",
     day: "numeric",
   });
-  const start = formatter.format(new Date(`${startDate}T00:00:00.000Z`));
-  const end = formatter.format(new Date(`${endDate}T00:00:00.000Z`));
-  return start === end ? start : `${start} - ${end}`;
+
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+
+  if (!start && !end) {
+    return "Date to be confirmed";
+  }
+
+  if (!start) {
+    return formatter.format(end as Date);
+  }
+
+  if (!end) {
+    return formatter.format(start);
+  }
+
+  const formattedStart = formatter.format(start);
+  const formattedEnd = formatter.format(end);
+  return formattedStart === formattedEnd
+    ? formattedStart
+    : `${formattedStart} - ${formattedEnd}`;
 }
 
 export function formatPrice(price: number, currency: string) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 0,
   }).format(price)} ${currency}`;
+}
+
+function parseDate(value: string) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

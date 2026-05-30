@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { distanceKm, parseCoordinate } from "@/lib/location";
 import type { InterestStatus, Opportunity } from "@/lib/types";
+import { redirect } from "next/navigation";
 
 type HomeProfile = {
   full_name: string | null;
@@ -30,11 +31,16 @@ export default async function AppHomePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [{ data: profile }, { data }, { data: followRows }] = await Promise.all([
+
+  if (!user) {
+    redirect("/login?next=/app");
+  }
+
+  const [profileResult, opportunitiesResult, followsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("full_name,latitude,longitude,region,preferred_radius_km")
-      .eq("id", user?.id)
+      .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("published_opportunities_with_context")
@@ -43,13 +49,32 @@ export default async function AppHomePage() {
     supabase
       .from("follows")
       .select("target_id")
-      .eq("follower_id", user?.id)
+      .eq("follower_id", user.id)
       .eq("target_type", "coach"),
   ]);
-  const followedCoachIds = (followRows ?? []).map((follow) => follow.target_id);
-  const opportunityIds = ((data ?? []) as HomeFeedRow[]).map((row) => row.id);
+
+  if (profileResult.error) {
+    console.error("Home profile lookup failed", profileResult.error);
+  }
+
+  if (opportunitiesResult.error) {
+    console.error("Home opportunities lookup failed", opportunitiesResult.error);
+  }
+
+  if (followsResult.error) {
+    console.error("Home follows lookup failed", followsResult.error);
+  }
+
+  const followRows = followsResult.error ? [] : followsResult.data ?? [];
+  const followedCoachIds = followRows
+    .map((follow) => follow.target_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const opportunityRows = opportunitiesResult.error
+    ? []
+    : ((opportunitiesResult.data ?? []) as HomeFeedRow[]);
+  const opportunityIds = opportunityRows.map((row) => row.id);
   const { data: interestRows } =
-    user && opportunityIds.length > 0
+    opportunityIds.length > 0
       ? await supabase
           .from("opportunity_interests")
           .select("opportunity_id,status")
@@ -65,8 +90,10 @@ export default async function AppHomePage() {
       : { data: [] };
   const followedCoachProfiles = (followedCoachRows ?? []) as FollowedCoach[];
 
-  const homeProfile = profile as HomeProfile | null;
-  const rows = (data ?? []) as HomeFeedRow[];
+  const homeProfile = profileResult.error
+    ? null
+    : (profileResult.data as HomeProfile | null);
+  const rows = opportunityRows;
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
@@ -204,7 +231,11 @@ function classifyLocation(row: HomeFeedRow, profile: HomeProfile | null) {
   const userLon = parseCoordinate(profile?.longitude);
   const tunnelLat = parseCoordinate(row.tunnel_latitude);
   const tunnelLon = parseCoordinate(row.tunnel_longitude);
-  const radius = profile?.preferred_radius_km ?? 1000;
+  const profileRadius = profile?.preferred_radius_km;
+  const radius =
+    typeof profileRadius === "number" && Number.isFinite(profileRadius)
+      ? profileRadius
+      : 1000;
 
   if (
     userLat !== null &&
