@@ -8,7 +8,7 @@ export type HomeFeedRow = {
   tunnel_id: string;
   start_date: string;
   end_date: string;
-  registration_deadline: string;
+  registration_deadline: string | null;
   price: number | string;
   currency: string;
   total_capacity: number;

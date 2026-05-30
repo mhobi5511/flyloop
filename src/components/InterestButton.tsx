@@ -72,7 +72,8 @@ export function InterestButton({ opportunityId, disabled }: InterestButtonProps)
         setMessage("Your interest was already sent.");
         return;
       }
-      setError(insertError.message);
+      console.error("Interest creation failed", insertError);
+      setError("Could not send interest. Please try again.");
       return;
     }
 

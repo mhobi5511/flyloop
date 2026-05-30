@@ -92,7 +92,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
     setIsLoading(false);
     if (saveError) {
-      setError(saveError.message);
+      console.error("Profile save failed", saveError);
+      setError("Could not save profile. Please check your details and try again.");
       return;
     }
 

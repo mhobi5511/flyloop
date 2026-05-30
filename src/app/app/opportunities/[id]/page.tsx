@@ -85,7 +85,10 @@ export default async function OpportunityDetailPage({
               <p>
                 Minimum time: {opportunity.minMinutesOrHours ?? "Organizer confirms"}
               </p>
-              <p>Registration deadline: {opportunity.registrationDeadline}</p>
+              <p>
+                Registration deadline:{" "}
+                {opportunity.registrationDeadline ?? "Organizer confirms"}
+              </p>
             </div>
           </div>
 

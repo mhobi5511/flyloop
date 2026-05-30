@@ -3,18 +3,17 @@ import { OpportunityCard } from "@/components/OpportunityCard";
 import { Section } from "@/components/Section";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
+import type { Opportunity } from "@/lib/types";
 
 export default async function AppHomePage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user?.id)
-    .maybeSingle();
-  const { data } = await supabase.rpc("get_home_feed");
+  const [{ data: profile }, { data }] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("id", user?.id).maybeSingle(),
+    supabase.rpc("get_home_feed"),
+  ]);
 
   const rows = (data ?? []) as HomeFeedRow[];
   const mapped = rows.map((row) => ({
@@ -23,18 +22,26 @@ export default async function AppHomePage() {
     isLastMinute: row.is_last_minute ?? false,
   }));
 
-  const lastMinute = mapped
-    .filter((item) => item.isLastMinute)
-    .map((item) => item.opportunity);
-  const upcoming = mapped
-    .filter((item) => !item.isLastMinute)
-    .map((item) => item.opportunity);
-  const followedCoaches = mapped
-    .filter((item) => item.feedPriority === 3)
-    .map((item) => item.opportunity);
-  const followedTunnels = mapped
-    .filter((item) => item.feedPriority === 4)
-    .map((item) => item.opportunity);
+  const lastMinute: Opportunity[] = [];
+  const upcoming: Opportunity[] = [];
+  const followedCoaches: Opportunity[] = [];
+  const followedTunnels: Opportunity[] = [];
+
+  for (const item of mapped) {
+    if (item.isLastMinute) {
+      lastMinute.push(item.opportunity);
+    } else {
+      upcoming.push(item.opportunity);
+    }
+
+    if (item.feedPriority === 3) {
+      followedCoaches.push(item.opportunity);
+    }
+
+    if (item.feedPriority === 4) {
+      followedTunnels.push(item.opportunity);
+    }
+  }
 
   return (
     <AppShell active="home">

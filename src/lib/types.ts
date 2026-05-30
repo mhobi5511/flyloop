@@ -55,7 +55,7 @@ export type Opportunity = {
   isLastMinute?: boolean;
   startDate: string;
   endDate: string;
-  registrationDeadline: string;
+  registrationDeadline: string | null;
   price: number;
   currency: string;
   totalCapacity: number;

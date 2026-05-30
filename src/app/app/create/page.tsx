@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { CreateOpportunityForm } from "@/components/CreateOpportunityForm";
+import {
+  CreateOpportunityForm,
+  type TunnelOption,
+} from "@/components/CreateOpportunityForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function CreateOpportunityPage() {
@@ -8,12 +11,25 @@ export default async function CreateOpportunityPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("wants_to_create_opportunities")
-    .eq("id", user?.id)
-    .maybeSingle();
+
+  const [{ data: profile }, { data: tunnelRows }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("wants_to_create_opportunities")
+      .eq("id", user?.id)
+      .maybeSingle(),
+    supabase
+      .from("tunnel_profiles")
+      .select("id,name,city,country")
+      .order("name", { ascending: true }),
+  ]);
   const canCreate = profile?.wants_to_create_opportunities === true;
+  const tunnels = ((tunnelRows ?? []) as TunnelOption[]).map((tunnel) => ({
+    id: tunnel.id,
+    name: tunnel.name,
+    city: tunnel.city,
+    country: tunnel.country,
+  }));
 
   return (
     <AppShell active="create">
@@ -24,7 +40,7 @@ export default async function CreateOpportunityPage() {
           discover it and send interest.
         </p>
         {canCreate ? (
-          <CreateOpportunityForm />
+          <CreateOpportunityForm tunnels={tunnels} />
         ) : (
           <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-black tracking-tight">

@@ -4,8 +4,12 @@ const lastMinuteWindowDays = 10;
 
 export function isLastMinuteOpportunity(
   opportunity: Opportunity,
-  now = new Date("2026-05-29T12:00:00.000Z"),
+  now = new Date(),
 ) {
+  if (!opportunity.registrationDeadline) {
+    return false;
+  }
+
   const startsAt = new Date(`${opportunity.startDate}T00:00:00.000Z`);
   const deadline = new Date(`${opportunity.registrationDeadline}T23:59:59.000Z`);
   const daysUntilStart =
@@ -47,9 +51,7 @@ export function formatDateRange(startDate: string, endDate: string) {
 }
 
 export function formatPrice(price: number, currency: string) {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency,
+  return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 0,
-  }).format(price);
+  }).format(price)} ${currency}`;
 }

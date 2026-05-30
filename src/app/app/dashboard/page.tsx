@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AtSign, MessageCircle, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { InterestStatusSupabaseSelect } from "@/components/InterestStatusSupabaseSelect";
-import { formatDateRange } from "@/lib/opportunities";
+import { formatDateRange, formatPrice } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus } from "@/lib/types";
 
@@ -11,6 +11,8 @@ type OpportunityRow = {
   title: string;
   start_date: string;
   end_date: string;
+  price: number | string;
+  currency: string;
   available_spots: number;
 };
 
@@ -70,7 +72,7 @@ export default async function OrganizerDashboardPage() {
 
   const { data: opportunities } = await supabase
     .from("opportunities")
-    .select("id,title,start_date,end_date,available_spots")
+    .select("id,title,start_date,end_date,price,currency,available_spots")
     .eq("created_by", user?.id)
     .order("start_date", { ascending: true });
   const opportunityRows = (opportunities ?? []) as OpportunityRow[];
@@ -122,6 +124,14 @@ export default async function OrganizerDashboardPage() {
                     <h2 className="mt-1 font-bold text-slate-950">
                       {opportunity.title}
                     </h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {formatPrice(
+                        typeof opportunity.price === "string"
+                          ? Number.parseFloat(opportunity.price)
+                          : opportunity.price,
+                        opportunity.currency,
+                      )}
+                    </p>
                   </div>
                   <div className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-700">
                     {opportunity.available_spots} open
