@@ -18,13 +18,22 @@ export function OrganizerNavBadge({
     const supabase = createSupabaseBrowserClient();
 
     async function loadCount() {
-      const { count: unreadCount } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("read", false)
-        .eq("type", "new_interest");
+      try {
+        const { count: unreadCount, error: countError } = await supabase
+          .from("notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("read", false)
+          .eq("type", "new_interest");
 
-      setCount(unreadCount ?? 0);
+        if (countError) {
+          console.error("Organizer nav badge count failed", countError);
+          return;
+        }
+
+        setCount(unreadCount ?? 0);
+      } catch (countError) {
+        console.error("Organizer nav badge count failed", countError);
+      }
     }
 
     function handleRead() {
@@ -33,18 +42,11 @@ export function OrganizerNavBadge({
 
     window.addEventListener("flyloop-notifications-read", handleRead);
 
-    const channel = supabase
-      .channel("organizer-nav-notifications")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        () => void loadCount(),
-      )
-      .subscribe();
+    const interval = window.setInterval(() => void loadCount(), 15_000);
 
     return () => {
       window.removeEventListener("flyloop-notifications-read", handleRead);
-      void supabase.removeChannel(channel);
+      window.clearInterval(interval);
     };
   }, []);
 

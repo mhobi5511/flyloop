@@ -23,28 +23,30 @@ export function NotificationBell() {
     const supabase = createSupabaseBrowserClient();
 
     async function loadNotifications() {
-      const { data } = await supabase
-        .from("notifications")
-        .select("id,title,body,type,opportunity_id,read,created_at")
-        .order("created_at", { ascending: false })
-        .limit(20);
+      try {
+        const { data, error: loadError } = await supabase
+          .from("notifications")
+          .select("id,title,body,type,opportunity_id,read,created_at")
+          .order("created_at", { ascending: false })
+          .limit(20);
 
-      setNotifications(data ?? []);
+        if (loadError) {
+          console.error("Notification load failed", loadError);
+          return;
+        }
+
+        setNotifications(data ?? []);
+      } catch (loadError) {
+        console.error("Notification load failed", loadError);
+      }
     }
 
     void loadNotifications();
 
-    const channel = supabase
-      .channel("notification-bell")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        () => void loadNotifications(),
-      )
-      .subscribe();
+    const interval = window.setInterval(() => void loadNotifications(), 15_000);
 
     return () => {
-      void supabase.removeChannel(channel);
+      window.clearInterval(interval);
     };
   }, []);
 
@@ -55,7 +57,16 @@ export function NotificationBell() {
 
     const supabase = createSupabaseBrowserClient();
     const unreadIds = unread.map((notification) => notification.id);
-    await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
+    const { error: updateError } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .in("id", unreadIds);
+
+    if (updateError) {
+      console.error("Notification mark-read failed", updateError);
+      return;
+    }
+
     setNotifications((current) =>
       current.map((notification) => ({ ...notification, read: true })),
     );
