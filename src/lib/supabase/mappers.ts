@@ -29,6 +29,13 @@ export type HomeFeedRow = {
   tunnel_country?: string | null;
   tunnel_city?: string | null;
   coach_name?: string | null;
+  coach_follow_id?: string | null;
+  tunnel_region?: string | null;
+  tunnel_latitude?: number | string | null;
+  tunnel_longitude?: number | string | null;
+  tunnel_distance_km?: number | null;
+  location_label?: string | null;
+  is_followed_coach?: boolean | null;
 };
 
 export function mapOpportunity(row: HomeFeedRow): Opportunity {
@@ -38,10 +45,14 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
     title: row.title,
     coachId: row.coach_id ?? undefined,
     coachName: row.coach_name ?? undefined,
+    coachFollowId: row.coach_follow_id ?? undefined,
     tunnelId: row.tunnel_id,
     tunnelName: row.tunnel_name ?? undefined,
     tunnelCity: row.tunnel_city ?? undefined,
     tunnelCountry: row.tunnel_country ?? undefined,
+    tunnelRegion: row.tunnel_region ?? undefined,
+    tunnelDistanceKm: row.tunnel_distance_km ?? undefined,
+    locationLabel: row.location_label ?? undefined,
     isLastMinute: row.is_last_minute,
     startDate: row.start_date,
     endDate: row.end_date,

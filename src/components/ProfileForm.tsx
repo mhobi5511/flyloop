@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { regions } from "@/lib/location";
 
 type ProfileFormProps = {
   profile: {
@@ -13,6 +14,12 @@ type ProfileFormProps = {
     instagram_handle: string | null;
     wants_to_join_opportunities: boolean;
     wants_to_create_opportunities: boolean;
+    current_country: string | null;
+    current_city: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    region: string | null;
+    preferred_radius_km: number;
   };
 };
 
@@ -28,6 +35,20 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   );
   const [wantsToCreate, setWantsToCreate] = useState(
     profile.wants_to_create_opportunities,
+  );
+  const [currentCountry, setCurrentCountry] = useState(
+    profile.current_country ?? "",
+  );
+  const [currentCity, setCurrentCity] = useState(profile.current_city ?? "");
+  const [latitude, setLatitude] = useState(
+    profile.latitude === null ? "" : String(profile.latitude),
+  );
+  const [longitude, setLongitude] = useState(
+    profile.longitude === null ? "" : String(profile.longitude),
+  );
+  const [region, setRegion] = useState(profile.region ?? "");
+  const [preferredRadiusKm, setPreferredRadiusKm] = useState(
+    String(profile.preferred_radius_km ?? 1000),
   );
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -66,9 +87,15 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       instagram_handle: optionalText(instagram),
       wants_to_join_opportunities: wantsToJoin,
       wants_to_create_opportunities: wantsToCreate,
+      current_country: optionalText(currentCountry),
+      current_city: optionalText(currentCity),
+      latitude: optionalNumber(latitude),
+      longitude: optionalNumber(longitude),
+      region: optionalText(region),
+      preferred_radius_km: Number(preferredRadiusKm) || 1000,
     };
     const profileSelect =
-      "full_name,country,phone,whatsapp_number,instagram_handle,wants_to_join_opportunities,wants_to_create_opportunities";
+      "full_name,country,phone,whatsapp_number,instagram_handle,wants_to_join_opportunities,wants_to_create_opportunities,current_country,current_city,latitude,longitude,region,preferred_radius_km";
     let { data, error: saveError } = await supabase
       .from("profiles")
       .update(profileValues)
@@ -109,6 +136,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     setInstagram(data.instagram_handle ?? "");
     setWantsToJoin(data.wants_to_join_opportunities);
     setWantsToCreate(data.wants_to_create_opportunities);
+    setCurrentCountry(data.current_country ?? "");
+    setCurrentCity(data.current_city ?? "");
+    setLatitude(data.latitude === null ? "" : String(data.latitude));
+    setLongitude(data.longitude === null ? "" : String(data.longitude));
+    setRegion(data.region ?? "");
+    setPreferredRadiusKm(String(data.preferred_radius_km ?? 1000));
     setMessage("Profile saved successfully.");
     router.refresh();
   }
@@ -178,6 +211,72 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           I want to create camps or Huck Jams
         </label>
       </div>
+      <div className="grid gap-3 rounded-2xl bg-slate-50 p-4">
+        <p className="text-sm font-black text-slate-800">Location preferences</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm font-bold text-slate-700">
+            Current city
+            <input
+              value={currentCity}
+              onChange={(event) => setCurrentCity(event.target.value)}
+              className="field"
+              placeholder="Munich"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-bold text-slate-700">
+            Current country
+            <input
+              value={currentCountry}
+              onChange={(event) => setCurrentCountry(event.target.value)}
+              className="field"
+              placeholder="Germany"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-bold text-slate-700">
+            Region
+            <select
+              value={region}
+              onChange={(event) => setRegion(event.target.value)}
+              className="field"
+            >
+              <option value="">Select region</option>
+              {regions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-bold text-slate-700">
+            Radius km
+            <input
+              type="number"
+              min="1"
+              value={preferredRadiusKm}
+              onChange={(event) => setPreferredRadiusKm(event.target.value)}
+              className="field"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-bold text-slate-700">
+            Latitude
+            <input
+              value={latitude}
+              onChange={(event) => setLatitude(event.target.value)}
+              className="field"
+              placeholder="48.1351"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-bold text-slate-700">
+            Longitude
+            <input
+              value={longitude}
+              onChange={(event) => setLongitude(event.target.value)}
+              className="field"
+              placeholder="11.5820"
+            />
+          </label>
+        </div>
+      </div>
       {message ? (
         <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
           {message}
@@ -197,4 +296,14 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       </button>
     </form>
   );
+}
+
+function optionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }

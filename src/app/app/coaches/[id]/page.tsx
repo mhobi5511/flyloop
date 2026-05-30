@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AtSign } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { FollowButton } from "@/components/FollowButton";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
@@ -12,6 +13,7 @@ type CoachProfileRow = {
   languages: string[];
   achievements: string[];
   instagram_handle: string | null;
+  user_id: string;
   profiles:
     | {
         full_name: string;
@@ -34,7 +36,7 @@ export default async function CoachProfilePage({
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("coach_profiles")
-    .select("id,bio,disciplines,languages,achievements,instagram_handle,profiles(full_name,country,instagram_handle)")
+    .select("id,user_id,bio,disciplines,languages,achievements,instagram_handle,profiles(full_name,country,instagram_handle)")
     .eq("id", id)
     .maybeSingle();
 
@@ -71,6 +73,13 @@ export default async function CoachProfilePage({
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {coach.languages.join(", ")}
             </p>
+            <div className="mt-4">
+              <FollowButton
+                targetType="coach"
+                targetId={coach.user_id}
+                label="Follow coach"
+              />
+            </div>
           </div>
         </div>
         <p className="mt-5 text-sm leading-6 text-slate-600">

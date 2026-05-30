@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { addTunnel, publishOpportunity } from "@/app/app/create/actions";
+import { regions } from "@/lib/location";
 import type { OpportunityType } from "@/lib/types";
 
 export type TunnelOption = {
@@ -126,6 +127,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
   const [tunnelName, setTunnelName] = useState("");
   const [tunnelCity, setTunnelCity] = useState("");
   const [tunnelCountry, setTunnelCountry] = useState("");
+  const [tunnelRegion, setTunnelRegion] = useState("");
   const [tunnelAddress, setTunnelAddress] = useState("");
   const [tunnelWebsite, setTunnelWebsite] = useState("");
   const [tunnelDescription, setTunnelDescription] = useState("");
@@ -222,6 +224,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
         name: tunnelName,
         city: tunnelCity,
         country: tunnelCountry,
+        region: tunnelRegion,
         address: tunnelAddress,
         website: tunnelWebsite,
         description: tunnelDescription,
@@ -245,6 +248,7 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
       setTunnelName("");
       setTunnelCity("");
       setTunnelCountry("");
+      setTunnelRegion("");
       setTunnelAddress("");
       setTunnelWebsite("");
       setTunnelDescription("");
@@ -337,6 +341,20 @@ export function CreateOpportunityForm({ tunnels }: CreateOpportunityFormProps) {
                 />
               </Field>
             </div>
+            <Field label="Region">
+              <select
+                className="field"
+                value={tunnelRegion}
+                onChange={(event) => setTunnelRegion(event.target.value)}
+              >
+                <option value="">Infer from country when possible</option>
+                {regions.map((region) => (
+                  <option key={region} value={region}>
+                    {region}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Address">
                 <input

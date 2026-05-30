@@ -47,11 +47,14 @@ export type Opportunity = {
   title: string;
   coachId?: string;
   coachName?: string;
+  coachFollowId?: string;
   tunnelId: string;
   tunnelName?: string;
   tunnelCity?: string;
   tunnelCountry?: string;
+  tunnelRegion?: string;
   tunnelDistanceKm?: number;
+  locationLabel?: string;
   isLastMinute?: boolean;
   startDate: string;
   endDate: string;

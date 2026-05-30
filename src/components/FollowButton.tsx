@@ -62,11 +62,16 @@ export function FollowButton({ targetType, targetId, label }: FollowButtonProps)
         .eq("target_id", targetId);
       setIsFollowing(false);
     } else {
-      await supabase.from("follows").insert({
+      const { error } = await supabase.from("follows").insert({
         follower_id: user.id,
         target_type: targetType,
         target_id: targetId,
       });
+      if (error && error.code !== "23505") {
+        console.error("Follow failed", error);
+        setIsLoading(false);
+        return;
+      }
       setIsFollowing(true);
     }
 

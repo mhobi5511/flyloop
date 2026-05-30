@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendNewTunnelNotification } from "@/lib/email/tunnel-notifications";
+import { regions } from "@/lib/location";
 import type { OpportunityType } from "@/lib/types";
 
 const supportedCurrencies = ["EUR", "CHF", "USD", "PLN", "GBP"] as const;
@@ -32,6 +33,7 @@ type AddTunnelInput = {
   name: string;
   city: string;
   country: string;
+  region: string;
   address: string;
   website: string;
   description: string;
@@ -61,6 +63,42 @@ function isValidDate(value: string) {
 
 function isSupportedCurrency(value: string): value is Currency {
   return supportedCurrencies.includes(value as Currency);
+}
+
+function inferRegion(country: string) {
+  const normalized = country.trim().toLowerCase();
+  const europe = [
+    "austria",
+    "belgium",
+    "france",
+    "germany",
+    "italy",
+    "netherlands",
+    "poland",
+    "spain",
+    "switzerland",
+    "united kingdom",
+  ];
+
+  if (europe.includes(normalized)) {
+    return "Europe";
+  }
+
+  if (["united states", "usa", "canada", "mexico"].includes(normalized)) {
+    return "North America";
+  }
+
+  return null;
+}
+
+function cleanRegion(value: string, country: string) {
+  const trimmed = value.trim();
+
+  if (regions.some((region) => region === trimmed)) {
+    return trimmed;
+  }
+
+  return inferRegion(country);
 }
 
 function friendlyPublishError(error: unknown) {
@@ -241,6 +279,7 @@ export async function addTunnel(
       description: cleanText(input.description),
       verified: false,
       created_by: user.id,
+      region: cleanRegion(input.region, country),
     })
     .select("id,name,city,country,address,website,created_at")
     .single();

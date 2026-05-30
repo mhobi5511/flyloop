@@ -1,22 +1,78 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CalendarPlus, Compass, Home, LayoutDashboard, User } from "lucide-react";
+import {
+  ClipboardList,
+  CalendarPlus,
+  Compass,
+  Home,
+  LayoutDashboard,
+  User,
+} from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { NotificationBell } from "./NotificationBell";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type AppShellProps = {
   children: ReactNode;
-  active?: "home" | "create" | "dashboard" | "profile";
+  active?: "home" | "create" | "dashboard" | "applications" | "profile";
+  canCreate?: boolean;
 };
 
-const navItems = [
+const baseNavItems = [
   { href: "/app", label: "Home", id: "home", icon: Home },
-  { href: "/app/create", label: "Create", id: "create", icon: CalendarPlus },
-  { href: "/app/dashboard", label: "Organizer", id: "dashboard", icon: LayoutDashboard },
-  { href: "/app/onboarding", label: "Profile", id: "profile", icon: User },
 ] as const;
 
-export function AppShell({ children, active = "home" }: AppShellProps) {
+const organizerNavItems = [
+  { href: "/app/create", label: "Create", id: "create", icon: CalendarPlus },
+  { href: "/app/dashboard", label: "Organizer", id: "dashboard", icon: LayoutDashboard },
+] as const;
+
+const applicationNavItem = {
+  href: "/app/applications",
+  label: "My Applications",
+  id: "applications",
+  icon: ClipboardList,
+} as const;
+
+const profileNavItem = {
+  href: "/app/onboarding",
+  label: "Profile",
+  id: "profile",
+  icon: User,
+} as const;
+
+async function getCanCreate() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("wants_to_create_opportunities")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return profile?.wants_to_create_opportunities === true;
+}
+
+export async function AppShell({
+  children,
+  active = "home",
+  canCreate,
+}: AppShellProps) {
+  const userCanCreate = canCreate ?? (await getCanCreate());
+  const navItems = [
+    ...baseNavItems,
+    ...(userCanCreate ? organizerNavItems : []),
+    applicationNavItem,
+    profileNavItem,
+  ];
+
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950">
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
@@ -56,7 +112,12 @@ export function AppShell({ children, active = "home" }: AppShellProps) {
         {children}
       </main>
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4 px-2 py-2">
+        <div
+          className="mx-auto grid max-w-md px-2 py-2"
+          style={{
+            gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))`,
+          }}
+        >
           {navItems.map((item) => {
             const Icon = item.icon;
             const selected = active === item.id;

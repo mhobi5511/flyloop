@@ -61,9 +61,10 @@ export function OpportunityCard({ opportunity, compact = false }: OpportunityCar
         <div className="flex items-center gap-1.5">
           <MapPin size={15} className="text-sky-600" />
           <span>
-            {view.tunnelDisplayDistanceKm === null
-              ? "Near"
-              : `${view.tunnelDisplayDistanceKm} km`}
+            {opportunity.locationLabel ??
+              (view.tunnelDisplayDistanceKm === null
+                ? opportunity.tunnelRegion ?? "Browse"
+                : `${Math.round(view.tunnelDisplayDistanceKm)} km away`)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
