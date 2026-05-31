@@ -7,10 +7,17 @@ import { getAppUrl } from "@/lib/site-url";
 
 export function LoginForm() {
   const searchParams = useSearchParams();
+  const isConfirmed = searchParams.get("confirmed") === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(searchParams.get("error") ?? "");
-  const [message, setMessage] = useState(searchParams.get("message") ?? "");
+  const [error, setError] = useState(
+    isConfirmed ? "" : searchParams.get("error") ?? "",
+  );
+  const [message, setMessage] = useState(
+    isConfirmed
+      ? "Email confirmed. You can now log in."
+      : searchParams.get("message") ?? "",
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   function getSafeNextPath() {
