@@ -6,6 +6,7 @@ import {
   CalendarPlus,
   Home,
   LayoutDashboard,
+  ShieldCheck,
   User,
 } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
@@ -13,10 +14,11 @@ import { NotificationBell } from "./NotificationBell";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { unstable_rethrow } from "next/navigation";
+import { isAdmin } from "@/lib/admin";
 
 type AppShellProps = {
   children: ReactNode;
-  active?: "home" | "create" | "dashboard" | "applications" | "profile";
+  active?: "home" | "create" | "dashboard" | "applications" | "profile" | "admin";
   canCreate?: boolean;
   canJoin?: boolean;
 };
@@ -44,6 +46,13 @@ const profileNavItem = {
   icon: User,
 } as const;
 
+const adminNavItem = {
+  href: "/admin",
+  label: "Admin",
+  id: "admin",
+  icon: ShieldCheck,
+} as const;
+
 async function getShellState() {
   try {
     const supabase = await createSupabaseServerClient();
@@ -55,6 +64,7 @@ async function getShellState() {
       return {
         canCreate: false,
         canJoin: true,
+        isAdmin: false,
         organizerUnreadCount: 0,
       };
     }
@@ -88,6 +98,7 @@ async function getShellState() {
     return {
       canCreate,
       canJoin: true,
+      isAdmin: isAdmin(user),
       organizerUnreadCount: notificationResult.count ?? 0,
     };
   } catch (error) {
@@ -96,6 +107,7 @@ async function getShellState() {
     return {
       canCreate: false,
       canJoin: true,
+      isAdmin: false,
       organizerUnreadCount: 0,
     };
   }
@@ -115,6 +127,7 @@ export async function AppShell({
     ...(userCanCreate ? organizerNavItems : []),
     ...(userCanJoin ? [applicationNavItem] : []),
     profileNavItem,
+    ...(shellState.isAdmin ? [adminNavItem] : []),
   ];
 
   return (

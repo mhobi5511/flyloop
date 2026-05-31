@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/proxy";
+import { isAdmin } from "@/lib/admin";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -21,7 +22,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/app/admin") && profile?.is_admin !== true) {
+  if (pathname.startsWith("/admin") && !isAdmin(user)) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     url.search = "";
@@ -50,5 +51,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup", "/reset-password"],
+  matcher: ["/app/:path*", "/admin/:path*", "/admin", "/login", "/signup", "/reset-password"],
 };
