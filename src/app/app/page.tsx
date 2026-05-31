@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { ensureTunnelCoordinates } from "@/lib/geocoding";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { distanceKm, parseCoordinate } from "@/lib/location";
 import type { InterestStatus, Opportunity } from "@/lib/types";
@@ -109,7 +108,7 @@ export default async function AppHomePage({
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);
-  const rows = await ensureTunnelCoordinates(filteredRows, supabase);
+  const rows = filteredRows;
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,

@@ -14,11 +14,19 @@ export default async function AdminPage() {
     redirect("/app");
   }
 
-  const [{ data: tunnels, error: tunnelsError }, usersResult] = await Promise.all([
+  const [
+    { data: tunnels, error: tunnelsError },
+    { count: missingCoordinateCount },
+    usersResult,
+  ] = await Promise.all([
     supabase
       .from("tunnel_profiles")
       .select("id,name,country,city,address,website,description,wind_quality_notes,size,region,header_image_url")
       .order("name", { ascending: true }),
+    supabase
+      .from("tunnel_profiles")
+      .select("*", { count: "exact", head: true })
+      .or("latitude.is.null,longitude.is.null"),
     supabase.rpc("get_admin_user_overview"),
   ]);
 
@@ -37,6 +45,7 @@ export default async function AdminPage() {
         <div className="mt-4">
           <AdminDashboard
             initialTunnels={(tunnels ?? []) as AdminTunnel[]}
+            initialMissingCoordinateCount={missingCoordinateCount ?? 0}
             users={(usersResult.data ?? []) as AdminUserOverview[]}
           />
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type AdminTunnel = {
@@ -28,6 +28,18 @@ export type AdminUserOverview = {
 
 type TunnelDraft = Omit<AdminTunnel, "id">;
 
+type GeocodeSummary = {
+  total: number;
+  updated: number;
+  failed: number;
+  skipped: number;
+  failed_items: Array<{
+    id: string;
+    name: string;
+    reason: string;
+  }>;
+};
+
 const emptyTunnel: TunnelDraft = {
   name: "",
   country: "",
@@ -43,9 +55,11 @@ const emptyTunnel: TunnelDraft = {
 
 export function AdminDashboard({
   initialTunnels,
+  initialMissingCoordinateCount,
   users,
 }: {
   initialTunnels: AdminTunnel[];
+  initialMissingCoordinateCount: number;
   users: AdminUserOverview[];
 }) {
   const [tunnels, setTunnels] = useState(initialTunnels);
@@ -56,6 +70,12 @@ export function AdminDashboard({
   const [deleteTunnel, setDeleteTunnel] = useState<AdminTunnel | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [uploadingTunnelId, setUploadingTunnelId] = useState<string | null>(null);
+  const [missingCoordinateCount, setMissingCoordinateCount] = useState(
+    initialMissingCoordinateCount,
+  );
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeStatus, setGeocodeStatus] = useState("");
+  const [geocodeResult, setGeocodeResult] = useState<GeocodeSummary | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -156,6 +176,9 @@ export function AdminDashboard({
     }
 
     const saved = result.data as AdminTunnel;
+    const previousTunnel = editingTunnelId
+      ? tunnels.find((tunnel) => tunnel.id === editingTunnelId)
+      : null;
     setTunnels((current) =>
       editingTunnelId
         ? current.map((tunnel) => (tunnel.id === saved.id ? saved : tunnel))
@@ -163,6 +186,14 @@ export function AdminDashboard({
     );
     closeEditor();
     setMessage(editingTunnelId ? "Tunnel updated." : "Tunnel created.");
+
+    if (
+      !previousTunnel ||
+      previousTunnel.city !== saved.city ||
+      previousTunnel.country !== saved.country
+    ) {
+      void runGeocode("missing");
+    }
   }
 
   async function confirmDeleteTunnel() {
@@ -256,6 +287,48 @@ export function AdminDashboard({
     setMessage("Tunnel image updated.");
   }
 
+  async function runGeocode(mode: "missing" | "all") {
+    if (mode === "all") {
+      const confirmed = window.confirm(
+        "Re-geocode all tunnels? Existing coordinates will be overwritten.",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setIsGeocoding(true);
+    setGeocodeResult(null);
+    setGeocodeStatus(
+      mode === "all"
+        ? "Re-geocoding all tunnels..."
+        : `0 of ${missingCoordinateCount} tunnels geocoded`,
+    );
+    setError("");
+
+    const response = await fetch("/api/admin/geocode-tunnels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+
+    setIsGeocoding(false);
+
+    if (!response.ok) {
+      setError("Could not run tunnel geocoding.");
+      setGeocodeStatus("");
+      return;
+    }
+
+    const summary = (await response.json()) as GeocodeSummary;
+    setGeocodeResult(summary);
+    setMissingCoordinateCount((current) =>
+      mode === "all" ? summary.failed : Math.max(current - summary.updated, 0),
+    );
+    setGeocodeStatus(`${summary.updated} of ${summary.total} tunnels geocoded`);
+  }
+
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -268,14 +341,59 @@ export function AdminDashboard({
               {filteredTunnels.length} tunnels
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-bold text-white"
-          >
-            <Plus size={16} />
-            New Tunnel
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={isGeocoding}
+              onClick={() => void runGeocode("missing")}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700 disabled:text-slate-400"
+            >
+              <MapPin size={16} />
+              Backfill missing tunnel coordinates
+            </button>
+            <button
+              type="button"
+              disabled={isGeocoding}
+              onClick={() => void runGeocode("all")}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200 px-3 text-sm font-bold text-amber-700 disabled:text-slate-400"
+            >
+              Re-geocode all tunnels
+            </button>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-bold text-white"
+            >
+              <Plus size={16} />
+              New Tunnel
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+          <p>{missingCoordinateCount} tunnels still miss coordinates.</p>
+          {isGeocoding || geocodeStatus ? (
+            <p className="mt-1 text-sky-700">
+              {isGeocoding ? geocodeStatus || "Geocoding tunnels..." : geocodeStatus}
+            </p>
+          ) : null}
+          {geocodeResult ? (
+            <div className="mt-2 grid gap-1">
+              <p>
+                Updated {geocodeResult.updated}, failed {geocodeResult.failed},
+                skipped {geocodeResult.skipped}.
+              </p>
+              {geocodeResult.failed_items.length > 0 ? (
+                <div className="grid gap-1">
+                  {geocodeResult.failed_items.map((item) => (
+                    <p key={item.id} className="text-rose-700">
+                      {item.name}: {item.reason}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <label className="mt-3 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3">
