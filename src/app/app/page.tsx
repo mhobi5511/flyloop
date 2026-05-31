@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ensureTunnelCoordinates } from "@/lib/geocoding";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { distanceKm, parseCoordinate } from "@/lib/location";
 import type { InterestStatus, Opportunity } from "@/lib/types";
@@ -108,15 +109,21 @@ export default async function AppHomePage({
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);
-  const rows = filteredRows;
+  const rows = await ensureTunnelCoordinates(filteredRows, supabase);
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
       interest.status,
     ]),
   );
+  const userLat = parseCoordinate(homeProfile?.latitude);
+  const userLon = parseCoordinate(homeProfile?.longitude);
+  const recommendationsEnabled =
+    homeProfile?.use_location_recommendations === true;
+  const locationAvailable = userLat !== null && userLon !== null;
+  const useRadiusFilter = recommendationsEnabled && locationAvailable;
   const mapped = rows.map((row) => {
-    const location = classifyLocation(row, homeProfile);
+    const location = classifyLocation(row, homeProfile, useRadiusFilter);
     return {
       opportunity: {
         ...mapOpportunity(row),
@@ -143,6 +150,8 @@ export default async function AppHomePage({
     const viewerStatus = item.opportunity.viewerInterestStatus;
 
     return (
+      item.opportunity.status === "published" &&
+      item.opportunity.availableSpots > 0 &&
       item.opportunity.createdBy !== user.id &&
       (!viewerStatus || !interactedStatuses.has(viewerStatus))
     );
@@ -156,7 +165,7 @@ export default async function AppHomePage({
   takeUnique(upcomingAccepted, usedOpportunityIds);
 
   for (const item of joinable) {
-    if (item.isLastMinute) {
+    if (item.isLastMinute && (!useRadiusFilter || item.isNearby)) {
       pushUnique(lastMinute, item.opportunity, usedOpportunityIds);
     }
   }
@@ -180,7 +189,6 @@ export default async function AppHomePage({
   }
   const currentView = filters.view ?? "";
   const hasFilters = Boolean(filters.country || filters.month);
-  const recommendationsEnabled = homeProfile?.use_location_recommendations === true;
   const hasAnySection =
     upcomingAccepted.length > 0 ||
     lastMinute.length > 0 ||
@@ -275,10 +283,10 @@ export default async function AppHomePage({
         <HomeSection
           title={
             currentView === "recommended"
-              ? recommendationsEnabled
+              ? useRadiusFilter
                 ? "All Opportunities Near You"
                 : "All Recommended Opportunities"
-              : recommendationsEnabled
+              : useRadiusFilter
                 ? "Opportunities Near You"
                 : "Recommended Opportunities"
           }
@@ -341,8 +349,12 @@ function pushUnique(
   usedIds.add(opportunity.id);
 }
 
-function classifyLocation(row: HomeFeedRow, profile: HomeProfile | null) {
-  if (!profile?.use_location_recommendations) {
+function classifyLocation(
+  row: HomeFeedRow,
+  profile: HomeProfile | null,
+  useRadiusFilter: boolean,
+) {
+  if (!useRadiusFilter) {
     return {
       isNearby: true,
       distanceKm: null,
@@ -379,7 +391,7 @@ function classifyLocation(row: HomeFeedRow, profile: HomeProfile | null) {
   }
 
   return {
-    isNearby: true,
+    isNearby: false,
     distanceKm: null,
     label: row.tunnel_region ?? undefined,
   };

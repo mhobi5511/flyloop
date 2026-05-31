@@ -14,8 +14,6 @@ export type AdminTunnel = {
   description: string | null;
   wind_quality_notes: string | null;
   size: string | null;
-  latitude: number | null;
-  longitude: number | null;
   region: string | null;
   header_image_url: string | null;
 };
@@ -39,8 +37,6 @@ const emptyTunnel: TunnelDraft = {
   description: "",
   wind_quality_notes: "",
   size: "",
-  latitude: null,
-  longitude: null,
   region: "",
   header_image_url: "",
 };
@@ -106,8 +102,6 @@ export function AdminDashboard({
       description: tunnel.description ?? "",
       wind_quality_notes: tunnel.wind_quality_notes ?? "",
       size: tunnel.size ?? "",
-      latitude: tunnel.latitude,
-      longitude: tunnel.longitude,
       region: tunnel.region ?? "",
       header_image_url: tunnel.header_image_url ?? "",
     });
@@ -704,34 +698,6 @@ function TunnelFormFields({
           onChange={(event) => update("header_image_url", event.target.value)}
         />
       </Field>
-      <Field label="Latitude">
-        <input
-          type="number"
-          step="any"
-          className="field"
-          value={draft.latitude ?? ""}
-          onChange={(event) =>
-            update(
-              "latitude",
-              event.target.value ? Number(event.target.value) : null,
-            )
-          }
-        />
-      </Field>
-      <Field label="Longitude">
-        <input
-          type="number"
-          step="any"
-          className="field"
-          value={draft.longitude ?? ""}
-          onChange={(event) =>
-            update(
-              "longitude",
-              event.target.value ? Number(event.target.value) : null,
-            )
-          }
-        />
-      </Field>
       <div className="sm:col-span-2">
         <Field label="Description">
           <textarea
@@ -786,14 +752,6 @@ function cleanTunnelDraft(draft: TunnelDraft) {
     description: cleanText(draft.description),
     wind_quality_notes: cleanText(draft.wind_quality_notes),
     size: cleanText(draft.size),
-    latitude:
-      typeof draft.latitude === "number" && Number.isFinite(draft.latitude)
-        ? draft.latitude
-        : null,
-    longitude:
-      typeof draft.longitude === "number" && Number.isFinite(draft.longitude)
-        ? draft.longitude
-        : null,
     region: cleanText(draft.region),
     header_image_url: cleanText(draft.header_image_url),
     verified: true,

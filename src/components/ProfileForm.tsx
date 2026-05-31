@@ -55,33 +55,76 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   }
 
   function enableLocationRecommendations(enabled: boolean) {
-    setUseLocationRecommendations(enabled);
     setLocationStatus("");
 
     if (!enabled) {
+      setUseLocationRecommendations(false);
+      setLatitude(null);
+      setLongitude(null);
+      void saveLocationRecommendationPreference(false, null, null);
       return;
     }
 
     if (!navigator.geolocation) {
-      setLocationStatus("Browser location is unavailable. You will still see all opportunities.");
+      setUseLocationRecommendations(false);
+      setLocationStatus("Location access is needed to show opportunities near you. You can still browse recommended opportunities.");
       setLatitude(null);
       setLongitude(null);
+      void saveLocationRecommendationPreference(false, null, null);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLatitude(position.coords.latitude);
-        setLongitude(position.coords.longitude);
+        const nextLatitude = position.coords.latitude;
+        const nextLongitude = position.coords.longitude;
+        setUseLocationRecommendations(true);
+        setLatitude(nextLatitude);
+        setLongitude(nextLongitude);
         setLocationStatus("Location recommendations are enabled.");
+        void saveLocationRecommendationPreference(
+          true,
+          nextLatitude,
+          nextLongitude,
+        );
       },
       () => {
+        setUseLocationRecommendations(false);
         setLatitude(null);
         setLongitude(null);
-        setLocationStatus("Location permission was not granted. You will still see all opportunities.");
+        setLocationStatus("Location access is needed to show opportunities near you. You can still browse recommended opportunities.");
+        void saveLocationRecommendationPreference(false, null, null);
       },
       { enableHighAccuracy: false, maximumAge: 3_600_000, timeout: 10_000 },
     );
+  }
+
+  async function saveLocationRecommendationPreference(
+    enabled: boolean,
+    nextLatitude: number | null,
+    nextLongitude: number | null,
+  ) {
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return;
+    }
+
+    const { error: saveError } = await supabase
+      .from("profiles")
+      .update({
+        use_location_recommendations: enabled,
+        latitude: enabled ? nextLatitude : null,
+        longitude: enabled ? nextLongitude : null,
+      })
+      .eq("id", user.id);
+
+    if (saveError) {
+      console.error("Location recommendation preference save failed", saveError);
+    }
   }
 
   async function uploadPhoto(file: File | undefined) {
@@ -176,6 +219,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     const fallbackName = user.email?.split("@")[0] ?? "Flyloop user";
     const cleanFullName = fullName.trim() || fallbackName;
     const cleanRadius = Math.max(1, Number(preferredRadiusKm) || 1000);
+    const hasLocation = latitude !== null && longitude !== null;
+    const locationRecommendationsEnabled =
+      useLocationRecommendations && hasLocation;
     const profileValues = {
       full_name: cleanFullName,
       country: optionalText(country),
@@ -186,9 +232,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       is_organizer: isOrganizer,
       wants_to_join_opportunities: true,
       wants_to_create_opportunities: isOrganizer,
-      use_location_recommendations: useLocationRecommendations,
-      latitude: useLocationRecommendations ? latitude : null,
-      longitude: useLocationRecommendations ? longitude : null,
+      use_location_recommendations: locationRecommendationsEnabled,
+      latitude: locationRecommendationsEnabled ? latitude : null,
+      longitude: locationRecommendationsEnabled ? longitude : null,
       current_country: null,
       current_city: null,
       region: null,
