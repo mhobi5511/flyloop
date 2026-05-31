@@ -129,3 +129,35 @@ export async function cancelOpportunity(
 
   return { ok: true, message: "Opportunity cancelled." };
 }
+
+export async function deleteOpportunity(
+  opportunityId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { error } = await supabase
+    .from("opportunities")
+    .delete()
+    .eq("id", opportunityId)
+    .eq("created_by", user.id);
+
+  if (error) {
+    console.error("Opportunity deletion failed", error);
+    return { ok: false, message: "Could not delete opportunity. Please try again." };
+  }
+
+  revalidatePath("/app");
+  revalidatePath("/app/dashboard");
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+
+  return { ok: true, message: "Opportunity deleted." };
+}

@@ -398,6 +398,70 @@ export async function updateOpportunity(
   return { ok: true, data: { id: opportunityId } };
 }
 
+export async function publishDraftOpportunity(
+  opportunityId: string,
+): Promise<ActionResult<{ id: string }>> {
+  const { supabase, user, profile } = await getAuthenticatedOrganizer();
+
+  if (!user) {
+    return { ok: false, message: "Please log in again before publishing." };
+  }
+
+  if (
+    profile?.is_organizer !== true &&
+    profile?.wants_to_create_opportunities !== true
+  ) {
+    return {
+      ok: false,
+      message: "Enable organizer mode in your profile first.",
+    };
+  }
+
+  if (!uuidPattern.test(opportunityId)) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  const { data: opportunity, error: lookupError } = await supabase
+    .from("opportunities")
+    .select("id,created_by,status,total_capacity")
+    .eq("id", opportunityId)
+    .eq("created_by", user.id)
+    .maybeSingle();
+
+  if (lookupError) {
+    return { ok: false, message: friendlyPublishError(lookupError) };
+  }
+
+  if (!opportunity) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  if (opportunity.status !== "draft") {
+    return { ok: false, message: "Only draft opportunities can be published." };
+  }
+
+  const { error } = await supabase
+    .from("opportunities")
+    .update({
+      status: "published",
+      available_spots: opportunity.total_capacity,
+    })
+    .eq("id", opportunityId)
+    .eq("created_by", user.id)
+    .eq("status", "draft");
+
+  if (error) {
+    return { ok: false, message: friendlyPublishError(error) };
+  }
+
+  revalidatePath("/app");
+  revalidatePath("/app/dashboard");
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+
+  return { ok: true, data: { id: opportunityId } };
+}
+
 export async function addTunnel(
   input: AddTunnelInput,
 ): Promise<ActionResult<{ id: string; name: string }>> {
