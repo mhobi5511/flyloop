@@ -56,9 +56,13 @@ export function SignupForm() {
     setIsLoading(true);
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanFullName = fullName.trim();
+      const cleanCountry = country.trim();
+      const cleanInstagram = instagram.trim().replace(/^@/, "");
       const supabase = createSupabaseBrowserClient();
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
         options: {
           emailRedirectTo: getAppUrl(
@@ -66,12 +70,18 @@ export function SignupForm() {
             window.location.origin,
           ),
           data: {
-            full_name: fullName,
-            country,
+            full_name: cleanFullName,
+            country: cleanCountry,
+            city: "",
+            bio: "",
+            disciplines: [],
+            home_tunnel_id: null,
+            website_url: "",
+            youtube_url: "",
             mobile_country_code: mobileCountryCode,
             phone: normalizedPhone,
             whatsapp_number: normalizedPhone,
-            instagram_handle: instagram,
+            instagram_handle: cleanInstagram,
             is_organizer: wantsToCreateOpportunities,
             wants_to_join_opportunities: true,
             wants_to_create_opportunities: wantsToCreateOpportunities,
@@ -81,11 +91,7 @@ export function SignupForm() {
 
       if (signUpError) {
         console.error("Signup failed", signUpError);
-        setError(
-          signUpError.message === "User already registered"
-            ? "This email is already registered. Please log in instead."
-            : "Could not create account. Please check your details and try again.",
-        );
+        setError(formatSignupError(signUpError.message));
         return;
       }
 
@@ -219,4 +225,29 @@ export function SignupForm() {
       </button>
     </form>
   );
+}
+
+function formatSignupError(message?: string) {
+  const cleanMessage = message?.trim();
+  const normalized = cleanMessage?.toLowerCase() ?? "";
+
+  if (normalized.includes("already registered") || normalized.includes("already exists")) {
+    return "This email is already registered. Please log in instead.";
+  }
+
+  if (normalized.includes("password")) {
+    return cleanMessage ?? "Please choose a stronger password.";
+  }
+
+  if (normalized.includes("email")) {
+    return cleanMessage ?? "Please enter a valid email address.";
+  }
+
+  if (normalized.includes("database")) {
+    return "Could not create your Flyloop profile. Please try again. If it keeps happening, contact Flyloop support.";
+  }
+
+  return cleanMessage
+    ? `Could not create account: ${cleanMessage}`
+    : "Could not create account. Please check your details and try again.";
 }
