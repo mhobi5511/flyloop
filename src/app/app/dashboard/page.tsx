@@ -28,7 +28,17 @@ type OrganizerOpportunityRow = {
     | { name: string; city: string | null; country: string | null }
     | Array<{ name: string; city: string | null; country: string | null }>
     | null;
-  opportunity_interests: Array<{ status: InterestStatus }> | null;
+  opportunity_interests: Array<{ status: InterestStatus; created_at: string | null }> | null;
+};
+
+type HealthStatus = "healthy" | "needs-attention" | "urgent";
+
+type Health = {
+  status: HealthStatus;
+  label: "Healthy" | "Needs Attention" | "Urgent";
+  explanation: string;
+  tone: "green" | "yellow" | "red";
+  priority: number;
 };
 
 type OpportunityCardModel = {
@@ -52,8 +62,7 @@ type OpportunityCardModel = {
   isPast: boolean;
   isDraft: boolean;
   isFullyBooked: boolean;
-  statusTone: "red" | "yellow" | "orange" | "green" | "blue" | "slate";
-  statusLabel: string;
+  health: Health;
   sortDate: number;
 };
 
@@ -131,7 +140,7 @@ export default async function OrganizerDashboardPage({
     supabase
       .from("opportunities")
       .select(
-        "id,title,type,status,start_date,end_date,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status)",
+        "id,title,type,status,start_date,end_date,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,created_at)",
       )
       .eq("created_by", user?.id)
       .order("start_date", { ascending: true }),
@@ -149,14 +158,20 @@ export default async function OrganizerDashboardPage({
       .filter((id): id is string => Boolean(id)),
   );
   const today = dateOnly(new Date());
+  const now = new Date();
   const cards = opportunityRows.map((row) =>
-    toCardModel(row, unreadOpportunityIds.has(row.id), today),
+    toCardModel(row, unreadOpportunityIds.has(row.id), today, now),
   );
   const kpis = buildKpis(cards);
   const grouped = {
     "needs-action": cards
       .filter((card) => card.needsAction)
-      .sort((a, b) => b.urgencyScore - a.urgencyScore || a.sortDate - b.sortDate),
+      .sort(
+        (a, b) =>
+          b.health.priority - a.health.priority ||
+          b.urgencyScore - a.urgencyScore ||
+          a.sortDate - b.sortDate,
+      ),
     upcoming: cards
       .filter((card) => card.isUpcoming)
       .sort((a, b) => a.sortDate - b.sortDate),
@@ -244,6 +259,7 @@ function toCardModel(
   opportunity: OrganizerOpportunityRow,
   hasUnread: boolean,
   today: string,
+  now: Date,
 ): OpportunityCardModel {
   const tunnel = Array.isArray(opportunity.tunnel_profiles)
     ? opportunity.tunnel_profiles[0]
@@ -260,39 +276,34 @@ function toCardModel(
   const isCancelled = opportunity.status === "cancelled";
   const isPast = !isDraft && opportunity.end_date < today;
   const isUpcoming = !isDraft && !isCancelled && opportunity.start_date >= today;
-  const activeForAttention = !isDraft && !isCancelled && opportunity.end_date >= today;
-  const startsSoonOpen =
-    activeForAttention &&
-    opportunity.status === "published" &&
-    opportunity.available_spots > 0 &&
-    startsInDays >= 0 &&
-    startsInDays <= 7;
-  const largeWaitlist = counts.waitlist >= 5;
-  const manyUnread = hasUnread && counts.pending + counts.waitlist >= 4;
-  const highPriority =
-    (startsSoonOpen && startsInDays <= 2) || largeWaitlist || manyUnread;
-  const needsAction =
-    activeForAttention &&
-    (hasUnread || counts.pending > 0 || counts.waitlist > 0 || startsSoonOpen);
+  const activeForAttention = !isDraft && !isCancelled;
   const isFullyBooked =
     opportunity.status === "full" || opportunity.available_spots <= 0;
   const bookedSpots = Math.min(
     opportunity.total_capacity,
     Math.max(counts.accepted, opportunity.total_capacity - opportunity.available_spots),
   );
+  const health = getOpportunityHealth({
+    opportunity,
+    counts,
+    bookedSpots,
+    isFullyBooked,
+    startsInDays,
+    now,
+  });
+  const needsAction =
+    activeForAttention &&
+    (health.status === "urgent" ||
+      health.status === "needs-attention" ||
+      hasUnread);
   const urgencyScore =
-    (highPriority ? 1000 : 0) +
+    health.priority * 500 +
     (hasUnread ? 300 : 0) +
     counts.pending * 90 +
     counts.waitlist * 70 +
-    (startsSoonOpen ? Math.max(20, 180 - startsInDays * 20) : 0);
-  const statusTone = getStatusTone({
-    highPriority,
-    pending: counts.pending,
-    startsSoonOpen,
-    isFullyBooked,
-    status: opportunity.status,
-  });
+    (startsInDays >= 0 && startsInDays <= 14
+      ? Math.max(20, 180 - startsInDays * 10)
+      : 0);
 
   return {
     id: opportunity.id,
@@ -315,8 +326,7 @@ function toCardModel(
     isPast,
     isDraft,
     isFullyBooked,
-    statusTone,
-    statusLabel: getStatusLabel(statusTone, opportunity.status),
+    health,
     sortDate: Date.parse(
       isDraft
         ? opportunity.updated_at ?? opportunity.created_at ?? opportunity.start_date
@@ -325,67 +335,96 @@ function toCardModel(
   };
 }
 
-function getStatusTone({
-  highPriority,
-  pending,
-  startsSoonOpen,
+function getOpportunityHealth({
+  opportunity,
+  counts,
+  bookedSpots,
   isFullyBooked,
-  status,
+  startsInDays,
+  now,
 }: {
-  highPriority: boolean;
-  pending: number;
-  startsSoonOpen: boolean;
+  opportunity: OrganizerOpportunityRow;
+  counts: Record<InterestStatus, number>;
+  bookedSpots: number;
   isFullyBooked: boolean;
-  status: OpportunityStatus;
-}): OpportunityCardModel["statusTone"] {
-  if (highPriority) {
-    return "red";
+  startsInDays: number;
+  now: Date;
+}): Health {
+  const capacity = Math.max(opportunity.total_capacity, 1);
+  const bookedRatio = bookedSpots / capacity;
+  const oldestPendingAgeDays = getOldestPendingAgeDays(
+    opportunity.opportunity_interests ?? [],
+    now,
+  );
+
+  if (
+    (startsInDays >= 0 && startsInDays <= 14 && bookedRatio < 0.5) ||
+    (startsInDays >= 0 && startsInDays <= 7 && !isFullyBooked)
+  ) {
+    return {
+      status: "urgent",
+      label: "Urgent",
+      explanation:
+        startsInDays <= 7 && !isFullyBooked
+          ? `Starts in ${formatDays(startsInDays)} with ${opportunity.available_spots} open spots`
+          : `Only ${bookedSpots}/${opportunity.total_capacity} spots booked`,
+      tone: "red",
+      priority: 3,
+    };
   }
 
-  if (pending > 0) {
-    return "yellow";
+  if (oldestPendingAgeDays !== null && oldestPendingAgeDays >= 3) {
+    return {
+      status: "urgent",
+      label: "Urgent",
+      explanation: `Pending applications waiting ${oldestPendingAgeDays} days`,
+      tone: "red",
+      priority: 3,
+    };
   }
 
-  if (startsSoonOpen) {
-    return "orange";
+  if (counts.pending > 0) {
+    return {
+      status: "needs-attention",
+      label: "Needs Attention",
+      explanation: `${counts.pending} pending ${pluralize("application", counts.pending)}`,
+      tone: "yellow",
+      priority: 2,
+    };
   }
 
-  if (isFullyBooked) {
-    return "green";
+  if (counts.waitlist > 0) {
+    return {
+      status: "needs-attention",
+      label: "Needs Attention",
+      explanation: `${counts.waitlist} waitlist ${pluralize("application", counts.waitlist)}`,
+      tone: "yellow",
+      priority: 2,
+    };
   }
 
-  if (status === "published") {
-    return "blue";
+  if (startsInDays >= 0 && startsInDays <= 30 && bookedRatio < 0.75) {
+    return {
+      status: "needs-attention",
+      label: "Needs Attention",
+      explanation: `Only ${bookedSpots}/${opportunity.total_capacity} spots booked`,
+      tone: "yellow",
+      priority: 2,
+    };
   }
 
-  return "slate";
-}
-
-function getStatusLabel(
-  tone: OpportunityCardModel["statusTone"],
-  status: OpportunityStatus,
-) {
-  if (tone === "red") {
-    return "High priority";
-  }
-
-  if (tone === "yellow") {
-    return "Review applicants";
-  }
-
-  if (tone === "orange") {
-    return "Starts soon";
-  }
-
-  if (tone === "green") {
-    return "Fully booked";
-  }
-
-  if (tone === "blue") {
-    return "Healthy";
-  }
-
-  return status;
+  return {
+    status: "healthy",
+    label: "Healthy",
+    explanation:
+      isFullyBooked || bookedRatio >= 0.75
+        ? `${bookedSpots}/${opportunity.total_capacity} spots booked`
+        : startsInDays > 30
+          ? `Starts in ${formatDays(startsInDays)}`
+          : `${bookedSpots}/${opportunity.total_capacity} spots booked`,
+    tone: "green",
+    priority: 1,
+  };
 }
 
 function buildKpis(opportunities: OpportunityCardModel[]) {
@@ -417,7 +456,7 @@ function OpportunityCard({
   return (
     <div
       className={`rounded-2xl border border-slate-200 border-l-4 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${borderClass(
-        opportunity.statusTone,
+        opportunity.health.tone,
       )}`}
     >
       <Link href={`/app/organizer/opportunities/${opportunity.id}`}>
@@ -427,11 +466,14 @@ function OpportunityCard({
               <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
                 {formatOpportunityType(opportunity.type)}
               </Badge>
-              <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${pillClass(opportunity.statusTone)}`}>
-                {opportunity.statusLabel}
+              <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${pillClass(opportunity.health.tone)}`}>
+                {opportunity.health.label}
               </span>
               {opportunity.hasUnread ? <Badge tone="blue">New</Badge> : null}
             </div>
+            <p className="mt-1 text-xs font-semibold text-slate-600">
+              {opportunity.health.explanation}
+            </p>
             <h2 className="mt-2 line-clamp-1 text-base font-black tracking-tight text-slate-950">
               {opportunity.title}
             </h2>
@@ -518,27 +560,21 @@ function StatusChip({
   );
 }
 
-function borderClass(tone: OpportunityCardModel["statusTone"]) {
+function borderClass(tone: Health["tone"]) {
   const classes = {
     red: "border-l-rose-500",
     yellow: "border-l-amber-400",
-    orange: "border-l-orange-500",
     green: "border-l-emerald-500",
-    blue: "border-l-sky-500",
-    slate: "border-l-slate-300",
   };
 
   return classes[tone];
 }
 
-function pillClass(tone: OpportunityCardModel["statusTone"]) {
+function pillClass(tone: Health["tone"]) {
   const classes = {
     red: "bg-rose-50 text-rose-700",
     yellow: "bg-amber-50 text-amber-800",
-    orange: "bg-orange-50 text-orange-700",
     green: "bg-emerald-50 text-emerald-700",
-    blue: "bg-sky-50 text-sky-700",
-    slate: "bg-slate-100 text-slate-600",
   };
 
   return classes[tone];
@@ -560,4 +596,37 @@ function daysBetween(fromDate: string, toDate: string) {
   const from = Date.parse(`${fromDate}T00:00:00.000Z`);
   const to = Date.parse(`${toDate}T00:00:00.000Z`);
   return Math.floor((to - from) / 86_400_000);
+}
+
+function getOldestPendingAgeDays(
+  interests: Array<{ status: InterestStatus; created_at: string | null }>,
+  now: Date,
+) {
+  const pendingAges = interests
+    .filter((interest) => interest.status === "pending" && interest.created_at)
+    .map((interest) => {
+      const createdAt = Date.parse(interest.created_at as string);
+      return Number.isFinite(createdAt)
+        ? Math.floor((now.getTime() - createdAt) / 86_400_000)
+        : null;
+    })
+    .filter((age): age is number => age !== null);
+
+  return pendingAges.length > 0 ? Math.max(...pendingAges) : null;
+}
+
+function formatDays(days: number) {
+  if (days <= 0) {
+    return "today";
+  }
+
+  if (days === 1) {
+    return "1 day";
+  }
+
+  return `${days} days`;
+}
+
+function pluralize(word: string, count: number) {
+  return count === 1 ? word : `${word}s`;
 }
