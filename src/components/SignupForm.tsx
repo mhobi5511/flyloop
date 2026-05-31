@@ -135,7 +135,7 @@ export function SignupForm() {
             aria-label="Mobile country code"
           >
             {mobileCountryCodeOptions.map((option) => (
-              <option key={option.dialCode} value={option.dialCode}>
+              <option key={option.iso2} value={option.dialCode}>
                 {formatMobileCountryCodeLabel(option)}
               </option>
             ))}

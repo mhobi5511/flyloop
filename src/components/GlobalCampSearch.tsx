@@ -12,7 +12,6 @@ type GlobalCampSearchProps = {
   countryOptions: string[];
   monthOptions: Array<{ value: string; label: string }>;
   opportunities: Opportunity[];
-  excludedOpportunityIds: string[];
   currentUserId: string;
 };
 
@@ -32,10 +31,10 @@ export function GlobalCampSearch({
   countryOptions,
   monthOptions,
   opportunities,
-  excludedOpportunityIds,
   currentUserId,
 }: GlobalCampSearchProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
+  const hasMountedRef = useRef(false);
   const [country, setCountry] = useState(initialCountry);
   const [month, setMonth] = useState(initialMonth);
   const [coach, setCoach] = useState(initialCoach);
@@ -45,13 +44,9 @@ export function GlobalCampSearch({
     month: initialMonth,
     coach: initialCoach,
     tunnel: initialTunnel,
-    submitted: Boolean(initialCountry || initialMonth || initialCoach || initialTunnel),
+    submitted: true,
   });
   const [isSearching, setIsSearching] = useState(false);
-  const excludedIds = useMemo(
-    () => new Set(excludedOpportunityIds),
-    [excludedOpportunityIds],
-  );
   const results = useMemo(() => {
     if (!search.submitted) {
       return [];
@@ -73,14 +68,18 @@ export function GlobalCampSearch({
         countryMatches &&
         monthMatches &&
         coachMatches &&
-        tunnelMatches &&
-        !excludedIds.has(opportunity.id)
+        tunnelMatches
       );
     });
-  }, [excludedIds, opportunities, search]);
+  }, [opportunities, search]);
 
   useEffect(() => {
     if (!search.submitted) {
+      return;
+    }
+
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
       return;
     }
 
@@ -112,7 +111,7 @@ export function GlobalCampSearch({
     setMonth("");
     setCoach("");
     setTunnel("");
-    setSearch({ country: "", month: "", coach: "", tunnel: "", submitted: false });
+    setSearch({ country: "", month: "", coach: "", tunnel: "", submitted: true });
     setIsSearching(false);
   }
 
@@ -127,7 +126,7 @@ export function GlobalCampSearch({
           Find Camps Worldwide
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Search all published camps by country, month, coach, or tunnel.
+          Search all upcoming Camps and Huck Jams by country, month, coach, or tunnel.
         </p>
       </div>
 
@@ -191,11 +190,11 @@ export function GlobalCampSearch({
           type="submit"
           className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white sm:col-span-2 lg:col-span-1"
         >
-          {isSearching ? "Searching..." : "Find Camp"}
+          {isSearching ? "Searching..." : "Find"}
         </button>
       </form>
 
-      {search.submitted ? (
+      {country || month || coach || tunnel ? (
         <button
           type="button"
           onClick={clearSearch}
@@ -218,11 +217,15 @@ export function GlobalCampSearch({
                 opportunity={opportunity}
                 dense
                 currentUserId={currentUserId}
+                discoveryBadges={getOwnOpportunityBadges(
+                  opportunity,
+                  currentUserId,
+                )}
               />
             ))
           ) : (
             <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-              No camps found for this search.
+              No opportunities found for this search.
             </p>
           )}
         </div>
@@ -233,4 +236,20 @@ export function GlobalCampSearch({
 
 function normalize(value?: string) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function getOwnOpportunityBadges(
+  opportunity: Opportunity,
+  currentUserId: string,
+) {
+  if (opportunity.createdBy !== currentUserId) {
+    return [];
+  }
+
+  return [
+    {
+      label: opportunity.type === "huck_jam" ? "Your Huck Jam" : "Your Camp",
+      tone: opportunity.type === "huck_jam" ? "green" : "blue",
+    } as const,
+  ];
 }

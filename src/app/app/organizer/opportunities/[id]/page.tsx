@@ -15,7 +15,6 @@ import {
   formatDateRange,
   formatOpportunityType,
   formatPrice,
-  formatPriceLabel,
 } from "@/lib/opportunities";
 import { phoneToWhatsAppPath } from "@/lib/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -108,72 +107,51 @@ export default async function OrganizerOpportunityPage({
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
-  const tunnel = Array.isArray(currentOpportunity.tunnel_profiles)
-    ? currentOpportunity.tunnel_profiles[0]
-    : currentOpportunity.tunnel_profiles;
   const applicantRows = (applicants ?? []) as ApplicantRow[];
 
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
       <NotificationReadSignal />
       <Link href="/app/dashboard" className="text-sm font-bold text-sky-700">
-        Back to Organizer
+        Back to Coachings
       </Link>
-      <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
+      <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="grid gap-3 lg:grid-cols-[1fr_200px] lg:items-start">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Badge tone={currentOpportunity.type === "camp" ? "blue" : "green"}>
                 {formatOpportunityType(currentOpportunity.type)}
               </Badge>
-              <Badge tone={currentOpportunity.status === "published" ? "slate" : "red"}>
-                {currentOpportunity.status}
-              </Badge>
             </div>
-            <h1 className="mt-3 text-3xl font-black tracking-tight">
+            <h1 className="mt-2 text-xl font-black tracking-tight sm:text-2xl">
               {currentOpportunity.title}
             </h1>
-            <div className="mt-4 grid gap-2 text-sm font-semibold text-slate-600 sm:grid-cols-2">
-              <p>Tunnel: {tunnel?.name ?? "Tunnel"}</p>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold text-slate-600">
               <p>
-                Location:{" "}
-                {tunnel
-                  ? formatLocation(tunnel.city, tunnel.country)
-                  : "Location to be confirmed"}
-              </p>
-              <p>
-                Date:{" "}
                 {formatDateRange(
                   currentOpportunity.start_date,
                   currentOpportunity.end_date,
                 )}
               </p>
               <p>
-                Availability: {currentOpportunity.available_spots} /{" "}
+                {currentOpportunity.available_spots}/
                 {currentOpportunity.total_capacity} open
               </p>
               <p>
-                Price:{" "}
                 {formatPrice(
                   Number(currentOpportunity.price),
                   currentOpportunity.currency,
                 )}
               </p>
-              <p>{formatPriceLabel(currentOpportunity.type)}</p>
             </div>
           </div>
           <OrganizerOpportunityActions opportunityId={currentOpportunity.id} />
         </div>
-        {currentOpportunity.description ? (
-          <p className="mt-4 text-sm leading-6 text-slate-600">
-            {currentOpportunity.description}
-          </p>
-        ) : null}
       </section>
 
-      <section className="mt-6">
-        <h2 className="text-2xl font-black tracking-tight">Applicants</h2>
-        <div className="mt-4 grid gap-4">
+      <section className="mt-4">
+        <h2 className="text-xl font-black tracking-tight">Applicants</h2>
+        <div className="mt-3 grid gap-3">
           {applicantRows.map((applicant) => {
             const profile = Array.isArray(applicant.profiles)
               ? applicant.profiles[0]
@@ -184,7 +162,7 @@ export default async function OrganizerOpportunityPage({
             return (
               <article
                 key={applicant.id}
-                className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${applicantBorderClass(applicant.status)}`}
+                className={`rounded-2xl border border-slate-200 bg-white p-3 shadow-sm ${applicantBorderClass(applicant.status)}`}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
@@ -252,12 +230,4 @@ function formatSubmittedDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function formatLocation(city?: string | null, country?: string | null) {
-  if (city && country) {
-    return `${city}, ${country}`;
-  }
-
-  return city ?? country ?? "Location to be confirmed";
 }

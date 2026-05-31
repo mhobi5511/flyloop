@@ -166,9 +166,21 @@ export default async function AppHomePage({
     .filter((item) => !useRadiusFilter || item.isNearby)
     .sort(compareFeedItems);
   const visibleDiscoveryFeed = discoveryFeed.slice(0, 5);
-  const globalSearchOpportunities = joinable.map((item) => item.opportunity);
-  const countryOptions = getCountryOptions(allRows);
-  const monthOptions = getMonthOptions(allRows);
+  const globalSearchOpportunities = mapped
+    .filter(
+      (item) =>
+        (item.opportunity.status === "published" ||
+          item.opportunity.status === "full") &&
+        item.opportunity.endDate >= today,
+    )
+    .map((item) => item.opportunity);
+  const futureRows = allRows.filter(
+    (row) =>
+      (row.status === "published" || row.status === "full") &&
+      row.end_date >= today,
+  );
+  const countryOptions = getCountryOptions(futureRows);
+  const monthOptions = getMonthOptions(futureRows);
 
   return (
     <AppShell active="home">
@@ -232,7 +244,6 @@ export default async function AppHomePage({
         countryOptions={countryOptions}
         monthOptions={monthOptions}
         opportunities={globalSearchOpportunities}
-        excludedOpportunityIds={[]}
         currentUserId={user.id}
       />
     </AppShell>

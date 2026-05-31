@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  cancelOpportunity,
-  deleteOpportunity,
-} from "@/app/app/opportunities/actions";
+import { deleteOpportunity } from "@/app/app/opportunities/actions";
 
 type OrganizerOpportunityActionsProps = {
   opportunityId: string;
@@ -19,32 +16,6 @@ export function OrganizerOpportunityActions({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  function cancel() {
-    const confirmed = window.confirm(
-      "Cancel this opportunity? It will stop appearing as open, but applicant history stays available.",
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMessage("");
-    setError("");
-
-    startTransition(async () => {
-      const result = await cancelOpportunity(opportunityId);
-
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      setMessage(result.message);
-      router.push("/app/dashboard");
-      router.refresh();
-    });
-  }
 
   function remove() {
     const confirmed = window.confirm(
@@ -73,36 +44,28 @@ export function OrganizerOpportunityActions({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
       <Link
         href={`/app/organizer/opportunities/${opportunityId}/edit`}
-        className="flex h-12 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700"
+        className="flex h-10 items-center justify-center rounded-xl bg-sky-600 px-3 text-sm font-bold text-white transition hover:bg-sky-700"
       >
-        Edit opportunity
+        Edit Opportunity
       </Link>
       <button
         type="button"
         disabled={isPending}
-        onClick={cancel}
-        className="mt-3 flex h-12 w-full items-center justify-center rounded-xl border border-amber-200 px-4 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:text-slate-400"
-      >
-        {isPending ? "Cancelling..." : "Cancel opportunity"}
-      </button>
-      <button
-        type="button"
-        disabled={isPending}
         onClick={remove}
-        className="mt-3 flex h-12 w-full items-center justify-center rounded-xl border border-rose-200 px-4 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:text-slate-400"
+        className="flex h-10 w-full items-center justify-center rounded-xl border border-rose-200 px-3 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:text-slate-400"
       >
-        {isPending ? "Working..." : "Delete opportunity"}
+        {isPending ? "Working..." : "Delete Opportunity"}
       </button>
       {message ? (
-        <p className="mt-3 rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
+        <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700 sm:col-span-2 lg:col-span-1">
           {message}
         </p>
       ) : null}
       {error ? (
-        <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700 sm:col-span-2 lg:col-span-1">
           {error}
         </p>
       ) : null}

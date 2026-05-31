@@ -1,15 +1,24 @@
+import {
+  getCountries,
+  getCountryCallingCode,
+  type CountryCode,
+} from "libphonenumber-js";
+
 export type MobileCountryCodeOption = {
   country: string;
   iso2: string;
   dialCode: string;
 };
 
-export const mobileCountryCodeOptions: MobileCountryCodeOption[] = [
-  { country: "Germany", iso2: "DE", dialCode: "+49" },
-  { country: "Switzerland", iso2: "CH", dialCode: "+41" },
-  { country: "Austria", iso2: "AT", dialCode: "+43" },
-  { country: "France", iso2: "FR", dialCode: "+33" },
-];
+const countryNameFormatter = new Intl.DisplayNames(["en"], { type: "region" });
+
+export const mobileCountryCodeOptions: MobileCountryCodeOption[] = getCountries()
+  .map((countryCode: CountryCode) => ({
+    country: countryNameFormatter.of(countryCode) ?? countryCode,
+    iso2: countryCode,
+    dialCode: `+${getCountryCallingCode(countryCode)}`,
+  }))
+  .sort((a, b) => a.country.localeCompare(b.country));
 
 export const fallbackMobileCountryCode = "+49";
 

@@ -6,7 +6,7 @@ import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
-type DashboardTab = "needs-action" | "upcoming" | "past";
+type DashboardTab = "camps" | "huck-jams" | "past";
 
 type OrganizerSearchParams = {
   tab?: string | string[];
@@ -19,6 +19,7 @@ type OrganizerOpportunityRow = {
   status: OpportunityStatus;
   start_date: string;
   end_date: string;
+  registration_deadline: string | null;
   total_capacity: number;
   available_spots: number;
   created_at: string | null;
@@ -74,12 +75,8 @@ const statuses: InterestStatus[] = [
 ];
 
 const tabs: Array<{ key: DashboardTab; label: string; empty: string }> = [
-  {
-    key: "needs-action",
-    label: "Needs Action",
-    empty: "Nothing needs attention right now.",
-  },
-  { key: "upcoming", label: "Upcoming", empty: "No upcoming opportunities." },
+  { key: "camps", label: "Camps", empty: "No upcoming camps." },
+  { key: "huck-jams", label: "Huck Jams", empty: "No upcoming Huck Jams." },
   { key: "past", label: "Past", empty: "No completed opportunities yet." },
 ];
 
@@ -126,7 +123,7 @@ export default async function OrganizerDashboardPage({
     supabase
       .from("opportunities")
       .select(
-        "id,title,type,status,start_date,end_date,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,created_at)",
+        "id,title,type,status,start_date,end_date,registration_deadline,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,created_at)",
       )
       .eq("created_by", user?.id)
       .order("start_date", { ascending: true }),
@@ -148,19 +145,23 @@ export default async function OrganizerDashboardPage({
   const cards = opportunityRows.map((row) =>
     toCardModel(row, unreadOpportunityIds.has(row.id), today, now),
   );
-  const kpis = buildKpis(cards);
   const grouped = {
-    "needs-action": cards
-      .filter((card) => card.needsAction)
+    camps: cards
+      .filter((card) => card.isUpcoming && card.type === "camp")
       .sort(
         (a, b) =>
           b.health.priority - a.health.priority ||
           b.urgencyScore - a.urgencyScore ||
           a.sortDate - b.sortDate,
       ),
-    upcoming: cards
-      .filter((card) => card.isUpcoming)
-      .sort((a, b) => a.sortDate - b.sortDate),
+    "huck-jams": cards
+      .filter((card) => card.isUpcoming && card.type === "huck_jam")
+      .sort(
+        (a, b) =>
+          b.health.priority - a.health.priority ||
+          b.urgencyScore - a.urgencyScore ||
+          a.sortDate - b.sortDate,
+      ),
     past: cards
       .filter((card) => card.isPast)
       .sort((a, b) => b.sortDate - a.sortDate),
@@ -184,20 +185,12 @@ export default async function OrganizerDashboardPage({
         </Link>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-5 sm:gap-2">
-        <Kpi label="Published" value={kpis.published} />
-        <Kpi label="Pending" value={kpis.pending} />
-        <Kpi label="Accepted" value={kpis.accepted} />
-        <Kpi label="Waitlist" value={kpis.waitlist} />
-        <Kpi label="Open Spots" value={kpis.openSpots} />
-      </div>
-
       <div className="mt-3">
         <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {tabs.map((tab) => (
             <Link
               key={tab.key}
-              href={tab.key === "needs-action" ? "/app/dashboard" : `/app/dashboard?tab=${tab.key}`}
+              href={tab.key === "camps" ? "/app/dashboard" : `/app/dashboard?tab=${tab.key}`}
               className={`min-w-0 rounded-lg px-1.5 py-1.5 text-center text-[0.7rem] font-black transition sm:px-3 sm:py-2 sm:text-xs ${
                 activeTab === tab.key
                   ? "bg-slate-950 text-white"
@@ -233,7 +226,7 @@ export default async function OrganizerDashboardPage({
 
 function normalizeTab(value: OrganizerSearchParams["tab"]): DashboardTab {
   const tab = Array.isArray(value) ? value[0] : value;
-  return tabs.some((item) => item.key === tab) ? (tab as DashboardTab) : "needs-action";
+  return tabs.some((item) => item.key === tab) ? (tab as DashboardTab) : "camps";
 }
 
 function toCardModel(
@@ -337,18 +330,46 @@ function getOpportunityHealth({
     opportunity.opportunity_interests ?? [],
     now,
   );
+  const today = dateOnly(now);
+  const deadlineInDays = opportunity.registration_deadline
+    ? daysBetween(today, opportunity.registration_deadline)
+    : null;
 
-  if (
-    (startsInDays >= 0 && startsInDays <= 14 && bookedRatio < 0.5) ||
-    (startsInDays >= 0 && startsInDays <= 7 && !isFullyBooked)
-  ) {
+  if (isFullyBooked) {
+    return {
+      status: "healthy",
+      label: "Healthy",
+      explanation: "Fully booked",
+      tone: "green",
+      priority: 1,
+    };
+  }
+
+  if (bookedRatio < 0.25) {
     return {
       status: "urgent",
       label: "Urgent",
-      explanation:
-        startsInDays <= 7 && !isFullyBooked
-          ? `Starts in ${formatDays(startsInDays)} with ${opportunity.available_spots} open spots`
-          : `Only ${bookedSpots}/${opportunity.total_capacity} spots booked`,
+      explanation: `${bookedSpots}/${opportunity.total_capacity} spots filled`,
+      tone: "red",
+      priority: 3,
+    };
+  }
+
+  if (startsInDays >= 0 && startsInDays <= 7 && bookedRatio < 0.75) {
+    return {
+      status: "urgent",
+      label: "Urgent",
+      explanation: `Starts in ${formatDays(startsInDays)}`,
+      tone: "red",
+      priority: 3,
+    };
+  }
+
+  if (deadlineInDays !== null && deadlineInDays >= 0 && deadlineInDays <= 3) {
+    return {
+      status: "urgent",
+      label: "Urgent",
+      explanation: `Registration closes in ${formatDays(deadlineInDays)}`,
       tone: "red",
       priority: 3,
     };
@@ -388,7 +409,7 @@ function getOpportunityHealth({
     return {
       status: "needs-attention",
       label: "Needs Attention",
-      explanation: `Only ${bookedSpots}/${opportunity.total_capacity} spots booked`,
+      explanation: `${bookedSpots}/${opportunity.total_capacity} spots filled`,
       tone: "yellow",
       priority: 2,
     };
@@ -398,32 +419,13 @@ function getOpportunityHealth({
     status: "healthy",
     label: "Healthy",
     explanation:
-      isFullyBooked || bookedRatio >= 0.75
-        ? `${bookedSpots}/${opportunity.total_capacity} spots booked`
+      bookedRatio >= 0.75
+        ? `${bookedSpots}/${opportunity.total_capacity} spots filled`
         : startsInDays > 30
           ? `Starts in ${formatDays(startsInDays)}`
-          : `${bookedSpots}/${opportunity.total_capacity} spots booked`,
+          : `${bookedSpots}/${opportunity.total_capacity} spots filled`,
     tone: "green",
     priority: 1,
-  };
-}
-
-function buildKpis(opportunities: OpportunityCardModel[]) {
-  const activePublished = opportunities.filter(
-    (opportunity) =>
-      (opportunity.status === "published" || opportunity.status === "full") &&
-      !opportunity.isPast,
-  );
-
-  return {
-    published: activePublished.length,
-    pending: opportunities.reduce((sum, item) => sum + item.counts.pending, 0),
-    accepted: opportunities.reduce((sum, item) => sum + item.counts.accepted, 0),
-    waitlist: opportunities.reduce((sum, item) => sum + item.counts.waitlist, 0),
-    openSpots: activePublished.reduce(
-      (sum, item) => sum + Math.max(item.availableSpots, 0),
-      0,
-    ),
   };
 }
 
@@ -471,54 +473,14 @@ function OpportunityCard({
             <p className="text-[0.68rem] font-bold text-slate-500">booked</p>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-black">
-          <StatusChip value={opportunity.counts.pending} label="pending" tone="amber" />
-          <StatusChip value={opportunity.counts.waitlist} label="waitlist" tone="sky" />
-          <StatusChip
-            value={opportunity.availableSpots}
-            label="open"
-            tone={opportunity.availableSpots > 0 ? "emerald" : "slate"}
-          />
-        </div>
+        <p className="mt-2 text-xs font-black text-slate-700">
+          {opportunity.isFullyBooked
+            ? "Fully booked"
+            : `${opportunity.availableSpots} open ${pluralize("spot", opportunity.availableSpots)}`}
+        </p>
       </Link>
 
     </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="min-h-12 rounded-xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
-      <p className="text-base font-black leading-none text-slate-950 sm:text-lg">
-        {value}
-      </p>
-      <p className="mt-0.5 truncate text-[0.62rem] font-bold uppercase text-slate-500 sm:text-[0.68rem]">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function StatusChip({
-  value,
-  label,
-  tone,
-}: {
-  value: number;
-  label: string;
-  tone: "amber" | "sky" | "emerald" | "slate";
-}) {
-  const classes = {
-    amber: "bg-amber-50 text-amber-800",
-    sky: "bg-sky-50 text-sky-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    slate: "bg-slate-100 text-slate-600",
-  };
-
-  return (
-    <span className={`rounded-full px-2 py-1 ${classes[tone]}`}>
-      {value} {label}
-    </span>
   );
 }
 

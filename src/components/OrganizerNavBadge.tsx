@@ -16,6 +16,8 @@ export function OrganizerNavBadge({
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
+    let disposed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function loadCount() {
       try {
@@ -30,7 +32,9 @@ export function OrganizerNavBadge({
           return;
         }
 
-        setCount(unreadCount ?? 0);
+        if (!disposed) {
+          setCount(unreadCount ?? 0);
+        }
       } catch (countError) {
         console.error("Organizer nav badge count failed", countError);
       }
@@ -41,12 +45,37 @@ export function OrganizerNavBadge({
     }
 
     window.addEventListener("flyloop-notifications-read", handleRead);
+    void supabase.auth.getUser().then(({ data }) => {
+      const userId = data.user?.id;
+
+      if (!userId || disposed) {
+        return;
+      }
+
+      channel = supabase
+        .channel(`organizer-notifications:${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => void loadCount(),
+        )
+        .subscribe();
+    });
 
     const interval = window.setInterval(() => void loadCount(), 15_000);
 
     return () => {
+      disposed = true;
       window.removeEventListener("flyloop-notifications-read", handleRead);
       window.clearInterval(interval);
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
   }, []);
 

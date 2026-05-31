@@ -21,6 +21,8 @@ export function NotificationBell() {
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
+    let disposed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function loadNotifications() {
       try {
@@ -36,13 +38,36 @@ export function NotificationBell() {
           return;
         }
 
-        setNotifications(data ?? []);
+        if (!disposed) {
+          setNotifications(data ?? []);
+        }
       } catch (loadError) {
         console.error("Notification load failed", loadError);
       }
     }
 
     void loadNotifications();
+    void supabase.auth.getUser().then(({ data }) => {
+      const userId = data.user?.id;
+
+      if (!userId || disposed) {
+        return;
+      }
+
+      channel = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => void loadNotifications(),
+        )
+        .subscribe();
+    });
 
     function handleRead() {
       void loadNotifications();
@@ -52,8 +77,12 @@ export function NotificationBell() {
     const interval = window.setInterval(() => void loadNotifications(), 15_000);
 
     return () => {
+      disposed = true;
       window.removeEventListener("flyloop-notifications-read", handleRead);
       window.clearInterval(interval);
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
   }, []);
 
