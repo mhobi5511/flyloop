@@ -28,7 +28,7 @@ const uuidPattern =
 const premiumFieldClass =
   "block h-[3.25rem] w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none focus:border-sky-400";
 const dateFieldClass =
-  "w-full h-14 rounded-2xl border border-slate-200 bg-white px-4 text-base box-border";
+  "block box-border h-14 w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 text-base outline-none focus:border-sky-400";
 
 function isoDateFromNow(days: number) {
   const date = new Date();
@@ -260,7 +260,7 @@ export function CreateOpportunityForm({
 
   return (
     <form
-      className="mt-3 grid w-full max-w-full gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:mt-4 sm:p-4"
+      className="mt-3 box-border grid w-full max-w-full gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:mt-4 sm:p-4"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
@@ -319,7 +319,7 @@ export function CreateOpportunityForm({
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className="space-y-3">
+      <div className="w-full max-w-full min-w-0 space-y-3">
         <Field label="Start date" required>
           <input
             type="date"
