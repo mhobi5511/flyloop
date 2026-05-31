@@ -25,6 +25,8 @@ type CreateOpportunityFormProps = {
 const currencies = ["EUR", "CHF", "USD", "PLN", "GBP"];
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const premiumFieldClass =
+  "block h-[3.25rem] w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none focus:border-sky-400";
 
 function isoDateFromNow(days: number) {
   const date = new Date();
@@ -315,11 +317,11 @@ export function CreateOpportunityForm({
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Start date" required>
           <input
             type="date"
-            className="field"
+            className={premiumFieldClass}
             value={startDate}
             onChange={(event) => updateStartDate(event.target.value)}
           />
@@ -327,7 +329,7 @@ export function CreateOpportunityForm({
         <Field label="End date" required>
           <input
             type="date"
-            className="field"
+            className={premiumFieldClass}
             value={endDate}
             onChange={(event) => {
               setEndDateTouched(true);
@@ -339,7 +341,7 @@ export function CreateOpportunityForm({
           <Field label="Registration deadline">
             <input
               type="date"
-              className="field"
+              className={premiumFieldClass}
               value={registrationDeadline}
               onChange={(event) => setRegistrationDeadline(event.target.value)}
             />
@@ -348,20 +350,20 @@ export function CreateOpportunityForm({
       </div>
 
       <SectionTitle eyebrow="Price & capacity" title="Set availability" />
-      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_7.5rem] sm:gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
         <Field label="Price" required>
           <input
             type="number"
             min="0"
             step="1"
-            className="field"
+            className={premiumFieldClass}
             value={price}
             onChange={(event) => setPrice(event.target.value)}
           />
         </Field>
         <Field label="Currency" required>
           <select
-            className="field"
+            className={premiumFieldClass}
             value={currency}
             onChange={(event) => setCurrency(event.target.value)}
           >
@@ -378,7 +380,7 @@ export function CreateOpportunityForm({
               type="number"
               min="1"
               step="1"
-              className="field"
+              className={premiumFieldClass}
               value={totalCapacity}
               onChange={(event) => setTotalCapacity(event.target.value)}
             />
