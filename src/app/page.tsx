@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   CalendarPlus,
@@ -7,7 +8,6 @@ import {
   RadioTower,
   Send,
   Sparkles,
-  Wind,
 } from "lucide-react";
 
 const steps = [
@@ -54,9 +54,14 @@ export default function LandingPage() {
     <main className="min-h-dvh bg-white text-slate-950">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <span className="grid size-10 place-items-center rounded-xl bg-sky-600 text-white">
-            <Wind size={20} />
-          </span>
+          <Image
+            src="/flyloop-icon-512.png"
+            alt=""
+            width={40}
+            height={40}
+            priority
+            className="size-10 rounded-xl shadow-sm"
+          />
           <span className="text-xl font-black tracking-tight">Flyloop</span>
         </Link>
         <div className="flex items-center gap-2">
