@@ -44,15 +44,15 @@ export function ApplicantStatusActions({
   }
 
   return (
-    <div className="grid gap-2">
-      <div className="flex flex-wrap gap-2">
+    <div className="grid gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {actions.map((action) => (
           <button
             key={action.status}
             type="button"
             disabled={isPending || status === action.status}
             onClick={() => update(action.status)}
-            className={`h-10 rounded-xl px-3 text-sm font-bold transition disabled:cursor-not-allowed ${
+            className={`h-8 rounded-lg px-2.5 text-xs font-bold transition disabled:cursor-not-allowed ${
               status === action.status
                 ? "bg-sky-100 text-sky-700"
                 : "border border-slate-200 text-slate-700 hover:bg-slate-50"
@@ -63,7 +63,7 @@ export function ApplicantStatusActions({
         ))}
       </div>
       {error ? (
-        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+        <p className="rounded-lg bg-rose-50 p-2 text-xs font-semibold text-rose-700">
           {error}
         </p>
       ) : null}

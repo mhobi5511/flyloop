@@ -151,7 +151,7 @@ export default async function OrganizerOpportunityPage({
 
       <section className="mt-4">
         <h2 className="text-xl font-black tracking-tight">Applicants</h2>
-        <div className="mt-3 grid gap-3">
+        <div className="mt-2 grid gap-2">
           {applicantRows.map((applicant) => {
             const profile = Array.isArray(applicant.profiles)
               ? applicant.profiles[0]
@@ -162,11 +162,11 @@ export default async function OrganizerOpportunityPage({
             return (
               <article
                 key={applicant.id}
-                className={`rounded-2xl border border-slate-200 bg-white p-3 shadow-sm ${applicantBorderClass(applicant.status)}`}
+                className={`rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm ${applicantBorderClass(applicant.status)}`}
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="flex min-w-0 gap-3">
+                    <div className="flex min-w-0 gap-2.5">
                       <Avatar
                         name={profile?.full_name}
                         imageUrl={profile?.profile_image_url}
@@ -179,28 +179,27 @@ export default async function OrganizerOpportunityPage({
                           </h3>
                           <ApplicationStatusBadge status={applicant.status} />
                         </div>
-                        <div className="mt-2 grid gap-1 text-sm text-slate-600">
+                        <div className="mt-1 grid gap-0.5 text-xs text-slate-600">
                           <p>{profile?.country ?? "Country not set"}</p>
-                          <p>Submitted: {formatSubmittedDate(applicant.created_at)}</p>
                           <p>Phone: {phone || "Not provided"}</p>
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {phone ? (
                         <a
                           href={`https://wa.me/${phoneToWhatsAppPath(phone)}`}
-                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-3 text-sm font-bold text-white"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 text-xs font-bold text-white"
                         >
-                          <MessageCircle size={16} /> WhatsApp
+                          <MessageCircle size={14} /> WhatsApp
                         </a>
                       ) : null}
                       {instagram ? (
                         <a
                           href={`https://instagram.com/${instagram}`}
-                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-xs font-bold text-slate-700"
                         >
-                          <AtSign size={16} /> Instagram
+                          <AtSign size={14} /> Instagram
                         </a>
                       ) : null}
                     </div>
@@ -222,12 +221,4 @@ export default async function OrganizerOpportunityPage({
       </section>
     </AppShell>
   );
-}
-
-function formatSubmittedDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
 }

@@ -44,7 +44,7 @@ export function GlobalCampSearch({
     month: initialMonth,
     coach: initialCoach,
     tunnel: initialTunnel,
-    submitted: true,
+    submitted: false,
   });
   const [isSearching, setIsSearching] = useState(false);
   const results = useMemo(() => {
@@ -111,7 +111,7 @@ export function GlobalCampSearch({
     setMonth("");
     setCoach("");
     setTunnel("");
-    setSearch({ country: "", month: "", coach: "", tunnel: "", submitted: true });
+    setSearch({ country: "", month: "", coach: "", tunnel: "", submitted: false });
     setIsSearching(false);
   }
 
@@ -194,7 +194,7 @@ export function GlobalCampSearch({
         </button>
       </form>
 
-      {country || month || coach || tunnel ? (
+      {search.submitted && (country || month || coach || tunnel) ? (
         <button
           type="button"
           onClick={clearSearch}
@@ -225,7 +225,7 @@ export function GlobalCampSearch({
             ))
           ) : (
             <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-              No opportunities found for this search.
+              No camps found.
             </p>
           )}
         </div>

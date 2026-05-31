@@ -42,23 +42,3 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists opportunity_interests_notify_athlete_status on public.opportunity_interests;
-
-create trigger opportunity_interests_notify_athlete_status
-after update of status on public.opportunity_interests
-for each row execute function public.notify_athlete_of_application_status_change();
-
-do $$
-begin
-  if exists (
-    select 1
-    from pg_publication
-    where pubname = 'supabase_realtime'
-  ) then
-    alter publication supabase_realtime add table public.notifications;
-  end if;
-exception
-  when duplicate_object then null;
-end;
-$$;
