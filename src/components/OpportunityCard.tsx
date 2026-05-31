@@ -15,12 +15,17 @@ type OpportunityCardProps = {
   opportunity: Opportunity;
   compact?: boolean;
   currentUserId?: string;
+  discoveryBadges?: Array<{
+    label: string;
+    tone: "amber" | "blue" | "green" | "slate";
+  }>;
 };
 
 export function OpportunityCard({
   opportunity,
   compact = false,
   currentUserId,
+  discoveryBadges = [],
 }: OpportunityCardProps) {
   const view = opportunityViewModel(opportunity);
   const location = formatCardLocation(opportunity);
@@ -46,9 +51,20 @@ export function OpportunityCard({
             <Badge tone={view.type === "camp" ? "blue" : "green"}>
               {view.typeLabel}
             </Badge>
-            {view.isLastMinute ? (
+            {view.isLastMinute &&
+            !discoveryBadges.some((badge) => badge.label.includes("Last Minute")) ? (
               <Badge tone="amber">Last-minute opportunity</Badge>
             ) : null}
+            {discoveryBadges.map((badge) => (
+              <span
+                key={badge.label}
+                className={`rounded-full px-2 py-1 text-xs font-bold ${badgeClass(
+                  badge.tone,
+                )}`}
+              >
+                {badge.label}
+              </span>
+            ))}
           </div>
           <h3 className="text-lg font-bold tracking-tight text-slate-950">
             {opportunity.title}
@@ -112,4 +128,15 @@ function formatCardLocation(opportunity: Opportunity) {
   }
 
   return "Location to be confirmed";
+}
+
+function badgeClass(tone: "amber" | "blue" | "green" | "slate") {
+  const classes = {
+    amber: "bg-orange-50 text-orange-700",
+    blue: "bg-sky-50 text-sky-700",
+    green: "bg-emerald-50 text-emerald-700",
+    slate: "bg-slate-100 text-slate-600",
+  };
+
+  return classes[tone];
 }

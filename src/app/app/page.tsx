@@ -1,12 +1,12 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { GlobalCampSearch } from "@/components/GlobalCampSearch";
 import { OpportunityCard } from "@/components/OpportunityCard";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { distanceKm, parseCoordinate } from "@/lib/location";
+import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, Opportunity } from "@/lib/types";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 
 type HomeProfile = {
   full_name: string | null;
@@ -24,7 +24,18 @@ type InterestRow = {
 type HomeSearchParams = {
   country?: string;
   month?: string;
-  view?: string;
+  coach?: string;
+  tunnel?: string;
+};
+
+type FeedItem = {
+  opportunity: Opportunity;
+  isNearby: boolean;
+  isLastMinute: boolean;
+  isFollowedCoach: boolean;
+  isFollowedTunnel: boolean;
+  isPopular: boolean;
+  distanceKm: number | null;
 };
 
 const interactedStatuses = new Set<InterestStatus>([
@@ -81,8 +92,6 @@ export default async function AppHomePage({
   const allRows = opportunitiesResult.error
     ? []
     : ((opportunitiesResult.data ?? []) as HomeFeedRow[]);
-  const countryOptions = getCountryOptions(allRows);
-  const monthOptions = getMonthOptions(allRows);
   const opportunityIds = allRows.map((row) => row.id);
   const followRows = followsResult.error ? [] : followsResult.data ?? [];
   const followedTunnelIds = new Set(
@@ -101,7 +110,6 @@ export default async function AppHomePage({
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);
-  const rows = allRows;
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
@@ -114,18 +122,23 @@ export default async function AppHomePage({
     homeProfile?.use_location_recommendations === true;
   const locationAvailable = userLat !== null && userLon !== null;
   const useRadiusFilter = recommendationsEnabled && locationAvailable;
-  const mapped = rows.map((row) => {
+  const mapped = allRows.map((row) => {
     const location = classifyLocation(row, homeProfile, useRadiusFilter);
+    const opportunity = {
+      ...mapOpportunity(row),
+      tunnelDistanceKm: location.distanceKm ?? undefined,
+      locationLabel: location.label,
+      viewerInterestStatus: interestByOpportunityId.get(row.id),
+    };
+
     return {
-      opportunity: {
-        ...mapOpportunity(row),
-        tunnelDistanceKm: location.distanceKm ?? undefined,
-        locationLabel: location.label,
-        viewerInterestStatus: interestByOpportunityId.get(row.id),
-      },
+      opportunity,
       isNearby: location.isNearby,
       isLastMinute: row.is_last_minute ?? false,
       isFollowedCoach: Boolean(row.is_followed_coach),
+      isFollowedTunnel: followedTunnelIds.has(opportunity.tunnelId),
+      isPopular: isPopular(opportunity),
+      distanceKm: location.distanceKm,
     };
   });
 
@@ -137,7 +150,8 @@ export default async function AppHomePage({
         item.opportunity.endDate >= today &&
         item.opportunity.createdBy !== user.id,
     )
-    .map((item) => item.opportunity);
+    .map((item) => item.opportunity)
+    .sort((a, b) => Date.parse(a.startDate) - Date.parse(b.startDate));
   const joinable = mapped.filter((item) => {
     const viewerStatus = item.opportunity.viewerInterestStatus;
 
@@ -148,53 +162,12 @@ export default async function AppHomePage({
       (!viewerStatus || !interactedStatuses.has(viewerStatus))
     );
   });
-  const lastMinute: Opportunity[] = [];
-  const recommended: Opportunity[] = [];
-  const followedCoaches: Opportunity[] = [];
-  const followedTunnels: Opportunity[] = [];
-  const usedOpportunityIds = new Set<string>();
-
-  takeUnique(upcomingAccepted, usedOpportunityIds);
-
-  for (const item of joinable) {
-    if (item.isLastMinute && (!useRadiusFilter || item.isNearby)) {
-      pushUnique(lastMinute, item.opportunity, usedOpportunityIds);
-    }
-  }
-
-  for (const item of joinable) {
-    if (item.isNearby && !item.isLastMinute) {
-      pushUnique(recommended, item.opportunity, usedOpportunityIds);
-    }
-  }
-
-  for (const item of joinable) {
-    if (item.isFollowedCoach) {
-      pushUnique(followedCoaches, item.opportunity, usedOpportunityIds);
-    }
-  }
-
-  for (const item of joinable) {
-    if (followedTunnelIds.has(item.opportunity.tunnelId)) {
-      pushUnique(followedTunnels, item.opportunity, usedOpportunityIds);
-    }
-  }
-  const currentView = filters.view ?? "";
-  const visibleFeedIds = getVisibleFeedIds({
-    upcomingAccepted,
-    lastMinute,
-    recommended,
-    followedCoaches,
-    followedTunnels,
-    currentView,
-  });
+  const discoveryFeed = joinable
+    .filter((item) => !useRadiusFilter || item.isNearby)
+    .sort(compareFeedItems);
   const globalSearchOpportunities = joinable.map((item) => item.opportunity);
-  const hasAnySection =
-    upcomingAccepted.length > 0 ||
-    lastMinute.length > 0 ||
-    recommended.length > 0 ||
-    followedCoaches.length > 0 ||
-    followedTunnels.length > 0;
+  const countryOptions = getCountryOptions(allRows);
+  const monthOptions = getMonthOptions(allRows);
 
   return (
     <AppShell active="home">
@@ -203,7 +176,7 @@ export default async function AppHomePage({
           Good to see you{homeProfile?.full_name ? `, ${homeProfile.full_name}` : ""}
         </p>
         <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
-          Find flying opportunities you can still join.
+          What can you fly next?
         </h1>
       </div>
 
@@ -211,134 +184,154 @@ export default async function AppHomePage({
         <HomeSection
           title="My Upcoming Camps"
           opportunities={upcomingAccepted}
-          compact
+          limit={3}
           viewHref="/app/applications?status=accepted"
-          showAll={false}
-          limit={1}
           currentUserId={user.id}
         />
       ) : null}
 
-      {lastMinute.length > 0 ? (
-        <HomeSection
-          title={currentView === "last-minute" ? "All Last Minute Opportunities" : "Last Minute Opportunities"}
-          opportunities={lastMinute}
-          compact={false}
-          viewHref={buildViewHref(filters, "last-minute")}
-          showAll={currentView === "last-minute"}
-          limit={2}
-          currentUserId={user.id}
-        />
-      ) : null}
-
-      {recommended.length > 0 ? (
-        <HomeSection
-          title={
-            currentView === "recommended"
-              ? useRadiusFilter
-                ? "All Opportunities Near You"
-                : "All Recommended Opportunities"
-              : useRadiusFilter
-                ? "Opportunities Near You"
-                : "Recommended Opportunities"
-          }
-          opportunities={recommended}
-          compact={false}
-          viewHref={buildViewHref(filters, "recommended")}
-          showAll={currentView === "recommended"}
-          limit={4}
-          currentUserId={user.id}
-        />
-      ) : null}
-
-      <HomeSection
-        title={currentView === "followed-coaches" ? "All Followed Coach Opportunities" : "From Followed Coaches"}
-        opportunities={followedCoaches}
-        compact
-        viewHref={buildViewHref(filters, "followed-coaches")}
-        showAll={currentView === "followed-coaches"}
-        limit={4}
-        hideWhenEmpty
-        currentUserId={user.id}
-      />
-
-      <HomeSection
-        title={currentView === "followed-tunnels" ? "All Followed Tunnel Opportunities" : "From Followed Tunnels"}
-        opportunities={followedTunnels}
-        compact
-        viewHref={buildViewHref(filters, "followed-tunnels")}
-        showAll={currentView === "followed-tunnels"}
-        limit={4}
-        hideWhenEmpty
-        currentUserId={user.id}
-      />
-
-      {!hasAnySection ? (
-        <p className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No matching opportunities yet.
-        </p>
-      ) : null}
+      <section className="mt-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold tracking-tight text-slate-950">
+            {useRadiusFilter ? "Opportunities Near You" : "Recommended Opportunities"}
+          </h2>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {discoveryFeed.length > 0 ? (
+            discoveryFeed.map((item) => (
+              <OpportunityCard
+                key={item.opportunity.id}
+                opportunity={item.opportunity}
+                currentUserId={user.id}
+                discoveryBadges={getDiscoveryBadges(item)}
+              />
+            ))
+          ) : (
+            <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+              No matching opportunities yet.
+            </p>
+          )}
+        </div>
+      </section>
 
       <GlobalCampSearch
         initialCountry={filters.country ?? ""}
         initialMonth={filters.month ?? ""}
+        initialCoach={filters.coach ?? ""}
+        initialTunnel={filters.tunnel ?? ""}
         countryOptions={countryOptions}
         monthOptions={monthOptions}
         opportunities={globalSearchOpportunities}
-        excludedOpportunityIds={[...visibleFeedIds]}
+        excludedOpportunityIds={[]}
         currentUserId={user.id}
       />
     </AppShell>
   );
 }
 
-function getVisibleFeedIds({
-  upcomingAccepted,
-  lastMinute,
-  recommended,
-  followedCoaches,
-  followedTunnels,
-  currentView,
+function HomeSection({
+  title,
+  opportunities,
+  limit,
+  viewHref,
+  currentUserId,
 }: {
-  upcomingAccepted: Opportunity[];
-  lastMinute: Opportunity[];
-  recommended: Opportunity[];
-  followedCoaches: Opportunity[];
-  followedTunnels: Opportunity[];
-  currentView: string;
+  title: string;
+  opportunities: Opportunity[];
+  limit: number;
+  viewHref: string;
+  currentUserId: string;
 }) {
-  return new Set(
-    [
-      ...upcomingAccepted.slice(0, 1),
-      ...(currentView === "last-minute" ? lastMinute : lastMinute.slice(0, 2)),
-      ...(currentView === "recommended" ? recommended : recommended.slice(0, 4)),
-      ...(currentView === "followed-coaches"
-        ? followedCoaches
-        : followedCoaches.slice(0, 4)),
-      ...(currentView === "followed-tunnels"
-        ? followedTunnels
-        : followedTunnels.slice(0, 4)),
-    ].map((opportunity) => opportunity.id),
+  const visible = opportunities.slice(0, limit);
+
+  return (
+    <section className="mt-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold tracking-tight text-slate-950">
+          {title}
+        </h2>
+        {opportunities.length > 0 ? (
+          <Link
+            href={viewHref}
+            className="shrink-0 text-sm font-bold text-sky-700"
+          >
+            View All
+          </Link>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {visible.map((opportunity) => (
+          <OpportunityCard
+            key={opportunity.id}
+            opportunity={opportunity}
+            compact
+            currentUserId={currentUserId}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function takeUnique(opportunities: Opportunity[], usedIds: Set<string>) {
-  for (const opportunity of opportunities) {
-    usedIds.add(opportunity.id);
-  }
+function compareFeedItems(a: FeedItem, b: FeedItem) {
+  return (
+    Number(b.isLastMinute) - Number(a.isLastMinute) ||
+    compareDistance(a, b) ||
+    Date.parse(a.opportunity.startDate) - Date.parse(b.opportunity.startDate) ||
+    Number(b.isFollowedCoach) - Number(a.isFollowedCoach) ||
+    Number(b.isFollowedTunnel) - Number(a.isFollowedTunnel) ||
+    Number(b.isPopular) - Number(a.isPopular) ||
+    sortTimestamp(b.opportunity.createdAt) - sortTimestamp(a.opportunity.createdAt)
+  );
 }
 
-function pushUnique(
-  target: Opportunity[],
-  opportunity: Opportunity,
-  usedIds: Set<string>,
-) {
-  if (usedIds.has(opportunity.id)) {
-    return;
+function sortTimestamp(value?: string) {
+  if (!value) {
+    return 0;
   }
 
-  target.push(opportunity);
-  usedIds.add(opportunity.id);
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function compareDistance(a: FeedItem, b: FeedItem) {
+  const aDistance = a.distanceKm ?? Number.POSITIVE_INFINITY;
+  const bDistance = b.distanceKm ?? Number.POSITIVE_INFINITY;
+  return aDistance - bDistance;
+}
+
+function getDiscoveryBadges(item: FeedItem) {
+  const badges: Array<{
+    label: string;
+    tone: "amber" | "blue" | "green" | "slate";
+  }> = [];
+
+  if (item.isLastMinute) {
+    badges.push({ label: "🟠 Last Minute", tone: "amber" });
+  }
+
+  if (item.isFollowedCoach) {
+    badges.push({ label: "🔵 Followed Coach", tone: "blue" });
+  }
+
+  if (item.isFollowedTunnel) {
+    badges.push({ label: "🟢 Followed Tunnel", tone: "green" });
+  }
+
+  if (item.isPopular) {
+    badges.push({ label: "⭐ Popular", tone: "slate" });
+  }
+
+  return badges;
+}
+
+function isPopular(opportunity: Opportunity) {
+  const booked = opportunity.totalCapacity - opportunity.availableSpots;
+
+  return (
+    opportunity.totalCapacity > 0 &&
+    booked >= Math.max(2, Math.ceil(opportunity.totalCapacity * 0.5))
+  );
 }
 
 function classifyLocation(
@@ -387,81 +380,6 @@ function classifyLocation(
     distanceKm: null,
     label: row.tunnel_region ?? undefined,
   };
-}
-
-function HomeSection({
-  title,
-  opportunities,
-  compact,
-  viewHref,
-  showAll,
-  limit,
-  hideWhenEmpty = false,
-  currentUserId,
-}: {
-  title: string;
-  opportunities: Opportunity[];
-  compact: boolean;
-  viewHref: string;
-  showAll: boolean;
-  limit: number;
-  hideWhenEmpty?: boolean;
-  currentUserId: string;
-}) {
-  const visible = showAll ? opportunities : opportunities.slice(0, limit);
-
-  if (hideWhenEmpty && visible.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="mt-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold tracking-tight text-slate-950">
-          {title}
-        </h2>
-        {!showAll && opportunities.length > limit ? (
-          <Link
-            href={viewHref}
-            className="shrink-0 text-sm font-bold text-sky-700"
-          >
-            View all
-          </Link>
-        ) : null}
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {visible.length > 0 ? (
-          visible.map((opportunity) => (
-            <OpportunityCard
-              key={opportunity.id}
-              opportunity={opportunity}
-              compact={compact}
-              currentUserId={currentUserId}
-            />
-          ))
-        ) : (
-          <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            No matching opportunities yet.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function buildViewHref(filters: HomeSearchParams, view: string) {
-  const params = new URLSearchParams();
-
-  if (filters.country) {
-    params.set("country", filters.country);
-  }
-
-  if (filters.month) {
-    params.set("month", filters.month);
-  }
-
-  params.set("view", view);
-  return `/app?${params.toString()}`;
 }
 
 function getCountryOptions(rows: HomeFeedRow[]) {
