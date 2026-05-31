@@ -320,25 +320,27 @@ export function CreateOpportunityForm({
         </p>
       ) : null}
       <div className="w-full max-w-full min-w-0 space-y-3">
-        <Field label="Start date" required>
-          <input
-            type="date"
-            className={dateFieldClass}
-            value={startDate}
-            onChange={(event) => updateStartDate(event.target.value)}
-          />
-        </Field>
-        <Field label="End date" required>
-          <input
-            type="date"
-            className={dateFieldClass}
-            value={endDate}
-            onChange={(event) => {
-              setEndDateTouched(true);
-              setEndDate(event.target.value);
-            }}
-          />
-        </Field>
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+          <Field label="Start date" required>
+            <input
+              type="date"
+              className={dateFieldClass}
+              value={startDate}
+              onChange={(event) => updateStartDate(event.target.value)}
+            />
+          </Field>
+          <Field label="End date" required>
+            <input
+              type="date"
+              className={dateFieldClass}
+              value={endDate}
+              onChange={(event) => {
+                setEndDateTouched(true);
+                setEndDate(event.target.value);
+              }}
+            />
+          </Field>
+        </div>
         <Field label="Registration deadline">
           <input
             type="date"
