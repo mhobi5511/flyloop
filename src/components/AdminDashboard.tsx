@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type AdminTunnel = {
@@ -53,14 +53,22 @@ const emptyTunnel: TunnelDraft = {
   header_image_url: "",
 };
 
+type ResetSummary = {
+  notifications_deleted: number;
+  interests_deleted: number;
+  opportunities_deleted: number;
+};
+
 export function AdminDashboard({
   initialTunnels,
   initialMissingCoordinateCount,
   users,
+  canResetOpportunities,
 }: {
   initialTunnels: AdminTunnel[];
   initialMissingCoordinateCount: number;
   users: AdminUserOverview[];
+  canResetOpportunities: boolean;
 }) {
   const [tunnels, setTunnels] = useState(initialTunnels);
   const [query, setQuery] = useState("");
@@ -76,6 +84,10 @@ export function AdminDashboard({
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeStatus, setGeocodeStatus] = useState("");
   const [geocodeResult, setGeocodeResult] = useState<GeocodeSummary | null>(null);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetResult, setResetResult] = useState<ResetSummary | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -329,8 +341,87 @@ export function AdminDashboard({
     setGeocodeStatus(`${summary.updated} of ${summary.total} tunnels geocoded`);
   }
 
+  function openResetModal() {
+    setResetConfirmation("");
+    setResetResult(null);
+    setMessage("");
+    setError("");
+    setIsResetModalOpen(true);
+  }
+
+  function closeResetModal() {
+    if (isResetting) {
+      return;
+    }
+
+    setIsResetModalOpen(false);
+    setResetConfirmation("");
+  }
+
+  async function resetOpportunities() {
+    if (!canResetOpportunities || resetConfirmation !== "RESET") {
+      return;
+    }
+
+    setIsResetting(true);
+    setResetResult(null);
+    setMessage("");
+    setError("");
+
+    const response = await fetch("/api/admin/reset-opportunities", {
+      method: "POST",
+    });
+
+    setIsResetting(false);
+
+    if (!response.ok) {
+      setError("Could not reset opportunities. Check admin access and try again.");
+      return;
+    }
+
+    const payload = (await response.json()) as { summary: ResetSummary };
+    setResetResult(payload.summary);
+    setIsResetModalOpen(false);
+    setResetConfirmation("");
+    setMessage(
+      `Reset complete: deleted ${payload.summary.opportunities_deleted} opportunities, ${payload.summary.interests_deleted} applications and ${payload.summary.notifications_deleted} notifications.`,
+    );
+  }
+
   return (
     <div className="grid gap-6">
+      {canResetOpportunities ? (
+        <section className="rounded-2xl border border-rose-200 bg-white p-3 shadow-sm sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-black tracking-tight text-rose-950">
+                Danger Zone
+              </h2>
+              <p className="text-sm font-semibold text-rose-700">
+                Remove all Camp and Huck Jam test data while keeping users,
+                profiles and tunnels.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isResetting}
+              onClick={openResetModal}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-3 text-sm font-bold text-white shadow-sm disabled:bg-slate-300"
+            >
+              <Trash2 size={16} />
+              Reset all opportunities
+            </button>
+          </div>
+          {resetResult ? (
+            <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+              Last reset deleted {resetResult.opportunities_deleted} opportunities,
+              {resetResult.interests_deleted} applications and{" "}
+              {resetResult.notifications_deleted} notifications.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -584,6 +675,54 @@ export function AdminDashboard({
                 className="h-10 rounded-xl bg-rose-600 text-sm font-bold text-white"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isResetModalOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-100 text-rose-700">
+                <AlertTriangle size={20} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-xl font-black tracking-tight">
+                  Reset all opportunities?
+                </h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                  This will delete all Camps, Huck Jams, applications, statuses
+                  and related notifications. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <label className="mt-4 grid gap-1 text-sm font-bold text-slate-700">
+              <span>Type RESET to confirm</span>
+              <input
+                value={resetConfirmation}
+                onChange={(event) => setResetConfirmation(event.target.value)}
+                className="field"
+                placeholder="RESET"
+              />
+            </label>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={closeResetModal}
+                className="h-10 rounded-xl border border-slate-200 text-sm font-bold text-slate-700 disabled:text-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={resetConfirmation !== "RESET" || isResetting}
+                onClick={() => void resetOpportunities()}
+                className="h-10 rounded-xl bg-rose-600 text-sm font-bold text-white disabled:bg-slate-300"
+              >
+                {isResetting ? "Resetting..." : "Reset"}
               </button>
             </div>
           </div>

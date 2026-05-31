@@ -120,7 +120,7 @@ export default async function ApplicationsPage({
   return (
     <AppShell active="applications" canCreate={canCreate} canJoin>
       <div>
-        <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Applications</h1>
+        <h1 className="text-2xl font-black tracking-tight sm:text-3xl">My flights</h1>
       </div>
 
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">

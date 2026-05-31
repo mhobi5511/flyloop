@@ -47,6 +47,7 @@ export default async function AdminPage() {
             initialTunnels={(tunnels ?? []) as AdminTunnel[]}
             initialMissingCoordinateCount={missingCoordinateCount ?? 0}
             users={(usersResult.data ?? []) as AdminUserOverview[]}
+            canResetOpportunities={isAdmin(user)}
           />
         </div>
       </div>

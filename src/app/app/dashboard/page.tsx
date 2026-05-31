@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { publishDraftOpportunity } from "@/app/app/create/actions";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
-type DashboardTab = "needs-action" | "upcoming" | "past" | "drafts";
+type DashboardTab = "needs-action" | "upcoming" | "past";
 
 type OrganizerSearchParams = {
   tab?: string | string[];
@@ -82,20 +81,7 @@ const tabs: Array<{ key: DashboardTab; label: string; empty: string }> = [
   },
   { key: "upcoming", label: "Upcoming", empty: "No upcoming opportunities." },
   { key: "past", label: "Past", empty: "No completed opportunities yet." },
-  { key: "drafts", label: "Drafts", empty: "No drafts right now." },
 ];
-
-async function publishDraftFromDashboard(formData: FormData) {
-  "use server";
-
-  const opportunityId = formData.get("opportunityId");
-
-  if (typeof opportunityId !== "string") {
-    return;
-  }
-
-  await publishDraftOpportunity(opportunityId);
-}
 
 export default async function OrganizerDashboardPage({
   searchParams,
@@ -121,7 +107,7 @@ export default async function OrganizerDashboardPage({
     return (
       <AppShell active="dashboard" canCreate={false}>
         <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h1 className="text-3xl font-black tracking-tight">Organizer</h1>
+          <h1 className="text-3xl font-black tracking-tight">My Coachings</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Enable organizer mode in your profile to access organizer tools.
           </p>
@@ -178,9 +164,6 @@ export default async function OrganizerDashboardPage({
     past: cards
       .filter((card) => card.isPast)
       .sort((a, b) => b.sortDate - a.sortDate),
-    drafts: cards
-      .filter((card) => card.isDraft)
-      .sort((a, b) => b.sortDate - a.sortDate),
   } satisfies Record<DashboardTab, OpportunityCardModel[]>;
   const activeCards = grouped[activeTab];
   const activeEmpty = tabs.find((tab) => tab.key === activeTab)?.empty;
@@ -189,20 +172,22 @@ export default async function OrganizerDashboardPage({
     <AppShell active="dashboard" canCreate>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Organizer</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">
+          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+            My Coachings
+          </h1>
+          <p className="mt-0.5 text-xs font-semibold text-slate-500 sm:text-sm">
             Focus on applicants, open spots, and the opportunities closest to start.
           </p>
         </div>
         <Link
           href="/app/create"
-          className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-bold text-white"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 text-sm font-bold text-white sm:h-11 sm:gap-2 sm:px-4"
         >
           <Plus size={17} /> New
         </Link>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-5 sm:gap-2">
         <Kpi label="Published" value={kpis.published} />
         <Kpi label="Pending" value={kpis.pending} />
         <Kpi label="Accepted" value={kpis.accepted} />
@@ -210,19 +195,19 @@ export default async function OrganizerDashboardPage({
         <Kpi label="Open Spots" value={kpis.openSpots} />
       </div>
 
-      <div className="mt-4 overflow-x-auto">
-        <div className="inline-flex min-w-full gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:min-w-0">
+      <div className="mt-3">
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {tabs.map((tab) => (
             <Link
               key={tab.key}
               href={tab.key === "needs-action" ? "/app/dashboard" : `/app/dashboard?tab=${tab.key}`}
-              className={`flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-center text-xs font-black transition sm:flex-none ${
+              className={`min-w-0 rounded-lg px-1.5 py-1.5 text-center text-[0.7rem] font-black transition sm:px-3 sm:py-2 sm:text-xs ${
                 activeTab === tab.key
                   ? "bg-slate-950 text-white"
                   : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              {tab.label}
+              <span className="truncate">{tab.label}</span>
               <span className="ml-1 text-[0.68rem] opacity-70">
                 {grouped[tab.key].length}
               </span>
@@ -236,7 +221,6 @@ export default async function OrganizerDashboardPage({
           <OpportunityCard
             key={opportunity.id}
             opportunity={opportunity}
-            showDraftActions={activeTab === "drafts"}
           />
         ))}
       </div>
@@ -448,10 +432,8 @@ function buildKpis(opportunities: OpportunityCardModel[]) {
 
 function OpportunityCard({
   opportunity,
-  showDraftActions,
 }: {
   opportunity: OpportunityCardModel;
-  showDraftActions: boolean;
 }) {
   return (
     <div
@@ -503,34 +485,17 @@ function OpportunityCard({
         </div>
       </Link>
 
-      {showDraftActions ? (
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-          <Link
-            href={`/app/organizer/opportunities/${opportunity.id}/edit`}
-            className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-          >
-            Edit
-          </Link>
-          <form action={publishDraftFromDashboard}>
-            <input type="hidden" name="opportunityId" value={opportunity.id} />
-            <button
-              type="submit"
-              className="inline-flex h-9 items-center rounded-xl bg-sky-600 px-3 text-xs font-black text-white transition hover:bg-sky-700"
-            >
-              Publish
-            </button>
-          </form>
-        </div>
-      ) : null}
     </div>
   );
 }
 
 function Kpi({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-      <p className="text-lg font-black leading-none text-slate-950">{value}</p>
-      <p className="mt-1 truncate text-[0.68rem] font-bold uppercase text-slate-500">
+    <div className="min-h-12 rounded-xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+      <p className="text-base font-black leading-none text-slate-950 sm:text-lg">
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-[0.62rem] font-bold uppercase text-slate-500 sm:text-[0.68rem]">
         {label}
       </p>
     </div>
