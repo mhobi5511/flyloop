@@ -53,8 +53,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [profileImageUrl, setProfileImageUrl] = useState(
     profile.profile_image_url ?? "",
   );
-  const [isOrganizer, setIsOrganizer] = useState(
-    profile.is_organizer || profile.wants_to_create_opportunities === true,
+  const [wantsToCreateOpportunities, setWantsToCreateOpportunities] = useState(
+    profile.wants_to_create_opportunities === true,
   );
   const [useLocationRecommendations, setUseLocationRecommendations] = useState(
     profile.use_location_recommendations,
@@ -272,9 +272,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       whatsapp_number: normalizedPhone,
       instagram_handle: optionalText(instagram),
       profile_image_url: optionalText(profileImageUrl),
-      is_organizer: isOrganizer,
+      is_organizer: wantsToCreateOpportunities,
       wants_to_join_opportunities: true,
-      wants_to_create_opportunities: isOrganizer,
+      wants_to_create_opportunities: wantsToCreateOpportunities,
       use_location_recommendations: locationRecommendationsEnabled,
       latitude: locationRecommendationsEnabled ? latitude : null,
       longitude: locationRecommendationsEnabled ? longitude : null,
@@ -331,7 +331,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     );
     setInstagram(data.instagram_handle ?? "");
     setProfileImageUrl(data.profile_image_url ?? "");
-    setIsOrganizer(data.is_organizer || data.wants_to_create_opportunities === true);
+    setWantsToCreateOpportunities(data.wants_to_create_opportunities === true);
     setUseLocationRecommendations(data.use_location_recommendations);
     setLatitude(data.latitude ?? null);
     setLongitude(data.longitude ?? null);
@@ -426,10 +426,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
       <div className="grid gap-3 rounded-2xl bg-slate-50 p-4">
         <Toggle
-          checked={isOrganizer}
-          label="Enable organizer mode"
+          checked={wantsToCreateOpportunities}
+          label="I want to organize Camps or Huck Jams"
           description="Create and manage camps or Huck Jams while keeping athlete features."
-          onChange={setIsOrganizer}
+          onChange={setWantsToCreateOpportunities}
         />
         <Toggle
           checked={useLocationRecommendations}

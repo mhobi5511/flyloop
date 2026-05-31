@@ -23,6 +23,8 @@ export function SignupForm() {
   const [instagram, setInstagram] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [wantsToCreateOpportunities, setWantsToCreateOpportunities] =
+    useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -70,9 +72,9 @@ export function SignupForm() {
             phone: normalizedPhone,
             whatsapp_number: normalizedPhone,
             instagram_handle: instagram,
-            is_organizer: false,
+            is_organizer: wantsToCreateOpportunities,
             wants_to_join_opportunities: true,
-            wants_to_create_opportunities: false,
+            wants_to_create_opportunities: wantsToCreateOpportunities,
           },
         },
       });
@@ -187,6 +189,15 @@ export function SignupForm() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="At least 6 characters"
+        />
+      </label>
+      <label className="flex items-start justify-between gap-3 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+        <span>I want to organize Camps or Huck Jams</span>
+        <input
+          type="checkbox"
+          checked={wantsToCreateOpportunities}
+          onChange={(event) => setWantsToCreateOpportunities(event.target.checked)}
+          className="mt-0.5 size-5 shrink-0"
         />
       </label>
       {error ? (

@@ -22,7 +22,11 @@ begin
     split_part(new.email, '@', 1),
     'Flyloop user'
   );
-  organizer_enabled := coalesce((new.raw_user_meta_data->>'is_organizer')::boolean, false);
+  organizer_enabled := coalesce(
+    (new.raw_user_meta_data->>'wants_to_create_opportunities')::boolean,
+    (new.raw_user_meta_data->>'is_organizer')::boolean,
+    true
+  );
 
   insert into public.profiles (
     id,
