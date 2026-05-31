@@ -17,6 +17,7 @@ import {
   formatPrice,
   formatPriceLabel,
 } from "@/lib/opportunities";
+import { phoneToWhatsAppPath } from "@/lib/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
@@ -210,7 +211,7 @@ export default async function OrganizerOpportunityPage({
                     <div className="mt-3 flex flex-wrap gap-2">
                       {phone ? (
                         <a
-                          href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                          href={`https://wa.me/${phoneToWhatsAppPath(phone)}`}
                           className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-3 text-sm font-bold text-white"
                         >
                           <MessageCircle size={16} /> WhatsApp

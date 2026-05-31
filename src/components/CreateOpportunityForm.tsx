@@ -256,14 +256,14 @@ export function CreateOpportunityForm({
 
   return (
     <form
-      className="mt-4 grid w-full max-w-full gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
+      className="mt-3 grid w-full max-w-full gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:mt-4 sm:p-4"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
       }}
     >
       <SectionTitle eyebrow="Basic info" title="What are you publishing?" />
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
         <Field label="Type" required>
           <select
             className="field"
@@ -310,12 +310,12 @@ export function CreateOpportunityForm({
 
       <SectionTitle eyebrow="Dates" title="Set the timing" />
       {showLastMinuteNotice ? (
-        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+        <p className="rounded-xl bg-amber-50 p-2.5 text-xs font-semibold leading-5 text-amber-800 sm:p-3 sm:text-sm">
           This opportunity will appear as last-minute because the registration
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
         <Field label="Start date" required>
           <input
             type="date"
@@ -335,18 +335,20 @@ export function CreateOpportunityForm({
             }}
           />
         </Field>
-        <Field label="Registration deadline">
-          <input
-            type="date"
-            className="field"
-            value={registrationDeadline}
-            onChange={(event) => setRegistrationDeadline(event.target.value)}
-          />
-        </Field>
+        <div className="col-span-2">
+          <Field label="Registration deadline">
+            <input
+              type="date"
+              className="field"
+              value={registrationDeadline}
+              onChange={(event) => setRegistrationDeadline(event.target.value)}
+            />
+          </Field>
+        </div>
       </div>
 
       <SectionTitle eyebrow="Price & capacity" title="Set availability" />
-      <div className="grid gap-3 sm:grid-cols-[1fr_120px_1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_7.5rem] sm:gap-3">
         <Field label="Price" required>
           <input
             type="number"
@@ -370,27 +372,29 @@ export function CreateOpportunityForm({
             ))}
           </select>
         </Field>
-        <Field label="Capacity" required>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            className="field"
-            value={totalCapacity}
-            onChange={(event) => setTotalCapacity(event.target.value)}
-          />
-        </Field>
+        <div className="col-span-2">
+          <Field label="Capacity" required>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              className="field"
+              value={totalCapacity}
+              onChange={(event) => setTotalCapacity(event.target.value)}
+            />
+          </Field>
+        </div>
       </div>
 
       <details
-        className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+        className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3"
         open={isDetailsOpen}
         onToggle={(event) => setIsDetailsOpen(event.currentTarget.open)}
       >
         <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
           Optional details
         </summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
           <Field label="Minimum time">
             <input
               className="field"
@@ -424,7 +428,7 @@ export function CreateOpportunityForm({
             />
           </Field>
         </div>
-        <div className="mt-3">
+        <div className="mt-2.5 sm:mt-3">
           <Field label="Description">
             <textarea
               className="field min-h-24 py-3"
@@ -437,12 +441,12 @@ export function CreateOpportunityForm({
       </details>
 
       {message ? (
-        <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
+        <p className="rounded-xl bg-sky-50 p-2.5 text-sm font-semibold text-sky-700 sm:p-3">
           {message}
         </p>
       ) : null}
       {error ? (
-        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+        <p className="rounded-xl bg-rose-50 p-2.5 text-sm font-semibold text-rose-700 sm:p-3">
           {error}
         </p>
       ) : null}
@@ -466,11 +470,11 @@ export function CreateOpportunityForm({
 
 function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
-    <div className="border-t border-slate-100 pt-2 first:border-t-0 first:pt-0">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-600">
+    <div className="border-t border-slate-100 pt-1.5 first:border-t-0 first:pt-0 sm:pt-2">
+      <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-sky-600 sm:text-xs sm:tracking-[0.16em]">
         {eyebrow}
       </p>
-      <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+      <h2 className="mt-0.5 text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-xl">
         {title}
       </h2>
     </div>
@@ -487,7 +491,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+    <label className="grid min-w-0 gap-0.5 text-xs font-bold text-slate-700 sm:gap-1 sm:text-sm">
       <span>
         {label}
         {required ? <span className="text-rose-600"> *</span> : null}
@@ -515,7 +519,7 @@ function TunnelCombobox({
   onSelect: (tunnel: TunnelOption) => void;
 }) {
   return (
-    <div className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+    <div className="grid min-w-0 gap-0.5 text-xs font-bold text-slate-700 sm:gap-1 sm:text-sm">
       <span>
         Tunnel <span className="text-rose-600">*</span>
       </span>

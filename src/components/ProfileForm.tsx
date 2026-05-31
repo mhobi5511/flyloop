@@ -3,12 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "./Avatar";
+import {
+  fallbackMobileCountryCode,
+  formatMobileCountryCodeLabel,
+  getMobileCountryCodeFromLocale,
+  mobileCountryCodeOptions,
+  normalizePhoneToE164,
+  splitE164PhoneNumber,
+} from "@/lib/phone";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ProfileFormProps = {
   profile: {
     full_name: string;
     country: string | null;
+    mobile_country_code: string | null;
     phone: string | null;
     whatsapp_number: string | null;
     instagram_handle: string | null;
@@ -26,8 +35,20 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile.full_name ?? "");
   const [country, setCountry] = useState(profile.country ?? "");
-  const [phone, setPhone] = useState(profile.phone ?? "");
-  const [whatsapp, setWhatsapp] = useState(profile.whatsapp_number ?? "");
+  const [mobileCountryCode, setMobileCountryCode] = useState(() =>
+    profile.mobile_country_code ??
+    (typeof navigator === "undefined"
+      ? fallbackMobileCountryCode
+      : getMobileCountryCodeFromLocale(navigator.language)),
+  );
+  const [mobileNumber, setMobileNumber] = useState(
+    profile.mobile_country_code
+      ? splitE164PhoneNumber(
+          profile.whatsapp_number ?? profile.phone,
+          profile.mobile_country_code,
+        )
+      : "",
+  );
   const [instagram, setInstagram] = useState(profile.instagram_handle ?? "");
   const [profileImageUrl, setProfileImageUrl] = useState(
     profile.profile_image_url ?? "",
@@ -48,6 +69,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [locationStatus, setLocationStatus] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const normalizedPhonePreview = normalizePhoneToE164(
+    mobileCountryCode,
+    mobileNumber,
+  );
 
   function optionalText(value: string) {
     const trimmed = value.trim();
@@ -219,14 +244,32 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     const fallbackName = user.email?.split("@")[0] ?? "Flyloop user";
     const cleanFullName = fullName.trim() || fallbackName;
     const cleanRadius = Math.max(1, Number(preferredRadiusKm) || 1000);
+    const normalizedPhone = normalizePhoneToE164(
+      mobileCountryCode,
+      mobileNumber,
+    );
+
+    if (!mobileCountryCode) {
+      setIsLoading(false);
+      setError("Please select a mobile country code.");
+      return;
+    }
+
+    if (!normalizedPhone) {
+      setIsLoading(false);
+      setError("Please enter a valid phone number.");
+      return;
+    }
+
     const hasLocation = latitude !== null && longitude !== null;
     const locationRecommendationsEnabled =
       useLocationRecommendations && hasLocation;
     const profileValues = {
       full_name: cleanFullName,
       country: optionalText(country),
-      phone: optionalText(phone),
-      whatsapp_number: optionalText(whatsapp),
+      mobile_country_code: mobileCountryCode,
+      phone: normalizedPhone,
+      whatsapp_number: normalizedPhone,
       instagram_handle: optionalText(instagram),
       profile_image_url: optionalText(profileImageUrl),
       is_organizer: isOrganizer,
@@ -241,7 +284,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       preferred_radius_km: cleanRadius,
     };
     const profileSelect =
-      "full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url,is_organizer,wants_to_create_opportunities,use_location_recommendations,latitude,longitude,preferred_radius_km";
+      "full_name,country,mobile_country_code,phone,whatsapp_number,instagram_handle,profile_image_url,is_organizer,wants_to_create_opportunities,use_location_recommendations,latitude,longitude,preferred_radius_km";
     let { data, error: saveError } = await supabase
       .from("profiles")
       .update(profileValues)
@@ -277,8 +320,15 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
     setFullName(data.full_name ?? "");
     setCountry(data.country ?? "");
-    setPhone(data.phone ?? "");
-    setWhatsapp(data.whatsapp_number ?? "");
+    setMobileCountryCode(data.mobile_country_code ?? fallbackMobileCountryCode);
+    setMobileNumber(
+      data.mobile_country_code
+        ? splitE164PhoneNumber(
+            data.whatsapp_number ?? data.phone,
+            data.mobile_country_code,
+          )
+        : "",
+    );
     setInstagram(data.instagram_handle ?? "");
     setProfileImageUrl(data.profile_image_url ?? "");
     setIsOrganizer(data.is_organizer || data.wants_to_create_opportunities === true);
@@ -323,29 +373,48 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         />
       </label>
       <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Country
+        Profile Country
         <input
           value={country}
           onChange={(event) => setCountry(event.target.value)}
           className="field"
         />
       </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Phone
-        <input
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          className="field"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        WhatsApp
-        <input
-          value={whatsapp}
-          onChange={(event) => setWhatsapp(event.target.value)}
-          className="field"
-        />
-      </label>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
+        <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+          Mobile Country Code
+          <select
+            required
+            className="field"
+            value={mobileCountryCode}
+            onChange={(event) => setMobileCountryCode(event.target.value)}
+            aria-label="Mobile country code"
+          >
+            {mobileCountryCodeOptions.map((option) => (
+              <option key={option.dialCode} value={option.dialCode}>
+                {formatMobileCountryCodeLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+          Mobile Number
+          <input
+            required
+            inputMode="tel"
+            value={mobileNumber}
+            onChange={(event) => setMobileNumber(event.target.value)}
+            className="field"
+            placeholder="1624234820"
+            aria-label="Mobile number"
+          />
+        </label>
+      </div>
+      {normalizedPhonePreview ? (
+        <p className="-mt-3 text-xs font-semibold text-slate-500">
+          Stored as {normalizedPhonePreview}
+        </p>
+      ) : null}
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Instagram
         <input

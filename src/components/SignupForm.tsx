@@ -2,23 +2,55 @@
 
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  fallbackMobileCountryCode,
+  formatMobileCountryCodeLabel,
+  getMobileCountryCodeFromLocale,
+  mobileCountryCodeOptions,
+  normalizePhoneToE164,
+} from "@/lib/phone";
 import { getAppUrl } from "@/lib/site-url";
 
 export function SignupForm() {
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState("");
-  const [phone, setPhone] = useState("");
+  const [mobileCountryCode, setMobileCountryCode] = useState(() =>
+    typeof navigator === "undefined"
+      ? fallbackMobileCountryCode
+      : getMobileCountryCodeFromLocale(navigator.language),
+  );
+  const [mobileNumber, setMobileNumber] = useState("");
   const [instagram, setInstagram] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const normalizedPhonePreview = normalizePhoneToE164(
+    mobileCountryCode,
+    mobileNumber,
+  );
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
+
+    if (!mobileCountryCode) {
+      setError("Please select a mobile country code.");
+      return;
+    }
+
+    const normalizedPhone = normalizePhoneToE164(
+      mobileCountryCode,
+      mobileNumber,
+    );
+
+    if (!normalizedPhone) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -34,8 +66,9 @@ export function SignupForm() {
           data: {
             full_name: fullName,
             country,
-            phone,
-            whatsapp_number: phone,
+            mobile_country_code: mobileCountryCode,
+            phone: normalizedPhone,
+            whatsapp_number: normalizedPhone,
             instagram_handle: instagram,
             is_organizer: false,
             wants_to_join_opportunities: true,
@@ -81,7 +114,7 @@ export function SignupForm() {
         />
       </label>
       <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Country
+        Profile Country
         <input
           className="field"
           value={country}
@@ -89,15 +122,41 @@ export function SignupForm() {
           placeholder="Germany"
         />
       </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        WhatsApp or phone
-        <input
-          className="field"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          placeholder="+49..."
-        />
-      </label>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
+        <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+          Mobile Country Code
+          <select
+            required
+            className="field"
+            value={mobileCountryCode}
+            onChange={(event) => setMobileCountryCode(event.target.value)}
+            aria-label="Mobile country code"
+          >
+            {mobileCountryCodeOptions.map((option) => (
+              <option key={option.dialCode} value={option.dialCode}>
+                {formatMobileCountryCodeLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+          Mobile Number
+          <input
+            required
+            inputMode="tel"
+            className="field"
+            value={mobileNumber}
+            onChange={(event) => setMobileNumber(event.target.value)}
+            placeholder="1624234820"
+            aria-label="Mobile number"
+          />
+        </label>
+      </div>
+      {normalizedPhonePreview ? (
+        <p className="-mt-3 text-xs font-semibold text-slate-500">
+          Stored as {normalizedPhonePreview}
+        </p>
+      ) : null}
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Instagram
         <input
