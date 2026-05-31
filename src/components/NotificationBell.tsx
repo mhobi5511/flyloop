@@ -17,7 +17,7 @@ type Notification = {
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const unread = notifications.filter((notification) => !notification.read);
+  const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -27,6 +27,7 @@ export function NotificationBell() {
         const { data, error: loadError } = await supabase
           .from("notifications")
           .select("id,title,body,type,opportunity_id,read,created_at")
+          .eq("read", false)
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -56,17 +57,17 @@ export function NotificationBell() {
     };
   }, []);
 
-  async function markRead() {
-    if (unread.length === 0) {
+  async function markRead(visible: Notification[]) {
+    if (visible.length === 0) {
       return;
     }
 
     const supabase = createSupabaseBrowserClient();
-    const unreadIds = unread.map((notification) => notification.id);
+    const visibleIds = visible.map((notification) => notification.id);
     const { error: updateError } = await supabase
       .from("notifications")
       .update({ read: true })
-      .in("id", unreadIds);
+      .in("id", visibleIds);
 
     if (updateError) {
       console.error("Notification mark-read failed", updateError);
@@ -74,22 +75,31 @@ export function NotificationBell() {
     }
 
     setNotifications((current) =>
-      current.map((notification) => ({ ...notification, read: true })),
+      current.filter((notification) => !visibleIds.includes(notification.id)),
     );
     window.dispatchEvent(new Event("flyloop-notifications-read"));
   }
 
+  function handleToggle(event: React.ToggleEvent<HTMLDetailsElement>) {
+    if (!event.currentTarget.open) {
+      setVisibleNotifications([]);
+      return;
+    }
+
+    setVisibleNotifications(notifications);
+    void markRead(notifications);
+  }
+
   return (
-    <details className="relative">
+    <details className="relative" onToggle={handleToggle}>
       <summary
-        onClick={markRead}
         className="grid size-10 cursor-pointer list-none place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm"
         aria-label="Notifications"
       >
         <Bell size={18} />
-        {unread.length > 0 ? (
+        {notifications.length > 0 ? (
           <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-sky-600 px-1 text-xs font-bold text-white">
-            {unread.length}
+            {notifications.length}
           </span>
         ) : null}
       </summary>
@@ -97,16 +107,16 @@ export function NotificationBell() {
         <div className="mb-2 flex items-center justify-between">
           <p className="font-bold text-slate-950">Notifications</p>
           <span className="text-xs font-semibold text-slate-500">
-            {notifications.length} total
+            {visibleNotifications.length} new
           </span>
         </div>
         <div className="grid max-h-[calc(100dvh-10rem)] gap-2 overflow-auto sm:max-h-80">
-          {notifications.length === 0 ? (
+          {visibleNotifications.length === 0 ? (
             <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-              No notifications yet.
+              No new notifications.
             </p>
           ) : (
-            notifications.map((notification) => (
+            visibleNotifications.map((notification) => (
               <Link
                 key={notification.id}
                 href={

@@ -183,7 +183,7 @@ export default async function AppHomePage({
 
       {upcomingAccepted.length > 0 ? (
         <HomeSection
-          title="My Upcoming Camps"
+          title="My Next Camp"
           opportunities={upcomingAccepted}
           limit={1}
           viewHref="/app/applications?status=accepted"

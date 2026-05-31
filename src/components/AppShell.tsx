@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react";
-import { LogoutButton } from "./LogoutButton";
 import { NotificationBell } from "./NotificationBell";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -29,12 +28,12 @@ const baseNavItems = [
 
 const organizerNavItems = [
   { href: "/app/create", label: "Create", id: "create", icon: CalendarPlus },
-  { href: "/app/dashboard", label: "Organizer", id: "dashboard", icon: LayoutDashboard },
+  { href: "/app/dashboard", label: "Coaching", id: "dashboard", icon: LayoutDashboard },
 ] as const;
 
 const applicationNavItem = {
   href: "/app/applications",
-  label: "Applications",
+  label: "Flying",
   id: "applications",
   icon: ClipboardList,
 } as const;
@@ -126,9 +125,9 @@ export async function AppShell({
     ...baseNavItems,
     ...(userCanCreate ? organizerNavItems : []),
     ...(userCanJoin ? [applicationNavItem] : []),
-    profileNavItem,
     ...(shellState.isAdmin ? [adminNavItem] : []),
   ];
+  const profileSelected = active === profileNavItem.id;
 
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950">
@@ -173,7 +172,18 @@ export async function AppShell({
           </nav>
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <LogoutButton />
+            <Link
+              href={profileNavItem.href}
+              aria-label={profileNavItem.label}
+              aria-current={profileSelected ? "page" : undefined}
+              className={`grid size-10 place-items-center rounded-full border shadow-sm ${
+                profileSelected
+                  ? "border-sky-200 bg-sky-50 text-sky-700"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <User size={18} />
+            </Link>
           </div>
         </div>
       </header>
