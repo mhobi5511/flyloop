@@ -44,6 +44,7 @@ type ApplicantRow = {
   created_at: string;
   profiles:
     | {
+        id: string;
         full_name: string;
         country: string | null;
         phone: string | null;
@@ -52,12 +53,13 @@ type ApplicantRow = {
         profile_image_url: string | null;
       }
     | Array<{
+        id: string;
         full_name: string;
         country: string | null;
         phone: string | null;
         whatsapp_number: string | null;
-          instagram_handle: string | null;
-          profile_image_url: string | null;
+        instagram_handle: string | null;
+        profile_image_url: string | null;
       }>
     | null;
 };
@@ -100,7 +102,7 @@ export default async function OrganizerOpportunityPage({
 
   const { data: applicants } = await supabase
     .from("opportunity_interests")
-    .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
+    .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
     .order("created_at", { ascending: false });
   const canCreate =
@@ -167,16 +169,35 @@ export default async function OrganizerOpportunityPage({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex min-w-0 gap-2.5">
-                      <Avatar
-                        name={profile?.full_name}
-                        imageUrl={profile?.profile_image_url}
-                        size="sm"
-                      />
+                      {profile?.id ? (
+                        <Link href={`/app/users/${profile.id}`}>
+                          <Avatar
+                            name={profile?.full_name}
+                            imageUrl={profile?.profile_image_url}
+                            size="sm"
+                          />
+                        </Link>
+                      ) : (
+                        <Avatar
+                          name={profile?.full_name}
+                          imageUrl={profile?.profile_image_url}
+                          size="sm"
+                        />
+                      )}
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-black text-slate-950">
-                            {profile?.full_name ?? "Applicant"}
-                          </h3>
+                          {profile?.id ? (
+                            <Link
+                              href={`/app/users/${profile.id}`}
+                              className="font-black text-slate-950 hover:text-sky-700"
+                            >
+                              {profile?.full_name ?? "Applicant"}
+                            </Link>
+                          ) : (
+                            <h3 className="font-black text-slate-950">
+                              {profile?.full_name ?? "Applicant"}
+                            </h3>
+                          )}
                           <ApplicationStatusBadge status={applicant.status} />
                         </div>
                         <div className="mt-1 grid gap-0.5 text-xs text-slate-600">

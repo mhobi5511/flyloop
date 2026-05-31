@@ -35,7 +35,7 @@ export async function proxy(request: NextRequest) {
     profile?.wants_to_create_opportunities !== true
   ) {
     const url = request.nextUrl.clone();
-    url.pathname = "/app/onboarding";
+    url.pathname = "/app/profile";
     url.search = "";
     return NextResponse.redirect(url);
   }

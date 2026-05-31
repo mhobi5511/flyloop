@@ -109,7 +109,7 @@ export default async function OrganizerDashboardPage({
             Enable organizer mode in your profile to access organizer tools.
           </p>
           <Link
-            href="/app/onboarding"
+            href="/app/profile"
             className="mt-4 inline-flex h-11 items-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white"
           >
             Open profile

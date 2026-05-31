@@ -17,6 +17,12 @@ type ProfileFormProps = {
   profile: {
     full_name: string;
     country: string | null;
+    city: string | null;
+    bio: string | null;
+    disciplines: string[] | null;
+    home_tunnel_id: string | null;
+    website_url: string | null;
+    youtube_url: string | null;
     mobile_country_code: string | null;
     phone: string | null;
     whatsapp_number: string | null;
@@ -29,12 +35,26 @@ type ProfileFormProps = {
     longitude: number | null;
     preferred_radius_km: number;
   };
+  tunnels: Array<{
+    id: string;
+    name: string;
+    city: string | null;
+    country: string | null;
+  }>;
 };
 
-export function ProfileForm({ profile }: ProfileFormProps) {
+export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile.full_name ?? "");
   const [country, setCountry] = useState(profile.country ?? "");
+  const [city, setCity] = useState(profile.city ?? "");
+  const [bio, setBio] = useState(profile.bio ?? "");
+  const [disciplines, setDisciplines] = useState(
+    (profile.disciplines ?? []).join(", "),
+  );
+  const [homeTunnelId, setHomeTunnelId] = useState(profile.home_tunnel_id ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(profile.website_url ?? "");
+  const [youtubeUrl, setYoutubeUrl] = useState(profile.youtube_url ?? "");
   const [mobileCountryCode, setMobileCountryCode] = useState(() =>
     profile.mobile_country_code ??
     (typeof navigator === "undefined"
@@ -77,6 +97,16 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   function optionalText(value: string) {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  function optionalUrl(value: string) {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return null;
+    }
+
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   }
 
   function enableLocationRecommendations(enabled: boolean) {
@@ -267,6 +297,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     const profileValues = {
       full_name: cleanFullName,
       country: optionalText(country),
+      city: optionalText(city),
+      bio: optionalText(bio),
+      disciplines: parseCsv(disciplines),
+      home_tunnel_id: optionalText(homeTunnelId),
+      website_url: optionalUrl(websiteUrl),
+      youtube_url: optionalUrl(youtubeUrl),
       mobile_country_code: mobileCountryCode,
       phone: normalizedPhone,
       whatsapp_number: normalizedPhone,
@@ -284,7 +320,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       preferred_radius_km: cleanRadius,
     };
     const profileSelect =
-      "full_name,country,mobile_country_code,phone,whatsapp_number,instagram_handle,profile_image_url,is_organizer,wants_to_create_opportunities,use_location_recommendations,latitude,longitude,preferred_radius_km";
+      "full_name,country,city,bio,disciplines,home_tunnel_id,website_url,youtube_url,mobile_country_code,phone,whatsapp_number,instagram_handle,profile_image_url,is_organizer,wants_to_create_opportunities,use_location_recommendations,latitude,longitude,preferred_radius_km";
     let { data, error: saveError } = await supabase
       .from("profiles")
       .update(profileValues)
@@ -320,6 +356,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
     setFullName(data.full_name ?? "");
     setCountry(data.country ?? "");
+    setCity(data.city ?? "");
+    setBio(data.bio ?? "");
+    setDisciplines((data.disciplines ?? []).join(", "));
+    setHomeTunnelId(data.home_tunnel_id ?? "");
+    setWebsiteUrl(data.website_url ?? "");
+    setYoutubeUrl(data.youtube_url ?? "");
     setMobileCountryCode(data.mobile_country_code ?? fallbackMobileCountryCode);
     setMobileNumber(
       data.mobile_country_code
@@ -380,6 +422,49 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           className="field"
         />
       </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        City
+        <input
+          value={city}
+          onChange={(event) => setCity(event.target.value)}
+          className="field"
+          placeholder="Eloy"
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        Short bio
+        <textarea
+          value={bio}
+          onChange={(event) => setBio(event.target.value)}
+          className="field min-h-24 resize-y"
+          maxLength={500}
+          placeholder="A few lines about your flying, coaching, or tunnel interests."
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        Disciplines
+        <input
+          value={disciplines}
+          onChange={(event) => setDisciplines(event.target.value)}
+          className="field"
+          placeholder="FS, VFS, Dynamic, Freestyle"
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        Home Tunnel
+        <select
+          value={homeTunnelId}
+          onChange={(event) => setHomeTunnelId(event.target.value)}
+          className="field"
+        >
+          <option value="">No home tunnel</option>
+          {tunnels.map((tunnel) => (
+            <option key={tunnel.id} value={tunnel.id}>
+              {formatTunnelOption(tunnel)}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
         <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
           Mobile Country Code
@@ -421,6 +506,24 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           value={instagram}
           onChange={(event) => setInstagram(event.target.value)}
           className="field"
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        Website
+        <input
+          value={websiteUrl}
+          onChange={(event) => setWebsiteUrl(event.target.value)}
+          className="field"
+          placeholder="https://example.com"
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">
+        YouTube
+        <input
+          value={youtubeUrl}
+          onChange={(event) => setYoutubeUrl(event.target.value)}
+          className="field"
+          placeholder="https://youtube.com/@yourchannel"
         />
       </label>
 
@@ -476,6 +579,23 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       </button>
     </form>
   );
+}
+
+function parseCsv(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatTunnelOption(tunnel: {
+  name: string;
+  city: string | null;
+  country: string | null;
+}) {
+  const location = [tunnel.city, tunnel.country].filter(Boolean).join(", ");
+
+  return location ? `${tunnel.name} - ${location}` : tunnel.name;
 }
 
 function Toggle({

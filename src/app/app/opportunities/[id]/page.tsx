@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { CalendarDays, Globe2, MapPin, Users } from "lucide-react";
 import { ApplicationStatusBadge } from "@/components/ApplicationStatusBadge";
 import { AppShell } from "@/components/AppShell";
+import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
@@ -62,6 +63,7 @@ export default async function OpportunityDetailPage({
   const description = getMeaningfulDescription(opportunity.description);
   const personLabel =
     opportunity.type === "camp" && opportunity.coachName ? "Coach" : "Organizer";
+  const profileUserId = opportunity.coachFollowId ?? opportunity.createdBy;
   const detailRows = getDetailRows({
     skillLevel: opportunity.skillLevel,
     disciplines: opportunity.disciplines,
@@ -181,16 +183,19 @@ export default async function OpportunityDetailPage({
             <div className="mt-5 rounded-2xl border border-slate-200 p-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex flex-1 items-center gap-3">
-                  <div className="grid size-14 place-items-center rounded-2xl bg-sky-50 font-black text-sky-700">
-                    {opportunity.coachName?.slice(0, 1) ?? "O"}
-                  </div>
+                  <Link href={`/app/users/${profileUserId}`}>
+                    <Avatar name={opportunity.coachName ?? personLabel} size="md" />
+                  </Link>
                   <div>
                     <p className="text-sm text-slate-500">
                       {personLabel === "Coach" ? "About the coach" : "Organizer"}
                     </p>
-                    <p className="font-bold text-slate-900">
+                    <Link
+                      href={`/app/users/${profileUserId}`}
+                      className="font-bold text-slate-900 hover:text-sky-700"
+                    >
                       {opportunity.coachName ?? personLabel}
-                    </p>
+                    </Link>
                   </div>
                 </div>
                 {!isOrganizer ? (

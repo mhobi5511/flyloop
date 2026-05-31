@@ -39,7 +39,7 @@ const applicationNavItem = {
 } as const;
 
 const profileNavItem = {
-  href: "/app/onboarding",
+  href: "/app/profile",
   label: "Profile",
   id: "profile",
   icon: User,
