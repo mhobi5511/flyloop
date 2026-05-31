@@ -26,6 +26,14 @@ type HomeSearchParams = {
   view?: string;
 };
 
+const interactedStatuses = new Set<InterestStatus>([
+  "pending",
+  "accepted",
+  "waitlist",
+  "declined",
+  "withdrawn",
+]);
+
 export default async function AppHomePage({
   searchParams,
 }: {
@@ -122,31 +130,63 @@ export default async function AppHomePage({
     };
   });
 
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingAccepted = mapped
+    .filter(
+      (item) =>
+        item.opportunity.viewerInterestStatus === "accepted" &&
+        item.opportunity.endDate >= today &&
+        item.opportunity.createdBy !== user.id,
+    )
+    .map((item) => item.opportunity);
+  const joinable = mapped.filter((item) => {
+    const viewerStatus = item.opportunity.viewerInterestStatus;
+
+    return (
+      item.opportunity.createdBy !== user.id &&
+      (!viewerStatus || !interactedStatuses.has(viewerStatus))
+    );
+  });
   const lastMinute: Opportunity[] = [];
   const recommended: Opportunity[] = [];
   const followedCoaches: Opportunity[] = [];
   const followedTunnels: Opportunity[] = [];
+  const usedOpportunityIds = new Set<string>();
 
-  for (const item of mapped) {
+  takeUnique(upcomingAccepted, usedOpportunityIds);
+
+  for (const item of joinable) {
     if (item.isLastMinute) {
-      lastMinute.push(item.opportunity);
+      pushUnique(lastMinute, item.opportunity, usedOpportunityIds);
     }
+  }
 
+  for (const item of joinable) {
     if (item.isNearby && !item.isLastMinute) {
-      recommended.push(item.opportunity);
+      pushUnique(recommended, item.opportunity, usedOpportunityIds);
     }
+  }
 
+  for (const item of joinable) {
     if (item.isFollowedCoach) {
-      followedCoaches.push(item.opportunity);
+      pushUnique(followedCoaches, item.opportunity, usedOpportunityIds);
     }
+  }
 
+  for (const item of joinable) {
     if (followedTunnelIds.has(item.opportunity.tunnelId)) {
-      followedTunnels.push(item.opportunity);
+      pushUnique(followedTunnels, item.opportunity, usedOpportunityIds);
     }
   }
   const currentView = filters.view ?? "";
   const hasFilters = Boolean(filters.country || filters.month);
   const recommendationsEnabled = homeProfile?.use_location_recommendations === true;
+  const hasAnySection =
+    upcomingAccepted.length > 0 ||
+    lastMinute.length > 0 ||
+    recommended.length > 0 ||
+    followedCoaches.length > 0 ||
+    followedTunnels.length > 0;
 
   return (
     <AppShell active="home">
@@ -207,55 +247,98 @@ export default async function AppHomePage({
         </Link>
       ) : null}
 
+      {upcomingAccepted.length > 0 ? (
+        <HomeSection
+          title="My Upcoming Camps"
+          opportunities={upcomingAccepted}
+          compact
+          viewHref="/app/applications?status=accepted"
+          showAll={false}
+          limit={1}
+          currentUserId={user.id}
+        />
+      ) : null}
+
       {lastMinute.length > 0 ? (
         <HomeSection
-          title={currentView === "last-minute" ? "All last-minute opportunities" : "Last-minute opportunities"}
+          title={currentView === "last-minute" ? "All Last Minute Opportunities" : "Last Minute Opportunities"}
           opportunities={lastMinute}
           compact={false}
           viewHref={buildViewHref(filters, "last-minute")}
           showAll={currentView === "last-minute"}
+          limit={2}
+          currentUserId={user.id}
+        />
+      ) : null}
+
+      {recommended.length > 0 ? (
+        <HomeSection
+          title={
+            currentView === "recommended"
+              ? recommendationsEnabled
+                ? "All Opportunities Near You"
+                : "All Recommended Opportunities"
+              : recommendationsEnabled
+                ? "Opportunities Near You"
+                : "Recommended Opportunities"
+          }
+          opportunities={recommended}
+          compact={false}
+          viewHref={buildViewHref(filters, "recommended")}
+          showAll={currentView === "recommended"}
+          limit={4}
           currentUserId={user.id}
         />
       ) : null}
 
       <HomeSection
-        title={
-          currentView === "recommended"
-            ? recommendationsEnabled
-              ? "All opportunities near you"
-              : "All recommended opportunities"
-            : recommendationsEnabled
-              ? "Opportunities near you"
-              : "Recommended opportunities"
-        }
-        opportunities={recommended}
-        compact={false}
-        viewHref={buildViewHref(filters, "recommended")}
-        showAll={currentView === "recommended"}
-        currentUserId={user.id}
-      />
-
-      <HomeSection
-        title={currentView === "followed-coaches" ? "All followed coach opportunities" : "From followed coaches"}
+        title={currentView === "followed-coaches" ? "All Followed Coach Opportunities" : "From Followed Coaches"}
         opportunities={followedCoaches}
         compact
         viewHref={buildViewHref(filters, "followed-coaches")}
         showAll={currentView === "followed-coaches"}
+        limit={4}
         hideWhenEmpty
         currentUserId={user.id}
       />
 
       <HomeSection
-        title={currentView === "followed-tunnels" ? "All followed tunnel opportunities" : "From followed tunnels"}
+        title={currentView === "followed-tunnels" ? "All Followed Tunnel Opportunities" : "From Followed Tunnels"}
         opportunities={followedTunnels}
         compact
         viewHref={buildViewHref(filters, "followed-tunnels")}
         showAll={currentView === "followed-tunnels"}
+        limit={4}
         hideWhenEmpty
         currentUserId={user.id}
       />
+
+      {!hasAnySection ? (
+        <p className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          No matching opportunities yet.
+        </p>
+      ) : null}
     </AppShell>
   );
+}
+
+function takeUnique(opportunities: Opportunity[], usedIds: Set<string>) {
+  for (const opportunity of opportunities) {
+    usedIds.add(opportunity.id);
+  }
+}
+
+function pushUnique(
+  target: Opportunity[],
+  opportunity: Opportunity,
+  usedIds: Set<string>,
+) {
+  if (usedIds.has(opportunity.id)) {
+    return;
+  }
+
+  target.push(opportunity);
+  usedIds.add(opportunity.id);
 }
 
 function classifyLocation(row: HomeFeedRow, profile: HomeProfile | null) {
@@ -308,6 +391,7 @@ function HomeSection({
   compact,
   viewHref,
   showAll,
+  limit,
   hideWhenEmpty = false,
   currentUserId,
 }: {
@@ -316,10 +400,11 @@ function HomeSection({
   compact: boolean;
   viewHref: string;
   showAll: boolean;
+  limit: number;
   hideWhenEmpty?: boolean;
   currentUserId: string;
 }) {
-  const visible = showAll ? opportunities : opportunities.slice(0, 4);
+  const visible = showAll ? opportunities : opportunities.slice(0, limit);
 
   if (hideWhenEmpty && visible.length === 0) {
     return null;
@@ -331,7 +416,7 @@ function HomeSection({
         <h2 className="text-xl font-bold tracking-tight text-slate-950">
           {title}
         </h2>
-        {!showAll && opportunities.length > 4 ? (
+        {!showAll && opportunities.length > limit ? (
           <Link
             href={viewHref}
             className="shrink-0 text-sm font-bold text-sky-700"

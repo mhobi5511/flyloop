@@ -121,7 +121,7 @@ async function getAuthenticatedOrganizer() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name,is_organizer,wants_to_create_opportunities")
+    .select("full_name,is_organizer,wants_to_create_opportunities,is_admin")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -407,13 +407,10 @@ export async function addTunnel(
     return { ok: false, message: "Please log in again before adding a tunnel." };
   }
 
-  if (
-    profile?.is_organizer !== true &&
-    profile?.wants_to_create_opportunities !== true
-  ) {
+  if (profile?.is_admin !== true) {
     return {
       ok: false,
-      message: "Enable organizer mode in your profile before adding a tunnel.",
+      message: "Only admins can add tunnels.",
     };
   }
 

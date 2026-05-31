@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   ApplicationStatusBadge,
   applicantBorderClass,
@@ -72,7 +73,27 @@ type ApplicationRow = {
       }>;
 };
 
-export default async function ApplicationsPage() {
+type ApplicationsSearchParams = {
+  status?: string;
+};
+
+const statusOptions: InterestStatus[] = [
+  "pending",
+  "accepted",
+  "waitlist",
+  "declined",
+  "withdrawn",
+];
+
+export default async function ApplicationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<ApplicationsSearchParams>;
+}) {
+  const filters = (await searchParams) ?? {};
+  const selectedStatus = statusOptions.includes(filters.status as InterestStatus)
+    ? (filters.status as InterestStatus)
+    : null;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -89,7 +110,9 @@ export default async function ApplicationsPage() {
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
   ]);
-  const rows = (applications ?? []) as ApplicationRow[];
+  const rows = ((applications ?? []) as ApplicationRow[]).filter(
+    (application) => !selectedStatus || application.status === selectedStatus,
+  );
   const canCreate =
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
@@ -98,9 +121,21 @@ export default async function ApplicationsPage() {
     <AppShell active="applications" canCreate={canCreate} canJoin>
       <div>
         <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Applications</h1>
-        <p className="mt-1 text-sm leading-6 text-slate-600">
-          Track the opportunities where you have sent interest.
-        </p>
+      </div>
+
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <StatusLink href="/app/applications" active={!selectedStatus}>
+          All
+        </StatusLink>
+        {statusOptions.map((status) => (
+          <StatusLink
+            key={status}
+            href={`/app/applications?status=${status}`}
+            active={selectedStatus === status}
+          >
+            {status.slice(0, 1).toUpperCase() + status.slice(1)}
+          </StatusLink>
+        ))}
       </div>
 
       <div className="mt-4 grid gap-3">
@@ -172,6 +207,29 @@ export default async function ApplicationsPage() {
         </p>
       ) : null}
     </AppShell>
+  );
+}
+
+function StatusLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-bold ${
+        active
+          ? "border-sky-600 bg-sky-600 text-white"
+          : "border-slate-200 bg-white text-slate-700"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }
 

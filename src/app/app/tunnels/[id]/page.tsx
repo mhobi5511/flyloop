@@ -32,7 +32,16 @@ export default async function TunnelProfilePage({
   return (
     <AppShell active="home">
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-44 bg-gradient-to-br from-sky-100 to-cyan-50" />
+        {tunnel.header_image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={tunnel.header_image_url}
+            alt=""
+            className="h-44 w-full object-cover"
+          />
+        ) : (
+          <div className="h-44 bg-gradient-to-br from-sky-100 to-cyan-50" />
+        )}
         <div className="p-5">
           <p className="flex items-center gap-2 text-sm font-bold text-sky-700">
             <MapPin size={17} />

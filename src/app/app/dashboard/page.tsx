@@ -84,9 +84,6 @@ export default async function OrganizerDashboardPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Organizer</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Manage your opportunities and open each one to handle applicants.
-          </p>
         </div>
         <Link
           href="/app/create"

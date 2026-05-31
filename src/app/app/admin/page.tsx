@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { AdminTunnelHeaderImageForm } from "@/components/AdminTunnelHeaderImageForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function AdminPage() {
@@ -22,6 +23,10 @@ export default async function AdminPage() {
     .select("id,status,created_at,opportunities(title),profiles(full_name)")
     .order("created_at", { ascending: false })
     .limit(25);
+  const { data: tunnels } = await supabase
+    .from("tunnel_profiles")
+    .select("id,name,city,country,header_image_url")
+    .order("name", { ascending: true });
 
   return (
     <AppShell active="dashboard">
@@ -81,6 +86,15 @@ export default async function AdminPage() {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <h2 className="text-xl font-bold tracking-tight">Tunnel header images</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(tunnels ?? []).map((tunnel) => (
+              <AdminTunnelHeaderImageForm key={tunnel.id} tunnel={tunnel} />
+            ))}
           </div>
         </section>
       </div>

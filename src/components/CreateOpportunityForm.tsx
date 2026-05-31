@@ -3,12 +3,10 @@
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  addTunnel,
   publishOpportunity,
   updateOpportunity,
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
-import { regions } from "@/lib/location";
 import type { OpportunityType } from "@/lib/types";
 
 export type TunnelOption = {
@@ -150,15 +148,10 @@ export function CreateOpportunityForm({
     initialOpportunity?.disciplines ?? "",
   );
   const [skillLevel, setSkillLevel] = useState(initialOpportunity?.skillLevel ?? "");
-  const [availableTunnels, setAvailableTunnels] = useState(tunnels);
-  const [showTunnelForm, setShowTunnelForm] = useState(false);
-  const [tunnelName, setTunnelName] = useState("");
-  const [tunnelCity, setTunnelCity] = useState("");
-  const [tunnelCountry, setTunnelCountry] = useState("");
-  const [tunnelRegion, setTunnelRegion] = useState("");
-  const [tunnelAddress, setTunnelAddress] = useState("");
-  const [tunnelWebsite, setTunnelWebsite] = useState("");
-  const [tunnelDescription, setTunnelDescription] = useState("");
+  const [availableTunnels] = useState(tunnels);
+  const [tunnelSearch, setTunnelSearch] = useState("");
+  const [isTunnelListOpen, setIsTunnelListOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(mode === "edit");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -166,6 +159,21 @@ export function CreateOpportunityForm({
     () => availableTunnels.find((tunnel) => tunnel.id === tunnelId),
     [availableTunnels, tunnelId],
   );
+  const tunnelMatches = useMemo(() => {
+    const query = tunnelSearch.trim().toLowerCase();
+
+    if (!query) {
+      return availableTunnels.slice(0, 8);
+    }
+
+    return availableTunnels
+      .filter((tunnel) =>
+        `${tunnel.name} ${tunnel.city} ${tunnel.country}`
+          .toLowerCase()
+          .includes(query),
+      )
+      .slice(0, 8);
+  }, [availableTunnels, tunnelSearch]);
   const capacityNumber = Number(totalCapacity);
   const showLastMinuteNotice = useMemo(() => {
     if (!registrationDeadline || !Number.isFinite(capacityNumber) || capacityNumber < 1) {
@@ -246,63 +254,16 @@ export function CreateOpportunityForm({
     });
   }
 
-  function submitTunnel() {
-    setError("");
-    setMessage("");
-
-    if (!tunnelName.trim() || !tunnelCity.trim() || !tunnelCountry.trim()) {
-      setError("Please enter the tunnel name, city and country.");
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await addTunnel({
-        name: tunnelName,
-        city: tunnelCity,
-        country: tunnelCountry,
-        region: tunnelRegion,
-        address: tunnelAddress,
-        website: tunnelWebsite,
-        description: tunnelDescription,
-      });
-
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      const newTunnel = {
-        id: result.data.id,
-        name: result.data.name,
-        city: tunnelCity.trim(),
-        country: tunnelCountry.trim(),
-      };
-      setAvailableTunnels((current) =>
-        [...current, newTunnel].sort((a, b) => a.name.localeCompare(b.name)),
-      );
-      setTunnelId(result.data.id);
-      setTunnelName("");
-      setTunnelCity("");
-      setTunnelCountry("");
-      setTunnelRegion("");
-      setTunnelAddress("");
-      setTunnelWebsite("");
-      setTunnelDescription("");
-      setShowTunnelForm(false);
-      setMessage("Tunnel added and selected.");
-    });
-  }
-
   return (
     <form
-      className="mt-5 grid w-full max-w-full gap-6 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+      className="mt-4 grid w-full max-w-full gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
       }}
     >
       <SectionTitle eyebrow="Basic info" title="What are you publishing?" />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Type" required>
           <select
             className="field"
@@ -330,111 +291,31 @@ export function CreateOpportunityForm({
       </div>
 
       <SectionTitle eyebrow="Location" title="Choose the tunnel" />
-      <div className="grid gap-3">
-        <Field label="Tunnel" required>
-          <select
-            className="field"
-            value={tunnelId}
-            onChange={(event) => setTunnelId(event.target.value)}
-          >
-            <option value="">Select a tunnel</option>
-            {availableTunnels.map((tunnel) => (
-              <option key={tunnel.id} value={tunnel.id}>
-                {tunnel.name} - {tunnel.city}, {tunnel.country}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <button
-          type="button"
-          className="max-w-full justify-self-start text-left text-sm font-bold text-sky-700"
-          onClick={() => setShowTunnelForm((current) => !current)}
-        >
-          If your tunnel is missing, add it here.
-        </button>
-        {showTunnelForm ? (
-          <div className="grid min-w-0 gap-4 border-l-2 border-sky-100 pl-3 sm:pl-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Tunnel name" required>
-                <input
-                  className="field"
-                  value={tunnelName}
-                  onChange={(event) => setTunnelName(event.target.value)}
-                />
-              </Field>
-              <Field label="City" required>
-                <input
-                  className="field"
-                  value={tunnelCity}
-                  onChange={(event) => setTunnelCity(event.target.value)}
-                />
-              </Field>
-              <Field label="Country" required>
-                <input
-                  className="field"
-                  value={tunnelCountry}
-                  onChange={(event) => setTunnelCountry(event.target.value)}
-                />
-              </Field>
-            </div>
-            <Field label="Region">
-              <select
-                className="field"
-                value={tunnelRegion}
-                onChange={(event) => setTunnelRegion(event.target.value)}
-              >
-                <option value="">Infer from country when possible</option>
-                {regions.map((region) => (
-                  <option key={region} value={region}>
-                    {region}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Address">
-                <input
-                  className="field"
-                  value={tunnelAddress}
-                  onChange={(event) => setTunnelAddress(event.target.value)}
-                />
-              </Field>
-              <Field label="Website">
-                <input
-                  className="field"
-                  value={tunnelWebsite}
-                  onChange={(event) => setTunnelWebsite(event.target.value)}
-                  placeholder="https://"
-                />
-              </Field>
-            </div>
-            <Field label="Description">
-              <textarea
-                className="field min-h-24 py-3"
-                value={tunnelDescription}
-                onChange={(event) => setTunnelDescription(event.target.value)}
-              />
-            </Field>
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={submitTunnel}
-              className="h-11 w-full justify-self-start rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:bg-slate-300 sm:w-auto"
-            >
-              {isPending ? "Saving..." : "Add new tunnel"}
-            </button>
-          </div>
-        ) : null}
-      </div>
+      <TunnelCombobox
+        matches={tunnelMatches}
+        selectedTunnel={selectedTunnel}
+        tunnelSearch={tunnelSearch}
+        isOpen={isTunnelListOpen}
+        onSearch={(value) => {
+          setTunnelSearch(value);
+          setIsTunnelListOpen(true);
+        }}
+        onFocus={() => setIsTunnelListOpen(true)}
+        onSelect={(tunnel) => {
+          setTunnelId(tunnel.id);
+          setTunnelSearch("");
+          setIsTunnelListOpen(false);
+        }}
+      />
 
       <SectionTitle eyebrow="Dates" title="Set the timing" />
       {showLastMinuteNotice ? (
-        <p className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
           This opportunity will appear as last-minute because the registration
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Start date" required>
           <input
             type="date"
@@ -465,7 +346,7 @@ export function CreateOpportunityForm({
       </div>
 
       <SectionTitle eyebrow="Price & capacity" title="Set availability" />
-      <div className="grid gap-4 sm:grid-cols-[1fr_140px_1fr]">
+      <div className="grid gap-3 sm:grid-cols-[1fr_120px_1fr]">
         <Field label="Price" required>
           <input
             type="number"
@@ -501,49 +382,59 @@ export function CreateOpportunityForm({
         </Field>
       </div>
 
-      <SectionTitle eyebrow="Details" title="Add useful context" />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Minimum time">
-          <input
-            className="field"
-            value={minMinutesOrHours}
-            onChange={(event) => setMinMinutesOrHours(event.target.value)}
-            placeholder={type === "camp" ? "45 min per athlete" : "10 min blocks"}
-          />
-        </Field>
-        <Field label="Skill level">
-          <input
-            className="field"
-            value={skillLevel}
-            onChange={(event) => setSkillLevel(event.target.value)}
-            placeholder={type === "camp" ? "Intermediate" : "All levels"}
-          />
-        </Field>
-        <Field label="Languages">
-          <input
-            className="field"
-            value={languages}
-            onChange={(event) => setLanguages(event.target.value)}
-            placeholder="English, German"
-          />
-        </Field>
-        <Field label="Disciplines">
-          <input
-            className="field"
-            value={disciplines}
-            onChange={(event) => setDisciplines(event.target.value)}
-            placeholder={type === "camp" ? "Dynamic, Angles" : "Belly, Backfly, Dynamic"}
-          />
-        </Field>
-      </div>
-      <Field label="Description">
-        <textarea
-          className="field min-h-28 py-3"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          placeholder="What should flyers know before they send interest?"
-        />
-      </Field>
+      <details
+        className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+        open={isDetailsOpen}
+        onToggle={(event) => setIsDetailsOpen(event.currentTarget.open)}
+      >
+        <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
+          Optional details
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Field label="Minimum time">
+            <input
+              className="field"
+              value={minMinutesOrHours}
+              onChange={(event) => setMinMinutesOrHours(event.target.value)}
+              placeholder={type === "camp" ? "45 min per athlete" : "10 min blocks"}
+            />
+          </Field>
+          <Field label="Skill level">
+            <input
+              className="field"
+              value={skillLevel}
+              onChange={(event) => setSkillLevel(event.target.value)}
+              placeholder={type === "camp" ? "Intermediate" : "All levels"}
+            />
+          </Field>
+          <Field label="Languages">
+            <input
+              className="field"
+              value={languages}
+              onChange={(event) => setLanguages(event.target.value)}
+              placeholder="English, German"
+            />
+          </Field>
+          <Field label="Disciplines">
+            <input
+              className="field"
+              value={disciplines}
+              onChange={(event) => setDisciplines(event.target.value)}
+              placeholder={type === "camp" ? "Dynamic, Angles" : "Belly, Backfly, Dynamic"}
+            />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <Field label="Description">
+            <textarea
+              className="field min-h-24 py-3"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="What should flyers know before they send interest?"
+            />
+          </Field>
+        </div>
+      </details>
 
       {message ? (
         <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
@@ -603,5 +494,85 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function TunnelCombobox({
+  matches,
+  selectedTunnel,
+  tunnelSearch,
+  isOpen,
+  onSearch,
+  onFocus,
+  onSelect,
+}: {
+  matches: TunnelOption[];
+  selectedTunnel?: TunnelOption;
+  tunnelSearch: string;
+  isOpen: boolean;
+  onSearch: (value: string) => void;
+  onFocus: () => void;
+  onSelect: (tunnel: TunnelOption) => void;
+}) {
+  return (
+    <div className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+      <span>
+        Tunnel <span className="text-rose-600">*</span>
+      </span>
+      <div className="relative">
+        <input
+          className="field"
+          value={tunnelSearch}
+          onChange={(event) => onSearch(event.target.value)}
+          onFocus={onFocus}
+          placeholder={
+            selectedTunnel
+              ? `${selectedTunnel.name} - ${selectedTunnel.city}, ${selectedTunnel.country}`
+              : "Search tunnel, city or country"
+          }
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls="tunnel-options"
+          autoComplete="off"
+        />
+        {selectedTunnel && !tunnelSearch ? (
+          <p className="mt-1 text-xs font-semibold text-sky-700">
+            Selected: {selectedTunnel.name}, {selectedTunnel.city}
+          </p>
+        ) : null}
+        {isOpen ? (
+          <div
+            id="tunnel-options"
+            role="listbox"
+            className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+          >
+            {matches.length > 0 ? (
+              matches.map((tunnel) => (
+                <button
+                  key={tunnel.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedTunnel?.id === tunnel.id}
+                  className="grid w-full gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-sky-50"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onSelect(tunnel)}
+                >
+                  <span className="text-sm font-black text-slate-900">
+                    {tunnel.name}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {tunnel.city}, {tunnel.country}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-sm font-semibold text-slate-500">
+                No admin-created tunnel matches.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

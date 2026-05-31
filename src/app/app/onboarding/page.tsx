@@ -17,9 +17,6 @@ export default async function OnboardingPage() {
     <AppShell active="profile">
       <div className="mx-auto max-w-2xl">
         <h1 className="text-3xl font-black tracking-tight">Profile</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Keep your contact details current so organizers can reach you.
-        </p>
         <ProfileForm
           profile={
             profile ?? {
