@@ -14,6 +14,7 @@ import { applicantBorderClass } from "./ApplicationStatusBadge";
 type OpportunityCardProps = {
   opportunity: Opportunity;
   compact?: boolean;
+  dense?: boolean;
   currentUserId?: string;
   discoveryBadges?: Array<{
     label: string;
@@ -24,6 +25,7 @@ type OpportunityCardProps = {
 export function OpportunityCard({
   opportunity,
   compact = false,
+  dense = false,
   currentUserId,
   discoveryBadges = [],
 }: OpportunityCardProps) {
@@ -40,11 +42,11 @@ export function OpportunityCard({
   return (
     <Link
       href={href}
-      className={`block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusBorder}`}
+      className={`block rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dense ? "p-3" : "p-4"} ${statusBorder}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className={`flex flex-wrap ${dense ? "mb-1.5 gap-1.5" : "mb-2 gap-2"}`}>
             {opportunity.viewerInterestStatus ? (
               <ApplicationStatusBadge status={opportunity.viewerInterestStatus} />
             ) : null}
@@ -58,7 +60,7 @@ export function OpportunityCard({
             {discoveryBadges.map((badge) => (
               <span
                 key={badge.label}
-                className={`rounded-full px-2 py-1 text-xs font-bold ${badgeClass(
+                className={`rounded-full px-2 font-bold ${dense ? "py-0.5 text-[0.68rem]" : "py-1 text-xs"} ${badgeClass(
                   badge.tone,
                 )}`}
               >
@@ -66,24 +68,32 @@ export function OpportunityCard({
               </span>
             ))}
           </div>
-          <h3 className="text-lg font-bold tracking-tight text-slate-950">
+          <h3 className={`${dense ? "line-clamp-1 text-base" : "text-lg"} font-bold tracking-tight text-slate-950`}>
             {opportunity.title}
           </h3>
-          <div className="mt-1 grid gap-0.5 text-sm text-slate-600">
-            <p>{view.coachDisplayName ?? "Organizer-led"}</p>
+          <div className={`${dense ? "mt-0.5 gap-0 text-xs" : "mt-1 gap-0.5 text-sm"} grid text-slate-600`}>
+            <p className="line-clamp-1">{view.coachDisplayName ?? "Organizer-led"}</p>
             <p className="font-semibold text-slate-700">
               {view.tunnelDisplayName ?? "Tunnel"}
             </p>
-            <p>{location}</p>
+            {!dense ? <p>{location}</p> : null}
           </div>
         </div>
-        <div className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-right">
-          <div className="text-sm font-bold text-sky-800">
-            {formatPrice(opportunity.price, opportunity.currency)}
-          </div>
-          <div className="max-w-24 text-xs leading-4 text-sky-600">
-            {formatPriceLabel(opportunity.type)}
-          </div>
+        <div className={`shrink-0 rounded-xl bg-sky-50 text-right ${dense ? "px-2.5 py-1.5" : "px-3 py-2"}`}>
+          {dense ? (
+            <div className="whitespace-nowrap text-xs font-black text-sky-800">
+              {formatCompactPrice(opportunity)}
+            </div>
+          ) : (
+            <>
+              <div className="text-sm font-bold text-sky-800">
+                {formatPrice(opportunity.price, opportunity.currency)}
+              </div>
+              <div className="max-w-24 text-xs leading-4 text-sky-600">
+                {formatPriceLabel(opportunity.type)}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -93,20 +103,30 @@ export function OpportunityCard({
         </p>
       ) : null}
 
-      <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
-        <div className="flex items-center gap-1.5">
-          <CalendarDays size={15} className="text-sky-600" />
-          <span>{formatDateRange(opportunity.startDate, opportunity.endDate)}</span>
+      {dense ? (
+        <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+          <CalendarDays size={14} className="shrink-0 text-sky-600" />
+          <span className="line-clamp-1">
+            {formatDateRange(opportunity.startDate, opportunity.endDate)} •{" "}
+            {opportunity.availableSpots} spots
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <MapPin size={15} className="text-sky-600" />
-          <span>{location}</span>
+      ) : (
+        <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
+          <div className="flex items-center gap-1.5">
+            <CalendarDays size={15} className="text-sky-600" />
+            <span>{formatDateRange(opportunity.startDate, opportunity.endDate)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MapPin size={15} className="text-sky-600" />
+            <span>{location}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Users size={15} className="text-sky-600" />
+            <span>{opportunity.availableSpots} spots</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Users size={15} className="text-sky-600" />
-          <span>{opportunity.availableSpots} spots</span>
-        </div>
-      </div>
+      )}
     </Link>
   );
 }
@@ -139,4 +159,13 @@ function badgeClass(tone: "amber" | "blue" | "green" | "slate") {
   };
 
   return classes[tone];
+}
+
+function formatCompactPrice(opportunity: Opportunity) {
+  const amount = new Intl.NumberFormat("en", {
+    maximumFractionDigits: 0,
+  }).format(opportunity.price);
+  const suffix = opportunity.type === "huck_jam" ? "" : "/h";
+
+  return `${amount} ${opportunity.currency}${suffix}`;
 }

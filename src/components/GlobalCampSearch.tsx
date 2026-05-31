@@ -118,8 +118,9 @@ export function GlobalCampSearch({
 
   return (
     <section
+      id="find-camps-worldwide"
       ref={sectionRef}
-      className="scroll-mt-20 mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      className="scroll-mt-20 mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
     >
       <div>
         <h2 className="text-xl font-black tracking-tight text-slate-950">
@@ -215,6 +216,7 @@ export function GlobalCampSearch({
               <OpportunityCard
                 key={opportunity.id}
                 opportunity={opportunity}
+                dense
                 currentUserId={currentUserId}
               />
             ))

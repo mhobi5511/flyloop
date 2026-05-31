@@ -165,13 +165,14 @@ export default async function AppHomePage({
   const discoveryFeed = joinable
     .filter((item) => !useRadiusFilter || item.isNearby)
     .sort(compareFeedItems);
+  const visibleDiscoveryFeed = discoveryFeed.slice(0, 5);
   const globalSearchOpportunities = joinable.map((item) => item.opportunity);
   const countryOptions = getCountryOptions(allRows);
   const monthOptions = getMonthOptions(allRows);
 
   return (
     <AppShell active="home">
-      <div className="rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-500 px-4 py-4 text-white shadow-sm sm:px-5">
+      <div className="rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-500 px-4 py-3 text-white shadow-sm sm:px-5">
         <p className="text-sm font-bold text-sky-100">
           Good to see you{homeProfile?.full_name ? `, ${homeProfile.full_name}` : ""}
         </p>
@@ -184,24 +185,33 @@ export default async function AppHomePage({
         <HomeSection
           title="My Upcoming Camps"
           opportunities={upcomingAccepted}
-          limit={3}
+          limit={1}
           viewHref="/app/applications?status=accepted"
           currentUserId={user.id}
         />
       ) : null}
 
-      <section className="mt-6">
+      <section className="mt-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold tracking-tight text-slate-950">
+          <h2 className="text-lg font-bold tracking-tight text-slate-950">
             {useRadiusFilter ? "Opportunities Near You" : "Recommended Opportunities"}
           </h2>
+          {discoveryFeed.length > visibleDiscoveryFeed.length ? (
+            <Link
+              href="#find-camps-worldwide"
+              className="shrink-0 text-sm font-bold text-sky-700"
+            >
+              View More
+            </Link>
+          ) : null}
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {discoveryFeed.length > 0 ? (
-            discoveryFeed.map((item) => (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {visibleDiscoveryFeed.length > 0 ? (
+            visibleDiscoveryFeed.map((item) => (
               <OpportunityCard
                 key={item.opportunity.id}
                 opportunity={item.opportunity}
+                dense
                 currentUserId={user.id}
                 discoveryBadges={getDiscoveryBadges(item)}
               />
@@ -245,9 +255,9 @@ function HomeSection({
   const visible = opportunities.slice(0, limit);
 
   return (
-    <section className="mt-6">
+    <section className="mt-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold tracking-tight text-slate-950">
+        <h2 className="text-lg font-bold tracking-tight text-slate-950">
           {title}
         </h2>
         {opportunities.length > 0 ? (
@@ -259,12 +269,13 @@ function HomeSection({
           </Link>
         ) : null}
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
         {visible.map((opportunity) => (
           <OpportunityCard
             key={opportunity.id}
             opportunity={opportunity}
             compact
+            dense
             currentUserId={currentUserId}
           />
         ))}
@@ -307,19 +318,19 @@ function getDiscoveryBadges(item: FeedItem) {
   }> = [];
 
   if (item.isLastMinute) {
-    badges.push({ label: "🟠 Last Minute", tone: "amber" });
+    badges.push({ label: "Last Minute", tone: "amber" });
   }
 
   if (item.isFollowedCoach) {
-    badges.push({ label: "🔵 Followed Coach", tone: "blue" });
+    badges.push({ label: "Followed Coach", tone: "blue" });
   }
 
   if (item.isFollowedTunnel) {
-    badges.push({ label: "🟢 Followed Tunnel", tone: "green" });
+    badges.push({ label: "Followed Tunnel", tone: "green" });
   }
 
   if (item.isPopular) {
-    badges.push({ label: "⭐ Popular", tone: "slate" });
+    badges.push({ label: "Popular", tone: "slate" });
   }
 
   return badges;
