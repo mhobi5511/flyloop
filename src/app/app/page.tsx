@@ -82,15 +82,7 @@ export default async function AppHomePage({
     : ((opportunitiesResult.data ?? []) as HomeFeedRow[]);
   const countryOptions = getCountryOptions(allRows);
   const monthOptions = getMonthOptions(allRows);
-  const filteredRows = allRows.filter((row) => {
-    const countryMatches =
-      !filters.country || row.tunnel_country === filters.country;
-    const monthMatches =
-      !filters.month || row.start_date?.slice(0, 7) === filters.month;
-
-    return countryMatches && monthMatches;
-  });
-  const opportunityIds = filteredRows.map((row) => row.id);
+  const opportunityIds = allRows.map((row) => row.id);
   const followRows = followsResult.error ? [] : followsResult.data ?? [];
   const followedTunnelIds = new Set(
     followRows
@@ -108,7 +100,7 @@ export default async function AppHomePage({
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);
-  const rows = filteredRows;
+  const rows = allRows;
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
@@ -187,7 +179,31 @@ export default async function AppHomePage({
     }
   }
   const currentView = filters.view ?? "";
-  const hasFilters = Boolean(filters.country || filters.month);
+  const hasGlobalSearch = Boolean(filters.country || filters.month);
+  const visibleFeedIds = getVisibleFeedIds({
+    upcomingAccepted,
+    lastMinute,
+    recommended,
+    followedCoaches,
+    followedTunnels,
+    currentView,
+  });
+  const globalSearchResults = hasGlobalSearch
+    ? joinable
+        .map((item) => item.opportunity)
+        .filter((opportunity) => {
+          const countryMatches =
+            !filters.country || opportunity.tunnelCountry === filters.country;
+          const monthMatches =
+            !filters.month || opportunity.startDate?.slice(0, 7) === filters.month;
+
+          return (
+            countryMatches &&
+            monthMatches &&
+            !visibleFeedIds.has(opportunity.id)
+          );
+        })
+    : [];
   const hasAnySection =
     upcomingAccepted.length > 0 ||
     lastMinute.length > 0 ||
@@ -205,54 +221,6 @@ export default async function AppHomePage({
           Find flying opportunities you can still join.
         </h1>
       </div>
-
-      <form className="mt-4 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        <label className="shrink-0">
-          <span className="sr-only">Country</span>
-          <select
-            name="country"
-            defaultValue={filters.country ?? ""}
-            className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm outline-none"
-          >
-            <option value="">All countries</option>
-            {countryOptions.map((country) => (
-              <option key={country} value={country}>
-                {country}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="shrink-0">
-          <span className="sr-only">Month</span>
-          <select
-            name="month"
-            defaultValue={filters.month ?? ""}
-            className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm outline-none"
-          >
-            <option value="">All months</option>
-            {monthOptions.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          className="h-9 shrink-0 rounded-full bg-slate-950 px-4 text-xs font-bold text-white shadow-sm"
-        >
-          Apply
-        </button>
-      </form>
-
-      {hasFilters ? (
-        <Link
-          href="/app"
-          className="mt-3 inline-flex text-sm font-bold text-sky-700"
-        >
-          Clear filters
-        </Link>
-      ) : null}
 
       {upcomingAccepted.length > 0 ? (
         <HomeSection
@@ -325,7 +293,46 @@ export default async function AppHomePage({
           No matching opportunities yet.
         </p>
       ) : null}
+
+      <GlobalCampSearch
+        filters={filters}
+        countryOptions={countryOptions}
+        monthOptions={monthOptions}
+        results={globalSearchResults}
+        hasSearch={hasGlobalSearch}
+        currentUserId={user.id}
+      />
     </AppShell>
+  );
+}
+
+function getVisibleFeedIds({
+  upcomingAccepted,
+  lastMinute,
+  recommended,
+  followedCoaches,
+  followedTunnels,
+  currentView,
+}: {
+  upcomingAccepted: Opportunity[];
+  lastMinute: Opportunity[];
+  recommended: Opportunity[];
+  followedCoaches: Opportunity[];
+  followedTunnels: Opportunity[];
+  currentView: string;
+}) {
+  return new Set(
+    [
+      ...upcomingAccepted.slice(0, 1),
+      ...(currentView === "last-minute" ? lastMinute : lastMinute.slice(0, 2)),
+      ...(currentView === "recommended" ? recommended : recommended.slice(0, 4)),
+      ...(currentView === "followed-coaches"
+        ? followedCoaches
+        : followedCoaches.slice(0, 4)),
+      ...(currentView === "followed-tunnels"
+        ? followedTunnels
+        : followedTunnels.slice(0, 4)),
+    ].map((opportunity) => opportunity.id),
   );
 }
 
@@ -452,6 +459,101 @@ function HomeSection({
           </p>
         )}
       </div>
+    </section>
+  );
+}
+
+function GlobalCampSearch({
+  filters,
+  countryOptions,
+  monthOptions,
+  results,
+  hasSearch,
+  currentUserId,
+}: {
+  filters: HomeSearchParams;
+  countryOptions: string[];
+  monthOptions: Array<{ value: string; label: string }>;
+  results: Opportunity[];
+  hasSearch: boolean;
+  currentUserId: string;
+}) {
+  return (
+    <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div>
+        <h2 className="text-xl font-black tracking-tight text-slate-950">
+          Find Camps Worldwide
+        </h2>
+        <p className="mt-1 text-sm leading-6 text-slate-600">
+          Search all published camps by country and month.
+        </p>
+      </div>
+
+      <form className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <label>
+          <span className="sr-only">Country</span>
+          <select
+            name="country"
+            defaultValue={filters.country ?? ""}
+            className="field"
+          >
+            <option value="">All countries</option>
+            {countryOptions.map((country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="sr-only">Month</span>
+          <select
+            name="month"
+            defaultValue={filters.month ?? ""}
+            className="field"
+          >
+            <option value="">All months</option>
+            {monthOptions.map((month) => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white"
+        >
+          Find Camp
+        </button>
+      </form>
+
+      {hasSearch ? (
+        <Link
+          href="/app"
+          className="mt-3 inline-flex text-sm font-bold text-sky-700"
+        >
+          Clear search
+        </Link>
+      ) : null}
+
+      {hasSearch ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {results.length > 0 ? (
+            results.map((opportunity) => (
+              <OpportunityCard
+                key={opportunity.id}
+                opportunity={opportunity}
+                currentUserId={currentUserId}
+              />
+            ))
+          ) : (
+            <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+              No camps found for this search.
+            </p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
