@@ -27,6 +27,8 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const premiumFieldClass =
   "block h-[3.25rem] w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none focus:border-sky-400";
+const dateFieldClass =
+  "box-border block h-14 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 text-base font-medium leading-none outline-none focus:border-sky-400";
 
 function isoDateFromNow(days: number) {
   const date = new Date();
@@ -317,31 +319,33 @@ export function CreateOpportunityForm({
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Start date" required>
-          <input
-            type="date"
-            className={premiumFieldClass}
-            value={startDate}
-            onChange={(event) => updateStartDate(event.target.value)}
-          />
-        </Field>
-        <Field label="End date" required>
-          <input
-            type="date"
-            className={premiumFieldClass}
-            value={endDate}
-            onChange={(event) => {
-              setEndDateTouched(true);
-              setEndDate(event.target.value);
-            }}
-          />
-        </Field>
-        <div className="col-span-2">
+      <div className="w-full max-w-full overflow-hidden">
+        <div className="grid w-full min-w-0 grid-cols-2 gap-3">
+          <Field label="Start date" required>
+            <input
+              type="date"
+              className={dateFieldClass}
+              value={startDate}
+              onChange={(event) => updateStartDate(event.target.value)}
+            />
+          </Field>
+          <Field label="End date" required>
+            <input
+              type="date"
+              className={dateFieldClass}
+              value={endDate}
+              onChange={(event) => {
+                setEndDateTouched(true);
+                setEndDate(event.target.value);
+              }}
+            />
+          </Field>
+        </div>
+        <div className="mt-3 w-full min-w-0">
           <Field label="Registration deadline">
             <input
               type="date"
-              className={premiumFieldClass}
+              className={dateFieldClass}
               value={registrationDeadline}
               onChange={(event) => setRegistrationDeadline(event.target.value)}
             />
