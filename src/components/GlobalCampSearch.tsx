@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import type { Opportunity } from "@/lib/types";
 
@@ -20,7 +20,6 @@ type SearchState = {
   month: string;
   coach: string;
   tunnel: string;
-  submitted: boolean;
 };
 
 export function GlobalCampSearch({
@@ -33,77 +32,32 @@ export function GlobalCampSearch({
   opportunities,
   currentUserId,
 }: GlobalCampSearchProps) {
-  const sectionRef = useRef<HTMLElement | null>(null);
-  const hasMountedRef = useRef(false);
   const [country, setCountry] = useState(initialCountry);
   const [month, setMonth] = useState(initialMonth);
   const [coach, setCoach] = useState(initialCoach);
   const [tunnel, setTunnel] = useState(initialTunnel);
-  const [search, setSearch] = useState<SearchState>({
-    country: initialCountry,
-    month: initialMonth,
-    coach: initialCoach,
-    tunnel: initialTunnel,
-    submitted: false,
-  });
+  const [results, setResults] = useState<Opportunity[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const results = useMemo(() => {
-    if (!search.submitted) {
-      return [];
-    }
-
-    return opportunities.filter((opportunity) => {
-      const countryMatches =
-        !search.country || opportunity.tunnelCountry === search.country;
-      const monthMatches =
-        !search.month || opportunity.startDate?.slice(0, 7) === search.month;
-      const coachMatches =
-        !search.coach ||
-        normalize(opportunity.coachName).includes(normalize(search.coach));
-      const tunnelMatches =
-        !search.tunnel ||
-        normalize(opportunity.tunnelName).includes(normalize(search.tunnel));
-
-      return (
-        countryMatches &&
-        monthMatches &&
-        coachMatches &&
-        tunnelMatches
-      );
-    });
-  }, [opportunities, search]);
-
-  useEffect(() => {
-    if (!search.submitted) {
-      return;
-    }
-
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      sectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      setIsSearching(false);
-    }, 80);
-
-    return () => window.clearTimeout(timeout);
-  }, [search]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsSearching(true);
-    setSearch({
+    const nextSearch = {
       country,
       month,
       coach: coach.trim(),
       tunnel: tunnel.trim(),
-      submitted: true,
-    });
+    };
+
+    setIsSearching(true);
+
+    try {
+      setResults(filterOpportunities(opportunities, nextSearch));
+    } catch (searchError) {
+      console.error("Find Camps Worldwide search failed", searchError);
+      setResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   }
 
   function clearSearch() {
@@ -111,14 +65,13 @@ export function GlobalCampSearch({
     setMonth("");
     setCoach("");
     setTunnel("");
-    setSearch({ country: "", month: "", coach: "", tunnel: "", submitted: false });
+    setResults(null);
     setIsSearching(false);
   }
 
   return (
     <section
       id="find-camps-worldwide"
-      ref={sectionRef}
       className="scroll-mt-20 mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
     >
       <div>
@@ -190,11 +143,11 @@ export function GlobalCampSearch({
           type="submit"
           className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white sm:col-span-2 lg:col-span-1"
         >
-          {isSearching ? "Searching..." : "Find"}
+          {isSearching ? "Searching..." : "Find Camp"}
         </button>
       </form>
 
-      {search.submitted && (country || month || coach || tunnel) ? (
+      {results !== null && (country || month || coach || tunnel) ? (
         <button
           type="button"
           onClick={clearSearch}
@@ -204,7 +157,7 @@ export function GlobalCampSearch({
         </button>
       ) : null}
 
-      {search.submitted ? (
+      {results !== null ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {isSearching ? (
             <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
@@ -236,6 +189,26 @@ export function GlobalCampSearch({
 
 function normalize(value?: string) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function filterOpportunities(
+  opportunities: Opportunity[],
+  search: SearchState,
+) {
+  return opportunities.filter((opportunity) => {
+    const countryMatches =
+      !search.country || opportunity.tunnelCountry === search.country;
+    const monthMatches =
+      !search.month || opportunity.startDate?.slice(0, 7) === search.month;
+    const coachMatches =
+      !search.coach ||
+      normalize(opportunity.coachName).includes(normalize(search.coach));
+    const tunnelMatches =
+      !search.tunnel ||
+      normalize(opportunity.tunnelName).includes(normalize(search.tunnel));
+
+    return countryMatches && monthMatches && coachMatches && tunnelMatches;
+  });
 }
 
 function getOwnOpportunityBadges(
