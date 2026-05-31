@@ -175,9 +175,6 @@ export default async function OrganizerDashboardPage({
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
             My Coachings
           </h1>
-          <p className="mt-0.5 text-xs font-semibold text-slate-500 sm:text-sm">
-            Focus on applicants, open spots, and the opportunities closest to start.
-          </p>
         </div>
         <Link
           href="/app/create"
