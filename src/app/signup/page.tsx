@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { SignupForm } from "@/components/SignupForm";
 
 export default function SignupPage() {
@@ -16,7 +17,9 @@ export default function SignupPage() {
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Create your account for joining, organizing, or both.
           </p>
-          <SignupForm />
+          <Suspense fallback={null}>
+            <SignupForm />
+          </Suspense>
           <p className="mt-5 text-center text-sm text-slate-600">
             Already have an account?{" "}
             <Link href="/login" className="font-bold text-sky-700">

@@ -78,6 +78,26 @@ export function formatPriceLabel(type: Opportunity["type"]) {
   return type === "huck_jam" ? "shared flying time" : "per hour incl. coaching";
 }
 
+export function getPublicOpportunityPath(id: string) {
+  return `/opportunity/${id}`;
+}
+
+export function getOpportunityShareText(opportunity: Opportunity, url: string) {
+  const typeLabel = formatOpportunityType(opportunity.type);
+  const dateText = formatDateRange(opportunity.startDate, opportunity.endDate);
+  const tunnelName = opportunity.tunnelName ?? "the tunnel";
+
+  return [
+    `Join my ${typeLabel} on Flyloop!`,
+    "",
+    opportunity.title,
+    dateText,
+    tunnelName,
+    "",
+    url,
+  ].join("\n");
+}
+
 function parseDate(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;

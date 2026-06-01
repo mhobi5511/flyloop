@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fallbackMobileCountryCode,
@@ -12,6 +13,7 @@ import {
 import { getAppUrl } from "@/lib/site-url";
 
 export function SignupForm() {
+  const searchParams = useSearchParams();
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState("");
   const [mobileCountryCode, setMobileCountryCode] = useState(() =>
@@ -32,6 +34,16 @@ export function SignupForm() {
     mobileCountryCode,
     mobileNumber,
   );
+
+  function getSafeNextPath() {
+    const nextPath = searchParams.get("next");
+
+    if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
+      return "/app";
+    }
+
+    return nextPath;
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,13 +72,14 @@ export function SignupForm() {
       const cleanFullName = fullName.trim();
       const cleanCountry = country.trim();
       const cleanInstagram = instagram.trim().replace(/^@/, "");
+      const nextPath = getSafeNextPath();
       const supabase = createSupabaseBrowserClient();
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
         options: {
           emailRedirectTo: getAppUrl(
-            "/auth/callback?next=/app",
+            `/auth/callback?next=${encodeURIComponent(nextPath)}`,
             window.location.origin,
           ),
           data: {
@@ -100,7 +113,7 @@ export function SignupForm() {
         return;
       }
 
-      window.location.assign("/app");
+      window.location.assign(nextPath);
     } catch (signupError) {
       console.error("Signup request failed", signupError);
       setError("Could not create account. Please try again in a moment.");

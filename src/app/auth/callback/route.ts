@@ -13,9 +13,12 @@ function getSafeNextPath(value: string | null) {
   return value;
 }
 
-function getConfirmedLoginUrl(origin: string) {
+function getConfirmedLoginUrl(origin: string, nextPath = "/app") {
   const loginUrl = new URL("/login", getSiteUrl(origin));
   loginUrl.searchParams.set("confirmed", "true");
+  if (nextPath !== "/app") {
+    loginUrl.searchParams.set("next", nextPath);
+  }
   return loginUrl;
 }
 
@@ -27,7 +30,7 @@ function getFailureLoginUrl(origin: string) {
 
 function getSuccessUrl(origin: string, nextPath: string, authType: string | null) {
   if (authType === "signup" || nextPath === "/app") {
-    return getConfirmedLoginUrl(origin);
+    return getConfirmedLoginUrl(origin, nextPath);
   }
 
   return new URL(nextPath, getSiteUrl(origin));

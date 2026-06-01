@@ -7,10 +7,13 @@ import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
+import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
   formatDateRange,
   formatPrice,
   formatOpportunityType,
+  getOpportunityShareText,
+  getPublicOpportunityPath,
   isLastMinuteOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -64,6 +67,9 @@ export default async function OpportunityDetailPage({
   const personLabel =
     opportunity.type === "camp" && opportunity.coachName ? "Coach" : "Organizer";
   const profileUserId = opportunity.coachFollowId ?? opportunity.createdBy;
+  const publicPath = getPublicOpportunityPath(opportunity.id);
+  const shareLabel = `Share ${formatOpportunityType(opportunity.type)}`;
+  const shareText = getOpportunityShareText(opportunity, publicPath);
   const detailRows = getDetailRows({
     skillLevel: opportunity.skillLevel,
     disciplines: opportunity.disciplines,
@@ -146,6 +152,13 @@ export default async function OpportunityDetailPage({
               disabled={isUnavailable}
               initialStatus={viewerInterestStatus}
               compact
+            />
+          </div>
+          <div className="mt-3">
+            <ShareOpportunityButton
+              label={shareLabel}
+              shareText={shareText}
+              url={publicPath}
             />
           </div>
 

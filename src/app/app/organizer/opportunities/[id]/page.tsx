@@ -11,10 +11,13 @@ import { Badge } from "@/components/Badge";
 import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
+import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
   formatDateRange,
   formatOpportunityType,
   formatPrice,
+  getOpportunityShareText,
+  getPublicOpportunityPath,
 } from "@/lib/opportunities";
 import { phoneToWhatsAppPath } from "@/lib/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -110,6 +113,34 @@ export default async function OrganizerOpportunityPage({
     profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
   const applicantRows = (applicants ?? []) as ApplicantRow[];
+  const publicPath = getPublicOpportunityPath(currentOpportunity.id);
+  const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
+  const shareText = getOpportunityShareText(
+    {
+      id: currentOpportunity.id,
+      type: currentOpportunity.type,
+      title: currentOpportunity.title,
+      tunnelId: "",
+      tunnelName: Array.isArray(currentOpportunity.tunnel_profiles)
+        ? currentOpportunity.tunnel_profiles[0]?.name
+        : currentOpportunity.tunnel_profiles?.name,
+      startDate: currentOpportunity.start_date,
+      endDate: currentOpportunity.end_date,
+      registrationDeadline: null,
+      price: Number(currentOpportunity.price),
+      currency: currentOpportunity.currency,
+      totalCapacity: currentOpportunity.total_capacity,
+      availableSpots: currentOpportunity.available_spots,
+      description: currentOpportunity.description ?? "",
+      languages: [],
+      disciplines: [],
+      skillLevel: null,
+      status: currentOpportunity.status,
+      contactMethod: "whatsapp",
+      createdBy: "",
+    },
+    publicPath,
+  );
 
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
@@ -147,7 +178,15 @@ export default async function OrganizerOpportunityPage({
               </p>
             </div>
           </div>
-          <OrganizerOpportunityActions opportunityId={currentOpportunity.id} />
+          <div className="grid gap-2">
+            <OrganizerOpportunityActions opportunityId={currentOpportunity.id} />
+            <ShareOpportunityButton
+              label={shareLabel}
+              shareText={shareText}
+              url={publicPath}
+              compact
+            />
+          </div>
         </div>
       </section>
 
