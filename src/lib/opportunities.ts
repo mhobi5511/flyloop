@@ -99,6 +99,9 @@ export function getOpportunityShareText(opportunity: Opportunity, url: string) {
     `📅 ${dateText}`,
     `📍 ${tunnelName}`,
     "",
+    "",
+    "👇 Register now",
+    "",
     url,
   ].join("\n");
 }
