@@ -93,11 +93,11 @@ export function getOpportunityShareText(opportunity: Opportunity, url: string) {
   const tunnelName = opportunity.tunnelName ?? "the tunnel";
 
   return [
-    `Join my ${typeLabel} on Flyloop!`,
+    `🔥 Join my ${typeLabel} on Flyloop`,
     "",
     opportunity.title,
-    dateText,
-    tunnelName,
+    `📅 ${dateText}`,
+    `📍 ${tunnelName}`,
     "",
     url,
   ].join("\n");

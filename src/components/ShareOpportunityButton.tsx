@@ -32,7 +32,7 @@ export function ShareOpportunityButton({
       if (useNativeShare) {
         await navigator.share({
           title: label,
-          text: shareText,
+          text: removeTrailingUrl(shareText, absoluteUrl),
           url: absoluteUrl,
         });
       } else {
@@ -73,4 +73,15 @@ export function ShareOpportunityButton({
       ) : null}
     </div>
   );
+}
+
+function removeTrailingUrl(text: string, url: string) {
+  const lines = text.split("\n");
+  const lastNonEmptyIndex = lines.findLastIndex((line) => line.trim().length > 0);
+
+  if (lastNonEmptyIndex === -1 || lines[lastNonEmptyIndex].trim() !== url) {
+    return text;
+  }
+
+  return lines.slice(0, lastNonEmptyIndex).join("\n").trimEnd();
 }

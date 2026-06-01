@@ -2,7 +2,16 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { SignupForm } from "@/components/SignupForm";
 
-export default function SignupPage() {
+type SignupPageProps = {
+  searchParams?: Promise<{ next?: string }>;
+};
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const params = (await searchParams) ?? {};
+  const loginHref = params.next
+    ? `/login?next=${encodeURIComponent(params.next)}`
+    : "/login";
+
   return (
     <main className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-950">
       <div className="mx-auto max-w-md">
@@ -22,7 +31,7 @@ export default function SignupPage() {
           </Suspense>
           <p className="mt-5 text-center text-sm text-slate-600">
             Already have an account?{" "}
-            <Link href="/login" className="font-bold text-sky-700">
+            <Link href={loginHref} className="font-bold text-sky-700">
               Log in
             </Link>
           </p>

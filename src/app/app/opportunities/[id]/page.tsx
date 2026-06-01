@@ -111,7 +111,7 @@ export default async function OpportunityDetailPage({
             </p>
           </div>
 
-          <div className="mt-2 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2 text-sky-700">
               <MapPin size={17} className="mt-0.5 shrink-0" />
               <div className="min-w-0">
@@ -137,41 +137,53 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
-          <div className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-sky-800">
-            <p className="text-lg font-black text-slate-950">
+          <div className="mt-4 rounded-2xl bg-sky-50 px-4 py-4 text-sky-800">
+            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+              Price
+            </p>
+            <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
               {formatPrice(opportunity.price, opportunity.currency)}
-              <span className="text-sm font-bold text-sky-800">
-                {opportunity.type === "huck_jam"
-                  ? " shared flying time"
-                  : "/h incl. coaching"}
-              </span>
+            </p>
+            <p className="mt-0.5 text-sm font-bold text-sky-800">
+              {opportunity.type === "huck_jam"
+                ? "shared flying time"
+                : "per hour incl. coaching"}
             </p>
           </div>
 
-          <div className="mt-2 rounded-xl border border-slate-200 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Link href={`/app/users/${profileUserId}`}>
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <Link href={`/app/users/${profileUserId}`} className="shrink-0">
                 <Avatar
                   name={opportunity.coachName ?? personLabel}
                   imageUrl={opportunityRow.coach_profile_image_url}
-                  size="sm"
+                  size="md"
                 />
               </Link>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  {personLabel}
-                </p>
+              <div className="min-w-0">
                 <Link
                   href={`/app/users/${profileUserId}`}
-                  className="block truncate text-sm font-black text-slate-900 hover:text-sky-700"
+                  className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
                 >
                   {opportunity.coachName ?? personLabel}
                 </Link>
+                <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
+                  {personLabel}
+                </p>
               </div>
             </div>
+            {opportunity.coachFollowId && !isOrganizer ? (
+              <div className="shrink-0">
+                <FollowButton
+                  targetType="coach"
+                  targetId={opportunity.coachFollowId}
+                  label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
+                />
+              </div>
+            ) : null}
           </div>
 
-          <div className="mt-2">
+          <div className="mt-4">
             <InterestButton
               opportunityId={opportunity.id}
               disabled={isUnavailable}
@@ -180,14 +192,7 @@ export default async function OpportunityDetailPage({
             />
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2">
-            {opportunity.coachFollowId && !isOrganizer ? (
-              <FollowButton
-                targetType="coach"
-                targetId={opportunity.coachFollowId}
-                label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
-              />
-            ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
             <ShareOpportunityButton
               label={shareLabel}
               shareText={shareText}

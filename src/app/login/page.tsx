@@ -2,7 +2,16 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/LoginForm";
 
-export default function AuthPage() {
+type AuthPageProps = {
+  searchParams?: Promise<{ next?: string }>;
+};
+
+export default async function AuthPage({ searchParams }: AuthPageProps) {
+  const params = (await searchParams) ?? {};
+  const signupHref = params.next
+    ? `/signup?next=${encodeURIComponent(params.next)}`
+    : "/signup";
+
   return (
     <main className="min-h-dvh bg-slate-50 px-4 py-6 text-slate-950">
       <div className="mx-auto max-w-md">
@@ -22,7 +31,7 @@ export default function AuthPage() {
           </Suspense>
           <p className="mt-5 text-center text-sm text-slate-600">
             New to Flyloop?{" "}
-            <Link href="/signup" className="font-bold text-sky-700">
+            <Link href={signupHref} className="font-bold text-sky-700">
               Create free account
             </Link>
           </p>

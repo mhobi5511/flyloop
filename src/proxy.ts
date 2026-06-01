@@ -41,8 +41,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthRoute && user) {
+    const nextPath = getSafeNextPath(request.nextUrl.searchParams.get("next"));
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
+    url.pathname = nextPath;
     url.search = "";
     return NextResponse.redirect(url);
   }
@@ -53,3 +54,11 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/app/:path*", "/admin/:path*", "/admin", "/login", "/signup", "/reset-password"],
 };
+
+function getSafeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/app";
+  }
+
+  return value;
+}
