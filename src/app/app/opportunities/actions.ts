@@ -143,19 +143,25 @@ export async function deleteOpportunity(
     return { ok: false, message: "Please log in again." };
   }
 
-  const { error } = await supabase
-    .from("opportunities")
-    .delete()
-    .eq("id", opportunityId)
-    .eq("created_by", user.id);
+  const { data: deleted, error } = await supabase.rpc(
+    "delete_opportunity_with_notification_cleanup",
+    {
+      target_opportunity_id: opportunityId,
+    },
+  );
 
   if (error) {
     console.error("Opportunity deletion failed", error);
     return { ok: false, message: "Could not delete opportunity. Please try again." };
   }
 
+  if (!deleted) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/applications");
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
 
