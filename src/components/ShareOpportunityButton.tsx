@@ -8,6 +8,7 @@ type ShareOpportunityButtonProps = {
   shareText: string;
   url: string;
   compact?: boolean;
+  variant?: "secondary" | "primary";
 };
 
 export function ShareOpportunityButton({
@@ -15,6 +16,7 @@ export function ShareOpportunityButton({
   shareText,
   url,
   compact = false,
+  variant = "secondary",
 }: ShareOpportunityButtonProps) {
   const [message, setMessage] = useState("");
 
@@ -58,9 +60,11 @@ export function ShareOpportunityButton({
       <button
         type="button"
         onClick={share}
-        className={`inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 ${
-          compact ? "h-10 px-3 text-sm" : "h-11 px-4 text-sm"
-        }`}
+        className={`inline-flex items-center justify-center gap-2 rounded-xl font-bold shadow-sm transition ${
+          variant === "primary"
+            ? "bg-sky-600 text-white hover:bg-sky-700"
+            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+        } ${compact ? "h-10 px-3 text-sm" : "h-11 px-4 text-sm"}`}
       >
         <Share2 size={16} /> {label}
       </button>

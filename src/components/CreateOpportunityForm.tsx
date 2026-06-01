@@ -252,7 +252,7 @@ export function CreateOpportunityForm({
       router.push(
         mode === "edit" && initialOpportunity
           ? `/app/organizer/opportunities/${initialOpportunity.id}`
-          : "/app",
+          : `/app/organizer/opportunities/${result.data.id}?published=1`,
       );
       router.refresh();
     });

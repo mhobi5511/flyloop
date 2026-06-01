@@ -87,7 +87,11 @@ export async function sendOpportunityInterest(
 
   return {
     ok: true,
-    message: "Your interest was sent. The organizer can contact you directly.",
+    message: [
+      "Your interest was sent.",
+      "The organizer has been notified.",
+      "You will receive an update when your status changes.",
+    ].join("\n"),
     status: "pending",
   };
 }

@@ -25,6 +25,9 @@ type PublicUserProfile = {
   created_at: string;
   camps_attended: number | null;
   camps_organized: number | null;
+  active_camps: number | null;
+  total_applicants: number | null;
+  total_opportunities_organized: number | null;
 };
 
 export default async function PublicUserProfilePage({
@@ -50,6 +53,14 @@ export default async function PublicUserProfilePage({
     profile.home_tunnel_city,
     profile.home_tunnel_country,
   );
+  const organizerStats = profile.wants_to_create_opportunities
+    ? {
+        activeCamps: profile.active_camps ?? 0,
+        totalApplicants: profile.total_applicants ?? 0,
+        totalOpportunities:
+          profile.total_opportunities_organized ?? profile.camps_organized ?? 0,
+      }
+    : null;
 
   return (
     <AppShell active="home">
@@ -84,28 +95,13 @@ export default async function PublicUserProfilePage({
           </div>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-6">
+        <div className="grid gap-4 p-4 sm:p-6">
           <section>
             <h2 className="text-sm font-black uppercase text-slate-500">About</h2>
             <p className="mt-2 text-sm leading-6 text-slate-700">
               {profile.bio?.trim() || "This user has not added a bio yet."}
             </p>
           </section>
-
-          {profile.disciplines && profile.disciplines.length > 0 ? (
-            <section>
-              <h2 className="text-sm font-black uppercase text-slate-500">
-                Disciplines
-              </h2>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {profile.disciplines.map((discipline) => (
-                  <Badge key={discipline} tone="slate">
-                    {discipline}
-                  </Badge>
-                ))}
-              </div>
-            </section>
-          ) : null}
 
           <section className="grid gap-2 rounded-2xl bg-slate-50 p-3">
             <h2 className="text-sm font-black uppercase text-slate-500">
@@ -124,10 +120,40 @@ export default async function PublicUserProfilePage({
             )}
           </section>
 
-          <section className="grid grid-cols-2 gap-2">
-            <Stat label="Camps attended" value={profile.camps_attended ?? 0} />
-            <Stat label="Camps organized" value={profile.camps_organized ?? 0} />
+          <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {organizerStats ? (
+              <>
+                <Stat label="Active Camps" value={organizerStats.activeCamps} />
+                <Stat
+                  label="Total Applicants"
+                  value={organizerStats.totalApplicants}
+                />
+                <Stat
+                  label="Total Organized"
+                  value={organizerStats.totalOpportunities}
+                />
+              </>
+            ) : null}
+            <Stat
+              label="Member Since"
+              value={formatShortMonthYear(profile.created_at)}
+            />
           </section>
+
+          {profile.disciplines && profile.disciplines.length > 0 ? (
+            <section>
+              <h2 className="text-sm font-black uppercase text-slate-500">
+                Disciplines
+              </h2>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {profile.disciplines.map((discipline) => (
+                  <Badge key={discipline} tone="slate">
+                    {discipline}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="flex flex-wrap gap-2">
             {profile.instagram_handle ? (
@@ -161,10 +187,10 @@ export default async function PublicUserProfilePage({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3">
-      <p className="text-2xl font-black text-slate-950">{value}</p>
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-xl font-black text-slate-950">{value}</p>
       <p className="mt-1 text-xs font-bold uppercase text-slate-500">{label}</p>
     </div>
   );
@@ -177,6 +203,13 @@ function formatLocation(city?: string | null, country?: string | null) {
 function formatMonthYear(value: string) {
   return new Intl.DateTimeFormat("en", {
     month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatShortMonthYear(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
     year: "numeric",
   }).format(new Date(value));
 }

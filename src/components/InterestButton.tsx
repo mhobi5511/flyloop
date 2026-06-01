@@ -89,7 +89,7 @@ export function InterestButton({
         <Send size={18} />
         {buttonLabel}
       </button>
-      <p className={`${compact ? "mt-2" : "mt-3 text-center"} text-sm leading-6 text-slate-600`}>
+      <p className={`${compact ? "mt-2" : "mt-3 text-center"} whitespace-pre-line text-sm leading-6 text-slate-600`}>
         {message ||
           (interestStatus
             ? statusHint(interestStatus)
@@ -133,5 +133,9 @@ function statusHint(status: InterestStatus) {
     return "You already applied and are on the waitlist.";
   }
 
-  return "You already applied. Your application is pending.";
+  return [
+    "You already applied. Your application is pending.",
+    "The organizer has been notified.",
+    "You will receive an update when your status changes.",
+  ].join("\n");
 }

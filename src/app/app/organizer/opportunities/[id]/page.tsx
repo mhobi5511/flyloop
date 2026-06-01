@@ -69,10 +69,13 @@ type ApplicantRow = {
 
 export default async function OrganizerOpportunityPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ published?: string }>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -115,6 +118,8 @@ export default async function OrganizerOpportunityPage({
   const applicantRows = (applicants ?? []) as ApplicantRow[];
   const publicUrl = getPublicOpportunityUrl(currentOpportunity.id);
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
+  const typeLabel = formatOpportunityType(currentOpportunity.type);
+  const showPublishedSuccess = resolvedSearchParams.published === "1";
   const shareText = getOpportunityShareText(
     {
       id: currentOpportunity.id,
@@ -145,6 +150,27 @@ export default async function OrganizerOpportunityPage({
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
       <NotificationReadSignal />
+      {showPublishedSuccess ? (
+        <section className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+          <p className="text-sm font-black text-sky-800">
+            Opportunity published successfully.
+          </p>
+          <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+            Your {typeLabel} is now live.
+          </h2>
+          <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+            Share it with your community to get your first applicants.
+          </p>
+          <div className="mt-3">
+            <ShareOpportunityButton
+              label={shareLabel}
+              shareText={shareText}
+              url={publicUrl}
+              variant="primary"
+            />
+          </div>
+        </section>
+      ) : null}
       <Link href="/app/dashboard" className="text-sm font-bold text-sky-700">
         Back to Coachings
       </Link>

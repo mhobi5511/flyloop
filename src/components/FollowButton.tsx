@@ -83,13 +83,13 @@ export function FollowButton({ targetType, targetId, label }: FollowButtonProps)
       type="button"
       onClick={toggle}
       disabled={isLoading}
-      className={`flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-60 ${
+      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold shadow-sm transition disabled:opacity-60 ${
         isFollowing
-          ? "border border-slate-200 bg-white text-slate-700"
-          : "bg-sky-600 text-white"
+          ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          : "border border-slate-200 bg-white text-slate-700 hover:bg-sky-50 hover:text-sky-700"
       }`}
     >
-      {isFollowing ? <Check size={17} /> : <Plus size={17} />}
+      {isFollowing ? <Check size={15} /> : <Plus size={15} />}
       {isFollowing ? "Following" : label}
     </button>
   );

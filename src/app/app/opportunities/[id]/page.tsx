@@ -112,28 +112,27 @@ export default async function OpportunityDetailPage({
             </Info>
           </div>
 
-          <div className="mt-3 rounded-2xl border border-slate-200 p-3">
-            <div className="flex items-start gap-2 text-sky-700">
-              <MapPin size={17} />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase text-slate-400">Tunnel</p>
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2 text-sky-700">
+              <MapPin size={17} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
                 <Link
-                  className="mt-0.5 block font-black text-slate-900"
+                  className="block truncate text-sm font-black text-slate-900"
                   href={`/app/tunnels/${opportunity.tunnelId}`}
                 >
                   {opportunity.tunnelName}
                 </Link>
-                <p className="mt-0.5 text-sm font-semibold text-slate-600">
+                <p className="text-xs font-semibold text-slate-600">
                   {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
                 </p>
               </div>
             </div>
             {!isOrganizer ? (
-              <div className="mt-3">
+              <div className="shrink-0">
                 <FollowButton
                   targetType="tunnel"
                   targetId={opportunity.tunnelId}
-                  label="Follow tunnel"
+                  label="Follow Tunnel"
                 />
               </div>
             ) : null}
@@ -224,7 +223,7 @@ export default async function OpportunityDetailPage({
                   <FollowButton
                     targetType="coach"
                     targetId={opportunity.coachFollowId}
-                    label={personLabel === "Coach" ? "Follow coach" : "Follow organizer"}
+                    label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
                   />
                 ) : null}
               </div>
@@ -294,10 +293,27 @@ function getDetailRows({
   }
 
   if (registrationDeadline) {
-    rows.push({ label: "Registration deadline", value: registrationDeadline });
+    rows.push({
+      label: "Registration",
+      value: formatRegistrationDeadline(registrationDeadline),
+    });
   }
 
   return rows;
+}
+
+function formatRegistrationDeadline(value: string) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Registration date to be confirmed";
+  }
+
+  return `Registration closes ${new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date)}`;
 }
 
 function Info({
