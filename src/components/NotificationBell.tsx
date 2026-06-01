@@ -23,12 +23,18 @@ export function NotificationBell() {
     const supabase = createSupabaseBrowserClient();
     let disposed = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let currentUserId: string | null = null;
 
     async function loadNotifications() {
+      if (!currentUserId) {
+        return;
+      }
+
       try {
         const { data, error: loadError } = await supabase
           .from("notifications")
           .select("id,title,body,type,opportunity_id,read,created_at")
+          .eq("user_id", currentUserId)
           .eq("read", false)
           .order("created_at", { ascending: false })
           .limit(20);
@@ -46,13 +52,15 @@ export function NotificationBell() {
       }
     }
 
-    void loadNotifications();
     void supabase.auth.getUser().then(({ data }) => {
       const userId = data.user?.id;
 
       if (!userId || disposed) {
         return;
       }
+
+      currentUserId = userId;
+      void loadNotifications();
 
       channel = supabase
         .channel(`notifications:${userId}`)
@@ -92,10 +100,19 @@ export function NotificationBell() {
     }
 
     const supabase = createSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return;
+    }
+
     const visibleIds = visible.map((notification) => notification.id);
     const { error: updateError } = await supabase
       .from("notifications")
       .update({ read: true })
+      .eq("user_id", user.id)
       .in("id", visibleIds);
 
     if (updateError) {

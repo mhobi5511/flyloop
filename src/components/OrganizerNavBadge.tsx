@@ -18,12 +18,18 @@ export function OrganizerNavBadge({
     const supabase = createSupabaseBrowserClient();
     let disposed = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let currentUserId: string | null = null;
 
     async function loadCount() {
+      if (!currentUserId) {
+        return;
+      }
+
       try {
         const { count: unreadCount, error: countError } = await supabase
           .from("notifications")
           .select("*", { count: "exact", head: true })
+          .eq("user_id", currentUserId)
           .eq("read", false)
           .eq("type", "new_interest");
 
@@ -51,6 +57,9 @@ export function OrganizerNavBadge({
       if (!userId || disposed) {
         return;
       }
+
+      currentUserId = userId;
+      void loadCount();
 
       channel = supabase
         .channel(`organizer-notifications:${userId}`)

@@ -78,6 +78,7 @@ async function getShellState() {
         supabase
           .from("notifications")
           .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
           .eq("read", false)
           .eq("type", "new_interest"),
       ]);
