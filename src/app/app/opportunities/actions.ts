@@ -147,6 +147,11 @@ export async function deleteOpportunity(
     return { ok: false, message: "Please log in again." };
   }
 
+  console.log("Delete opportunity requested", {
+    opportunityId,
+    userId: user.id,
+  });
+
   const { data: deleted, error } = await supabase.rpc(
     "delete_opportunity_with_notification_cleanup",
     {
@@ -154,9 +159,37 @@ export async function deleteOpportunity(
     },
   );
 
+  console.log("Delete opportunity RPC response", {
+    opportunityId,
+    userId: user.id,
+    deleted,
+    error,
+  });
+
   if (error) {
-    console.error("Opportunity deletion failed", error);
-    return { ok: false, message: "Could not delete opportunity. Please try again." };
+    const debugMessage = [
+      error.message,
+      error.details,
+      error.hint,
+      error.code ? `Code: ${error.code}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    console.error("Opportunity deletion failed", {
+      opportunityId,
+      userId: user.id,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      error,
+    });
+
+    return {
+      ok: false,
+      message: debugMessage || "Opportunity deletion failed without details.",
+    };
   }
 
   if (!deleted) {
