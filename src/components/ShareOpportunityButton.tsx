@@ -34,7 +34,7 @@ export function ShareOpportunityButton({
           url: absoluteUrl,
         });
       } else {
-        await navigator.clipboard.writeText(`${shareText}\n\n${absoluteUrl}`);
+        await navigator.clipboard.writeText(shareText);
         setMessage("Link copied.");
       }
     } catch (error) {

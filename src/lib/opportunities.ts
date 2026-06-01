@@ -1,6 +1,7 @@
 import type { Opportunity } from "./types";
 
 const lastMinuteWindowDays = 10;
+const publicOpportunityOrigin = "https://flyloop.one";
 
 export function isLastMinuteOpportunity(
   opportunity: Opportunity,
@@ -80,6 +81,10 @@ export function formatPriceLabel(type: Opportunity["type"]) {
 
 export function getPublicOpportunityPath(id: string) {
   return `/opportunity/${id}`;
+}
+
+export function getPublicOpportunityUrl(id: string) {
+  return `${publicOpportunityOrigin}${getPublicOpportunityPath(id)}`;
 }
 
 export function getOpportunityShareText(opportunity: Opportunity, url: string) {

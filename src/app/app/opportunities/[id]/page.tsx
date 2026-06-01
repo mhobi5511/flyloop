@@ -13,13 +13,17 @@ import {
   formatPrice,
   formatOpportunityType,
   getOpportunityShareText,
-  getPublicOpportunityPath,
+  getPublicOpportunityUrl,
   isLastMinuteOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import type { ReactNode } from "react";
 import type { InterestStatus } from "@/lib/types";
+
+type OpportunityDetailRow = HomeFeedRow & {
+  coach_profile_image_url?: string | null;
+};
 
 export default async function OpportunityDetailPage({
   params,
@@ -42,7 +46,8 @@ export default async function OpportunityDetailPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const opportunity = mapOpportunity(row as HomeFeedRow);
+  const opportunityRow = row as OpportunityDetailRow;
+  const opportunity = mapOpportunity(opportunityRow);
   const { data: viewerInterest } =
     user && user.id !== opportunity.createdBy
       ? await supabase
@@ -67,9 +72,9 @@ export default async function OpportunityDetailPage({
   const personLabel =
     opportunity.type === "camp" && opportunity.coachName ? "Coach" : "Organizer";
   const profileUserId = opportunity.coachFollowId ?? opportunity.createdBy;
-  const publicPath = getPublicOpportunityPath(opportunity.id);
+  const publicUrl = getPublicOpportunityUrl(opportunity.id);
   const shareLabel = `Share ${formatOpportunityType(opportunity.type)}`;
-  const shareText = getOpportunityShareText(opportunity, publicPath);
+  const shareText = getOpportunityShareText(opportunity, publicUrl);
   const detailRows = getDetailRows({
     skillLevel: opportunity.skillLevel,
     disciplines: opportunity.disciplines,
@@ -158,7 +163,7 @@ export default async function OpportunityDetailPage({
             <ShareOpportunityButton
               label={shareLabel}
               shareText={shareText}
-              url={publicPath}
+              url={publicUrl}
             />
           </div>
 
@@ -197,7 +202,11 @@ export default async function OpportunityDetailPage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex flex-1 items-center gap-3">
                   <Link href={`/app/users/${profileUserId}`}>
-                    <Avatar name={opportunity.coachName ?? personLabel} size="md" />
+                    <Avatar
+                      name={opportunity.coachName ?? personLabel}
+                      imageUrl={opportunityRow.coach_profile_image_url}
+                      size="md"
+                    />
                   </Link>
                   <div>
                     <p className="text-sm text-slate-500">

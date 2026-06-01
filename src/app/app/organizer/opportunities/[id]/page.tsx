@@ -17,7 +17,7 @@ import {
   formatOpportunityType,
   formatPrice,
   getOpportunityShareText,
-  getPublicOpportunityPath,
+  getPublicOpportunityUrl,
 } from "@/lib/opportunities";
 import { phoneToWhatsAppPath } from "@/lib/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -113,7 +113,7 @@ export default async function OrganizerOpportunityPage({
     profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
   const applicantRows = (applicants ?? []) as ApplicantRow[];
-  const publicPath = getPublicOpportunityPath(currentOpportunity.id);
+  const publicUrl = getPublicOpportunityUrl(currentOpportunity.id);
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
   const shareText = getOpportunityShareText(
     {
@@ -139,7 +139,7 @@ export default async function OrganizerOpportunityPage({
       contactMethod: "whatsapp",
       createdBy: "",
     },
-    publicPath,
+    publicUrl,
   );
 
   return (
@@ -183,7 +183,7 @@ export default async function OrganizerOpportunityPage({
             <ShareOpportunityButton
               label={shareLabel}
               shareText={shareText}
-              url={publicPath}
+              url={publicUrl}
               compact
             />
           </div>

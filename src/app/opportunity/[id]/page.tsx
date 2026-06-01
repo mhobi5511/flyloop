@@ -13,8 +13,8 @@ import {
   formatPriceLabel,
   getOpportunityShareText,
   getPublicOpportunityPath,
+  getPublicOpportunityUrl,
 } from "@/lib/opportunities";
-import { getAppUrl, getSiteUrl } from "@/lib/site-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 
@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     opportunity.startDate,
     opportunity.endDate,
   )}.`;
-  const url = getAppUrl(getPublicOpportunityPath(opportunity.id));
+  const url = getPublicOpportunityUrl(opportunity.id);
 
   return {
     title: `${opportunity.title} | Flyloop`,
@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       type: "website",
       images: row.coach_profile_image_url
         ? [{ url: row.coach_profile_image_url, alt: `${typeLabel} coach` }]
-        : [{ url: `${getSiteUrl()}/flyloop-icon-512.png`, alt: "Flyloop" }],
+        : [{ url: "https://flyloop.one/flyloop-icon-512.png", alt: "Flyloop" }],
     },
   };
 }
@@ -81,7 +81,7 @@ export default async function PublicOpportunityPage({ params }: PageProps) {
   const opportunity = mapOpportunity(row);
   const typeLabel = formatOpportunityType(opportunity.type);
   const publicPath = getPublicOpportunityPath(opportunity.id);
-  const absoluteUrl = getAppUrl(publicPath);
+  const absoluteUrl = getPublicOpportunityUrl(opportunity.id);
   const shareText = getOpportunityShareText(opportunity, absoluteUrl);
 
   return (
@@ -161,7 +161,7 @@ export default async function PublicOpportunityPage({ params }: PageProps) {
               <ShareOpportunityButton
                 label={`Share ${typeLabel}`}
                 shareText={shareText}
-                url={publicPath}
+                url={absoluteUrl}
               />
             </div>
 
