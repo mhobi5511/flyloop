@@ -1,17 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AtSign, MessageCircle } from "lucide-react";
+import { AtSign, CalendarDays, MapPin, MessageCircle, Users, WalletCards } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
 import {
   ApplicationStatusBadge,
   applicantBorderClass,
 } from "@/components/ApplicationStatusBadge";
-import { Badge } from "@/components/Badge";
 import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
-import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
   formatDateRange,
   formatOpportunityType,
@@ -120,15 +118,18 @@ export default async function OrganizerOpportunityPage({
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
   const typeLabel = formatOpportunityType(currentOpportunity.type);
   const showPublishedSuccess = resolvedSearchParams.published === "1";
+  const tunnel = Array.isArray(currentOpportunity.tunnel_profiles)
+    ? currentOpportunity.tunnel_profiles[0]
+    : currentOpportunity.tunnel_profiles;
+  const tunnelName = tunnel?.name ?? "Tunnel to be confirmed";
+  const tunnelLocation = formatLocation(tunnel?.city, tunnel?.country);
   const shareText = getOpportunityShareText(
     {
       id: currentOpportunity.id,
       type: currentOpportunity.type,
       title: currentOpportunity.title,
       tunnelId: "",
-      tunnelName: Array.isArray(currentOpportunity.tunnel_profiles)
-        ? currentOpportunity.tunnel_profiles[0]?.name
-        : currentOpportunity.tunnel_profiles?.name,
+      tunnelName,
       startDate: currentOpportunity.start_date,
       endDate: currentOpportunity.end_date,
       registrationDeadline: null,
@@ -151,24 +152,13 @@ export default async function OrganizerOpportunityPage({
     <AppShell active="dashboard" canCreate={canCreate}>
       <NotificationReadSignal />
       {showPublishedSuccess ? (
-        <section className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+        <section className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 shadow-sm">
           <p className="text-sm font-black text-sky-800">
             Opportunity published successfully.
           </p>
-          <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+          <p className="mt-0.5 text-sm font-bold text-slate-700">
             Your {typeLabel} is now live.
-          </h2>
-          <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
-            Share it with your community to get your first applicants.
           </p>
-          <div className="mt-3">
-            <ShareOpportunityButton
-              label={shareLabel}
-              shareText={shareText}
-              url={publicUrl}
-              variant="primary"
-            />
-          </div>
         </section>
       ) : null}
       <Link href="/app/dashboard" className="text-sm font-bold text-sky-700">
@@ -177,26 +167,41 @@ export default async function OrganizerOpportunityPage({
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="grid gap-3 lg:grid-cols-[1fr_200px] lg:items-start">
           <div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={currentOpportunity.type === "camp" ? "blue" : "green"}>
+            <div className="flex flex-wrap items-center gap-1.5 text-[0.68rem] font-black uppercase">
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">
                 {formatOpportunityType(currentOpportunity.type)}
-              </Badge>
+              </span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+                {currentOpportunity.status}
+              </span>
             </div>
             <h1 className="mt-2 text-xl font-black tracking-tight sm:text-2xl">
               {currentOpportunity.title}
             </h1>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold text-slate-600">
-              <p>
+            <div className="mt-3 grid gap-1.5 text-sm font-semibold text-slate-700 sm:grid-cols-2">
+              <p className="flex items-center gap-2">
+                <MapPin size={16} className="text-sky-700" />
+                <span>
+                  <span className="font-black text-slate-900">{tunnelName}</span>
+                  {tunnelLocation ? (
+                    <span className="text-slate-500">, {tunnelLocation}</span>
+                  ) : null}
+                </span>
+              </p>
+              <p className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-sky-700" />
                 {formatDateRange(
                   currentOpportunity.start_date,
                   currentOpportunity.end_date,
                 )}
               </p>
-              <p>
+              <p className="flex items-center gap-2">
+                <Users size={16} className="text-sky-700" />
                 {currentOpportunity.available_spots}/
                 {currentOpportunity.total_capacity} open
               </p>
-              <p>
+              <p className="flex items-center gap-2">
+                <WalletCards size={16} className="text-sky-700" />
                 {formatPrice(
                   Number(currentOpportunity.price),
                   currentOpportunity.currency,
@@ -205,12 +210,11 @@ export default async function OrganizerOpportunityPage({
             </div>
           </div>
           <div className="grid gap-2">
-            <OrganizerOpportunityActions opportunityId={currentOpportunity.id} />
-            <ShareOpportunityButton
-              label={shareLabel}
+            <OrganizerOpportunityActions
+              opportunityId={currentOpportunity.id}
+              shareLabel={shareLabel}
               shareText={shareText}
-              url={publicUrl}
-              compact
+              shareUrl={publicUrl}
             />
           </div>
         </div>
@@ -307,4 +311,8 @@ export default async function OrganizerOpportunityPage({
       </section>
     </AppShell>
   );
+}
+
+function formatLocation(city?: string | null, country?: string | null) {
+  return [city, country].filter(Boolean).join(", ");
 }

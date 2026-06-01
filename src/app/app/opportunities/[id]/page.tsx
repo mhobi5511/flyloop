@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, Globe2, MapPin, Users } from "lucide-react";
-import { ApplicationStatusBadge } from "@/components/ApplicationStatusBadge";
+import { CalendarDays, MapPin, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
@@ -18,7 +17,6 @@ import {
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
-import type { ReactNode } from "react";
 import type { InterestStatus } from "@/lib/types";
 
 type OpportunityDetailRow = HomeFeedRow & {
@@ -76,20 +74,19 @@ export default async function OpportunityDetailPage({
   const shareLabel = `Share ${formatOpportunityType(opportunity.type)}`;
   const shareText = getOpportunityShareText(opportunity, publicUrl);
   const detailRows = getDetailRows({
+    description,
     skillLevel: opportunity.skillLevel,
     disciplines: opportunity.disciplines,
+    languages: opportunity.languages,
     minMinutesOrHours: opportunity.minMinutesOrHours,
     registrationDeadline: opportunity.registrationDeadline,
   });
 
   return (
     <AppShell active="home">
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap gap-2">
-            {viewerInterestStatus ? (
-              <ApplicationStatusBadge status={viewerInterestStatus} />
-            ) : null}
+      <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+          <div className="flex flex-wrap gap-1.5">
             <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
               {formatOpportunityType(opportunity.type)}
             </Badge>
@@ -99,20 +96,22 @@ export default async function OpportunityDetailPage({
             </Badge>
           </div>
 
-          <h1 className="mt-3 text-2xl font-black leading-tight tracking-tight sm:text-4xl">
+          <h1 className="mt-2 text-2xl font-black leading-tight tracking-tight sm:text-4xl">
             {opportunity.title}
           </h1>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Info compact icon={<CalendarDays size={16} />} label="Date">
+          <div className="mt-2 grid gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
+            <p className="flex items-center gap-2">
+              <CalendarDays size={16} className="text-sky-700" />
               {formatDateRange(opportunity.startDate, opportunity.endDate)}
-            </Info>
-            <Info compact icon={<Users size={16} />} label="Availability">
+            </p>
+            <p className="flex items-center gap-2">
+              <Users size={16} className="text-sky-700" />
               {opportunity.availableSpots} of {opportunity.totalCapacity} spots open
-            </Info>
+            </p>
           </div>
 
-          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-2 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2 text-sky-700">
               <MapPin size={17} className="mt-0.5 shrink-0" />
               <div className="min-w-0">
@@ -138,19 +137,41 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
-          <div className="mt-3 rounded-2xl bg-sky-50 p-3">
-            <p className="text-xs font-bold uppercase text-sky-700">Price</p>
-            <p className="mt-0.5 text-2xl font-black text-slate-950">
+          <div className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-sky-800">
+            <p className="text-lg font-black text-slate-950">
               {formatPrice(opportunity.price, opportunity.currency)}
-            </p>
-            <p className="text-xs font-semibold text-sky-700">
-              {opportunity.type === "huck_jam"
-                ? "shared flying time"
-                : "per hour incl. coaching"}
+              <span className="text-sm font-bold text-sky-800">
+                {opportunity.type === "huck_jam"
+                  ? " shared flying time"
+                  : "/h incl. coaching"}
+              </span>
             </p>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-2 rounded-xl border border-slate-200 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Link href={`/app/users/${profileUserId}`}>
+                <Avatar
+                  name={opportunity.coachName ?? personLabel}
+                  imageUrl={opportunityRow.coach_profile_image_url}
+                  size="sm"
+                />
+              </Link>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  {personLabel}
+                </p>
+                <Link
+                  href={`/app/users/${profileUserId}`}
+                  className="block truncate text-sm font-black text-slate-900 hover:text-sky-700"
+                >
+                  {opportunity.coachName ?? personLabel}
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-2">
             <InterestButton
               opportunityId={opportunity.id}
               disabled={isUnavailable}
@@ -158,76 +179,37 @@ export default async function OpportunityDetailPage({
               compact
             />
           </div>
-          <div className="mt-3">
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {opportunity.coachFollowId && !isOrganizer ? (
+              <FollowButton
+                targetType="coach"
+                targetId={opportunity.coachFollowId}
+                label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
+              />
+            ) : null}
             <ShareOpportunityButton
               label={shareLabel}
               shareText={shareText}
               url={publicUrl}
+              compact
             />
           </div>
 
-          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm font-bold text-slate-700">Details</p>
-            {description ? (
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                {description}
-              </p>
-            ) : null}
-            {detailRows.length > 0 ? (
-              <div className="mt-3 grid gap-2 text-sm text-slate-600">
+          {detailRows.length > 0 ? (
+            <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
+                Additional Information ▼
+              </summary>
+              <div className="mt-2 grid gap-1.5 text-sm leading-5 text-slate-600">
                 {detailRows.map((row) => (
                   <p key={row.label}>
-                    {row.label}: {row.value}
+                    <span className="font-bold text-slate-800">{row.label}:</span>{" "}
+                    {row.value}
                   </p>
                 ))}
               </div>
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Please speak with the coach or organizer for details.
-              </p>
-            )}
-          </div>
-
-          {opportunity.languages.length > 0 ? (
-            <div className="mt-3">
-              <Info icon={<Globe2 size={18} />} label="Languages">
-                {opportunity.languages.join(", ")}
-              </Info>
-            </div>
-          ) : null}
-
-          {opportunity.coachFollowId ? (
-            <div className="mt-5 rounded-2xl border border-slate-200 p-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex flex-1 items-center gap-3">
-                  <Link href={`/app/users/${profileUserId}`}>
-                    <Avatar
-                      name={opportunity.coachName ?? personLabel}
-                      imageUrl={opportunityRow.coach_profile_image_url}
-                      size="md"
-                    />
-                  </Link>
-                  <div>
-                    <p className="text-sm text-slate-500">
-                      {personLabel === "Coach" ? "About the coach" : "Organizer"}
-                    </p>
-                    <Link
-                      href={`/app/users/${profileUserId}`}
-                      className="font-bold text-slate-900 hover:text-sky-700"
-                    >
-                      {opportunity.coachName ?? personLabel}
-                    </Link>
-                  </div>
-                </div>
-                {!isOrganizer ? (
-                  <FollowButton
-                    targetType="coach"
-                    targetId={opportunity.coachFollowId}
-                    label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
-                  />
-                ) : null}
-              </div>
-            </div>
+            </details>
           ) : null}
         </article>
 
@@ -268,28 +250,36 @@ function getMeaningfulDescription(description: string) {
 }
 
 function getDetailRows({
+  description,
   skillLevel,
   disciplines,
+  languages,
   minMinutesOrHours,
   registrationDeadline,
 }: {
+  description: string;
   skillLevel: string | null;
   disciplines: string[];
+  languages: string[];
   minMinutesOrHours?: string;
   registrationDeadline: string | null;
 }) {
   const rows: Array<{ label: string; value: string }> = [];
 
+  if (minMinutesOrHours?.trim()) {
+    rows.push({ label: "Minimum time", value: minMinutesOrHours });
+  }
+
   if (skillLevel?.trim()) {
     rows.push({ label: "Skill level", value: skillLevel });
   }
 
-  if (disciplines.length > 0) {
-    rows.push({ label: "Disciplines", value: disciplines.join(", ") });
+  if (languages.length > 0) {
+    rows.push({ label: "Languages", value: languages.join(", ") });
   }
 
-  if (minMinutesOrHours?.trim()) {
-    rows.push({ label: "Minimum time", value: minMinutesOrHours });
+  if (disciplines.length > 0) {
+    rows.push({ label: "Disciplines", value: disciplines.join(", ") });
   }
 
   if (registrationDeadline) {
@@ -297,6 +287,10 @@ function getDetailRows({
       label: "Registration",
       value: formatRegistrationDeadline(registrationDeadline),
     });
+  }
+
+  if (description) {
+    rows.push({ label: "Description", value: description });
   }
 
   return rows;
@@ -314,26 +308,4 @@ function formatRegistrationDeadline(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(date)}`;
-}
-
-function Info({
-  icon,
-  label,
-  children,
-  compact = false,
-}: {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`rounded-2xl border border-slate-200 ${compact ? "p-3" : "p-4"}`}>
-      <div className="flex items-center gap-2 text-sky-700">{icon}</div>
-      <p className="mt-1 text-xs font-bold uppercase text-slate-400">
-        {label}
-      </p>
-      <div className="mt-1 text-sm font-bold text-slate-800">{children}</div>
-    </div>
-  );
 }

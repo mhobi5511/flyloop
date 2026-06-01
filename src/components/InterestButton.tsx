@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Send } from "lucide-react";
+import { CheckCircle2, Clock3, Send, XCircle } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sendOpportunityInterest } from "@/app/app/opportunities/actions";
 import type { InterestStatus } from "@/lib/types";
@@ -78,6 +78,20 @@ export function InterestButton({
       ? "Sending..."
       : "I'm interested";
 
+  if (compact && interestStatus) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex items-center gap-2 font-black text-slate-900">
+          <StatusIcon status={interestStatus} />
+          {statusButtonLabel(interestStatus)}
+        </div>
+        <p className="mt-1 whitespace-pre-line text-xs font-semibold leading-5 text-slate-600">
+          {message || statusHint(interestStatus)}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={compact ? "" : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"}>
       <button
@@ -122,15 +136,15 @@ function statusButtonLabel(status: InterestStatus) {
 
 function statusHint(status: InterestStatus) {
   if (status === "accepted") {
-    return "You already applied and were accepted.";
+    return "You were accepted by the organizer.";
   }
 
   if (status === "declined") {
-    return "You already applied. This application was declined.";
+    return "This application was declined by the organizer.";
   }
 
   if (status === "waitlist") {
-    return "You already applied and are on the waitlist.";
+    return "You are on the waitlist for this opportunity.";
   }
 
   return [
@@ -138,4 +152,34 @@ function statusHint(status: InterestStatus) {
     "The organizer has been notified.",
     "You will receive an update when your status changes.",
   ].join("\n");
+}
+
+function StatusIcon({ status }: { status: InterestStatus }) {
+  const className = statusIconClass(status);
+
+  if (status === "accepted") {
+    return <CheckCircle2 size={17} className={className} />;
+  }
+
+  if (status === "declined" || status === "withdrawn") {
+    return <XCircle size={17} className={className} />;
+  }
+
+  return <Clock3 size={17} className={className} />;
+}
+
+function statusIconClass(status: InterestStatus) {
+  if (status === "accepted") {
+    return "text-emerald-600";
+  }
+
+  if (status === "declined" || status === "withdrawn") {
+    return "text-rose-600";
+  }
+
+  if (status === "waitlist") {
+    return "text-yellow-600";
+  }
+
+  return "text-amber-600";
 }
