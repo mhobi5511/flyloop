@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Camera } from "lucide-react";
@@ -12,7 +12,6 @@ import {
   normalizePhoneToE164,
   splitE164PhoneNumber,
 } from "@/lib/phone";
-import { countryOptions } from "@/lib/countries";
 import {
   calculateProfileCompleteness,
   PROFILE_OPENED_STORAGE_KEY,
@@ -54,7 +53,7 @@ type TunnelOption = ProfileFormProps["tunnels"][number];
 export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile.full_name ?? "");
-  const [country, setCountry] = useState(profile.country ?? "");
+  const [country, setCountry] = useState(() => normalizeProfileCountry(profile.country));
   const [city, setCity] = useState(profile.city ?? "");
   const [bio, setBio] = useState(profile.bio ?? "");
   const [disciplines, setDisciplines] = useState(
@@ -432,7 +431,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     }
 
     setFullName(data.full_name ?? "");
-    setCountry(data.country ?? "");
+    setCountry(normalizeProfileCountry(data.country));
     setCity(data.city ?? "");
     setBio(data.bio ?? "");
     setDisciplines((data.disciplines ?? []).join(", "));
@@ -458,7 +457,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     setSavedSnapshot(
       JSON.stringify({
         fullName: data.full_name ?? "",
-        country: data.country ?? "",
+        country: normalizeProfileCountry(data.country),
         city: data.city ?? "",
         bio: data.bio ?? "",
         disciplines: (data.disciplines ?? []).join(", "),
@@ -915,23 +914,121 @@ function CountryField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const countries = useMemo(
+    () =>
+      Array.from(
+        new Set(mobileCountryCodeOptions.map((option) => option.country)),
+      ),
+    [],
+  );
+  const matches = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
+      return countries;
+    }
+
+    return countries.filter((countryName) =>
+      countryName.toLowerCase().includes(query),
+    );
+  }, [countries, search]);
+
+  function openPicker() {
+    setIsOpen(true);
+    window.setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  function selectCountry(countryName: string) {
+    onChange(countryName);
+    setSearch("");
+    setIsOpen(false);
+  }
+
   return (
-    <Field label="Country">
-      <input
-        id="profile-country"
-        list="profile-country-options"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field"
-        placeholder="Switzerland"
-        autoComplete="country-name"
-      />
-      <datalist id="profile-country-options">
-        {countryOptions.map((countryName) => (
-          <option key={countryName} value={countryName} />
-        ))}
-      </datalist>
-    </Field>
+    <div className="grid gap-1.5 text-sm font-bold text-slate-700">
+      <span>Country</span>
+      <div className="relative">
+        <button
+          id="profile-country"
+          type="button"
+          onClick={openPicker}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openPicker();
+            }
+          }}
+          className="field flex items-center justify-between text-left"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-controls="profile-country-options"
+        >
+          <span className={value ? "text-slate-900" : "text-slate-400"}>
+            {value || "Select country"}
+          </span>
+          <span aria-hidden="true" className="text-slate-400">
+            ▼
+          </span>
+        </button>
+        {isOpen ? (
+          <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setIsOpen(false);
+                }
+
+                if (event.key === "Enter" && matches[0]) {
+                  event.preventDefault();
+                  selectCountry(matches[0]);
+                }
+              }}
+              className="field"
+              placeholder="Search country"
+              role="combobox"
+              aria-expanded={isOpen}
+              aria-controls="profile-country-options"
+              autoComplete="off"
+            />
+            <div
+              id="profile-country-options"
+              role="listbox"
+              className="mt-2 max-h-72 overflow-y-auto rounded-lg"
+            >
+              {matches.length > 0 ? (
+                matches.map((countryName) => (
+                  <button
+                    key={countryName}
+                    type="button"
+                    role="option"
+                    aria-selected={value === countryName}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm font-bold ${
+                      value === countryName
+                        ? "bg-sky-50 text-sky-700"
+                        : "text-slate-800 hover:bg-slate-50"
+                    }`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectCountry(countryName)}
+                  >
+                    {countryName}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-sm font-semibold text-slate-500">
+                  No country matches.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1093,4 +1190,16 @@ function getInitials(name?: string | null) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+function normalizeProfileCountry(country?: string | null) {
+  const value = country?.trim();
+
+  if (!value) {
+    return "";
+  }
+
+  return mobileCountryCodeOptions.some((option) => option.country === value)
+    ? value
+    : "";
 }
