@@ -83,5 +83,5 @@ function removeTrailingUrl(text: string, url: string) {
     return text;
   }
 
-  return lines.slice(0, lastNonEmptyIndex).join("\n").trimEnd();
+  return lines.slice(0, lastNonEmptyIndex).join("\n");
 }
