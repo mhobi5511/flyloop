@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { GlobalCampSearch } from "@/components/GlobalCampSearch";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { distanceKm, parseCoordinate } from "@/lib/location";
+import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, Opportunity } from "@/lib/types";
@@ -10,6 +11,12 @@ import { redirect } from "next/navigation";
 
 type HomeProfile = {
   full_name: string | null;
+  country: string | null;
+  city: string | null;
+  disciplines: string[] | null;
+  home_tunnel_id: string | null;
+  instagram_handle: string | null;
+  profile_image_url: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
   use_location_recommendations: boolean | null;
@@ -64,7 +71,7 @@ export default async function AppHomePage({
   const [profileResult, opportunitiesResult, followsResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name,latitude,longitude,use_location_recommendations,preferred_radius_km")
+      .select("full_name,country,city,disciplines,home_tunnel_id,instagram_handle,profile_image_url,latitude,longitude,use_location_recommendations,preferred_radius_km")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -110,6 +117,7 @@ export default async function AppHomePage({
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);
+  const profileCompleteness = calculateProfileCompleteness(homeProfile);
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
@@ -197,6 +205,25 @@ export default async function AppHomePage({
           What can you fly next?
         </h1>
       </div>
+
+      {!profileCompleteness.isComplete ? (
+        <div className="mt-4 flex flex-col items-start gap-3 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base font-black tracking-tight text-slate-950">
+              Complete your profile
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Your profile is {profileCompleteness.percent}% complete.
+            </p>
+          </div>
+          <Link
+            href="/app/profile"
+            className="shrink-0 rounded-full bg-sky-600 px-4 py-2 text-sm font-black text-white"
+          >
+            Complete Profile
+          </Link>
+        </div>
+      ) : null}
 
       {upcomingAccepted.length > 0 ? (
         <HomeSection

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "./Avatar";
 import {
@@ -11,6 +11,10 @@ import {
   normalizePhoneToE164,
   splitE164PhoneNumber,
 } from "@/lib/phone";
+import {
+  calculateProfileCompleteness,
+  PROFILE_OPENED_STORAGE_KEY,
+} from "@/lib/profile-completeness";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ProfileFormProps = {
@@ -93,6 +97,35 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     mobileCountryCode,
     mobileNumber,
   );
+  const profileCompleteness = useMemo(
+    () =>
+      calculateProfileCompleteness({
+        profile_image_url: profileImageUrl,
+        full_name: fullName,
+        country,
+        city,
+        disciplines: parseCsv(disciplines),
+        home_tunnel_id: homeTunnelId,
+        instagram_handle: instagram,
+      }),
+    [city, country, disciplines, fullName, homeTunnelId, instagram, profileImageUrl],
+  );
+
+  useEffect(() => {
+    localStorage.setItem(PROFILE_OPENED_STORAGE_KEY, "true");
+    window.dispatchEvent(new Event("flyloop-profile-opened"));
+  }, []);
+
+  function focusProfileField(targetId: string) {
+    const element = document.getElementById(targetId);
+
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => element.focus({ preventScroll: true }), 250);
+  }
 
   function optionalText(value: string) {
     const trimmed = value.trim();
@@ -383,14 +416,75 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   }
 
   return (
-    <form
-      onSubmit={save}
-      className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
-    >
+    <>
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-black tracking-tight text-slate-950">
+              Profile Completion
+            </h2>
+            <p className="mt-1 text-sm font-bold text-sky-700">
+              {profileCompleteness.percent}% Complete
+            </p>
+          </div>
+          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+            {profileCompleteness.completed}/{profileCompleteness.total}
+          </span>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-sky-600 transition-all"
+            style={{ width: `${profileCompleteness.percent}%` }}
+          />
+        </div>
+        {profileCompleteness.isComplete ? (
+          <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+            <p className="font-black">✅ Profile complete</p>
+            <p className="mt-1 leading-6">
+              Your profile can now be discovered by athletes, coaches and
+              organizers worldwide.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Complete your profile to improve your visibility for coaches,
+              athletes and organizers.
+            </p>
+            <div className="mt-3">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                Missing:
+              </p>
+              <ul className="mt-2 grid gap-1 pl-4 text-sm text-slate-700">
+                {profileCompleteness.missingFields.map((field) => (
+                  <li key={field.key} className="list-disc">
+                    <button
+                      type="button"
+                      onClick={() => focusProfileField(field.targetId)}
+                      className="font-bold text-sky-700 underline-offset-2 hover:underline"
+                    >
+                      {field.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+      </section>
+
+      <form
+        onSubmit={save}
+        className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+      >
       <div className="flex items-center gap-3">
         <Avatar name={fullName} imageUrl={profileImageUrl} size="lg" />
         <div className="min-w-0">
-          <label className="inline-flex h-10 cursor-pointer items-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white">
+          <label
+            id="profile-photo-upload"
+            tabIndex={-1}
+            className="inline-flex h-10 cursor-pointer items-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+          >
             {isUploading ? "Uploading..." : "Upload photo"}
             <input
               type="file"
@@ -409,6 +503,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Name
         <input
+          id="profile-full-name"
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
           className="field"
@@ -417,6 +512,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Profile Country
         <input
+          id="profile-country"
           value={country}
           onChange={(event) => setCountry(event.target.value)}
           className="field"
@@ -425,6 +521,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         City
         <input
+          id="profile-city"
           value={city}
           onChange={(event) => setCity(event.target.value)}
           className="field"
@@ -444,6 +541,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Disciplines
         <input
+          id="profile-disciplines"
           value={disciplines}
           onChange={(event) => setDisciplines(event.target.value)}
           className="field"
@@ -453,6 +551,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Home Tunnel
         <select
+          id="profile-home-tunnel"
           value={homeTunnelId}
           onChange={(event) => setHomeTunnelId(event.target.value)}
           className="field"
@@ -503,6 +602,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       <label className="grid gap-1 text-sm font-bold text-slate-700">
         Instagram
         <input
+          id="profile-instagram"
           value={instagram}
           onChange={(event) => setInstagram(event.target.value)}
           className="field"
@@ -577,7 +677,8 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       >
         {isLoading ? "Saving..." : "Save profile"}
       </button>
-    </form>
+      </form>
+    </>
   );
 }
 

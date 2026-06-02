@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
+import { ProfileNavDot } from "./ProfileNavDot";
+import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { unstable_rethrow } from "next/navigation";
 import { isAdmin } from "@/lib/admin";
@@ -65,6 +67,7 @@ async function getShellState() {
         canJoin: true,
         isAdmin: false,
         organizerUnreadCount: 0,
+        profileIncomplete: true,
       };
     }
 
@@ -72,7 +75,7 @@ async function getShellState() {
       await Promise.all([
         supabase
           .from("profiles")
-          .select("is_organizer,wants_to_create_opportunities")
+          .select("is_organizer,wants_to_create_opportunities,full_name,country,city,disciplines,home_tunnel_id,instagram_handle,profile_image_url")
           .eq("id", user.id)
           .maybeSingle(),
         supabase
@@ -94,12 +97,14 @@ async function getShellState() {
     const canCreate =
       profile?.is_organizer === true ||
       profile?.wants_to_create_opportunities === true;
+    const profileIncomplete = !calculateProfileCompleteness(profile).isComplete;
 
     return {
       canCreate,
       canJoin: true,
       isAdmin: isAdmin(user),
       organizerUnreadCount: notificationResult.count ?? 0,
+      profileIncomplete,
     };
   } catch (error) {
     unstable_rethrow(error);
@@ -109,6 +114,7 @@ async function getShellState() {
       canJoin: true,
       isAdmin: false,
       organizerUnreadCount: 0,
+      profileIncomplete: true,
     };
   }
 }
@@ -177,13 +183,14 @@ export async function AppShell({
               href={profileNavItem.href}
               aria-label={profileNavItem.label}
               aria-current={profileSelected ? "page" : undefined}
-              className={`grid size-10 place-items-center rounded-full border shadow-sm ${
+              className={`relative grid size-10 place-items-center rounded-full border shadow-sm ${
                 profileSelected
                   ? "border-sky-200 bg-sky-50 text-sky-700"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               <User size={18} />
+              <ProfileNavDot initialIncomplete={shellState.profileIncomplete} />
             </Link>
           </div>
         </div>
