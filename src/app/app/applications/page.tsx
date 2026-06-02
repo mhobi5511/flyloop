@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import {
   ApplicationStatusBadge,
   applicantBorderClass,
@@ -30,8 +29,8 @@ type ApplicationRow = {
         price: number | string;
         currency: string;
         tunnel_profiles:
-          | { name: string; city: string | null; country: string | null }
-          | Array<{ name: string; city: string | null; country: string | null }>
+          | { id: string; name: string; city: string | null; country: string | null }
+          | Array<{ id: string; name: string; city: string | null; country: string | null }>
           | null;
         coach_profiles:
           | {
@@ -55,8 +54,8 @@ type ApplicationRow = {
         price: number | string;
         currency: string;
         tunnel_profiles:
-          | { name: string; city: string | null; country: string | null }
-          | Array<{ name: string; city: string | null; country: string | null }>
+          | { id: string; name: string; city: string | null; country: string | null }
+          | Array<{ id: string; name: string; city: string | null; country: string | null }>
           | null;
         coach_profiles:
           | {
@@ -74,15 +73,14 @@ type ApplicationRow = {
 };
 
 type ApplicationsSearchParams = {
-  status?: string;
+  month?: string;
+  tunnel?: string;
 };
 
-const statusOptions: InterestStatus[] = [
+const activeStatuses: InterestStatus[] = [
   "pending",
   "accepted",
   "waitlist",
-  "declined",
-  "withdrawn",
 ];
 
 export default async function ApplicationsPage({
@@ -91,9 +89,6 @@ export default async function ApplicationsPage({
   searchParams?: Promise<ApplicationsSearchParams>;
 }) {
   const filters = (await searchParams) ?? {};
-  const selectedStatus = statusOptions.includes(filters.status as InterestStatus)
-    ? (filters.status as InterestStatus)
-    : null;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -106,13 +101,30 @@ export default async function ApplicationsPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("id,status,created_at,opportunities(id,title,type,start_date,end_date,price,currency,tunnel_profiles(name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
+      .select("id,status,created_at,opportunities(id,title,type,start_date,end_date,price,currency,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
   ]);
-  const rows = ((applications ?? []) as ApplicationRow[]).filter(
-    (application) => !selectedStatus || application.status === selectedStatus,
+  const activeRows = ((applications ?? []) as ApplicationRow[]).filter((application) =>
+    activeStatuses.includes(application.status),
   );
+  const monthOptions = getMonthOptions(activeRows);
+  const tunnelOptions = getTunnelOptions(activeRows);
+  const selectedMonth = monthOptions.some((option) => option.value === filters.month)
+    ? filters.month
+    : "";
+  const selectedTunnel = tunnelOptions.some((option) => option.id === filters.tunnel)
+    ? filters.tunnel
+    : "";
+  const rows = activeRows.filter((application) => {
+    const opportunity = getOpportunity(application);
+    const tunnel = opportunity ? getTunnel(opportunity) : null;
+
+    return (
+      (!selectedMonth || opportunity?.start_date.slice(0, 7) === selectedMonth) &&
+      (!selectedTunnel || tunnel?.id === selectedTunnel)
+    );
+  });
   const canCreate =
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
@@ -123,34 +135,54 @@ export default async function ApplicationsPage({
         <h1 className="text-2xl font-black tracking-tight sm:text-3xl">My Flights</h1>
       </div>
 
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-        <StatusLink href="/app/applications" active={!selectedStatus}>
-          All
-        </StatusLink>
-        {statusOptions.map((status) => (
-          <StatusLink
-            key={status}
-            href={`/app/applications?status=${status}`}
-            active={selectedStatus === status}
+      <form className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:items-end" action="/app/applications">
+        <label className="grid gap-1 text-xs font-bold text-slate-600 sm:w-44">
+          Month
+          <select
+            name="month"
+            defaultValue={selectedMonth}
+            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm"
           >
-            {status.slice(0, 1).toUpperCase() + status.slice(1)}
-          </StatusLink>
-        ))}
-      </div>
+            <option value="">All months</option>
+            {monthOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-slate-600 sm:w-56">
+          Tunnel
+          <select
+            name="tunnel"
+            defaultValue={selectedTunnel}
+            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm"
+          >
+            <option value="">All tunnels</option>
+            {tunnelOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          className="col-span-2 h-10 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm sm:col-span-1"
+        >
+          Apply
+        </button>
+      </form>
 
       <div className="mt-4 grid gap-3">
         {rows.map((application) => {
-          const opportunity = Array.isArray(application.opportunities)
-            ? application.opportunities[0]
-            : application.opportunities;
+          const opportunity = getOpportunity(application);
 
           if (!opportunity) {
             return null;
           }
 
-          const tunnel = Array.isArray(opportunity.tunnel_profiles)
-            ? opportunity.tunnel_profiles[0]
-            : opportunity.tunnel_profiles;
+          const tunnel = getTunnel(opportunity);
 
           return (
             <article
@@ -201,35 +233,22 @@ export default async function ApplicationsPage({
         })}
       </div>
 
-      {rows.length === 0 ? (
+      {activeRows.length === 0 ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          <p>You have not sent interest for any opportunities yet.</p>
+          <Link
+            href="/app"
+            className="mt-3 inline-flex rounded-full bg-sky-600 px-4 py-2 text-sm font-black text-white"
+          >
+            Find your next camp
+          </Link>
+        </div>
+      ) : rows.length === 0 ? (
         <p className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          You have not sent interest for any opportunities yet.
+          No flights match those filters.
         </p>
       ) : null}
     </AppShell>
-  );
-}
-
-function StatusLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-bold ${
-        active
-          ? "border-sky-600 bg-sky-600 text-white"
-          : "border-slate-200 bg-white text-slate-700"
-      }`}
-    >
-      {children}
-    </Link>
   );
 }
 
@@ -239,4 +258,62 @@ function formatLocation(city?: string | null, country?: string | null) {
   }
 
   return city ?? country ?? "Location to be confirmed";
+}
+
+function getOpportunity(application: ApplicationRow) {
+  return Array.isArray(application.opportunities)
+    ? application.opportunities[0]
+    : application.opportunities;
+}
+
+function getTunnel(opportunity: NonNullable<ReturnType<typeof getOpportunity>>) {
+  return Array.isArray(opportunity.tunnel_profiles)
+    ? opportunity.tunnel_profiles[0]
+    : opportunity.tunnel_profiles;
+}
+
+function getMonthOptions(applications: ApplicationRow[]) {
+  const months = new Map<string, string>();
+
+  for (const application of applications) {
+    const opportunity = getOpportunity(application);
+
+    if (!opportunity?.start_date) {
+      continue;
+    }
+
+    const value = opportunity.start_date.slice(0, 7);
+    months.set(value, formatMonthLabel(value));
+  }
+
+  return Array.from(months, ([value, label]) => ({ value, label })).sort((a, b) =>
+    a.value.localeCompare(b.value),
+  );
+}
+
+function getTunnelOptions(applications: ApplicationRow[]) {
+  const tunnels = new Map<string, string>();
+
+  for (const application of applications) {
+    const opportunity = getOpportunity(application);
+    const tunnel = opportunity ? getTunnel(opportunity) : null;
+
+    if (tunnel?.id) {
+      tunnels.set(tunnel.id, tunnel.name);
+    }
+  }
+
+  return Array.from(tunnels, ([id, name]) => ({ id, name })).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+function formatMonthLabel(value: string) {
+  const [year, month] = value.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
