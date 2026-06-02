@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "./Avatar";
+import { Camera } from "lucide-react";
 import {
   fallbackMobileCountryCode,
   formatMobileCountryCodeLabel,
@@ -11,6 +12,7 @@ import {
   normalizePhoneToE164,
   splitE164PhoneNumber,
 } from "@/lib/phone";
+import { countryOptions } from "@/lib/countries";
 import {
   calculateProfileCompleteness,
   PROFILE_OPENED_STORAGE_KEY,
@@ -47,6 +49,8 @@ type ProfileFormProps = {
   }>;
 };
 
+type TunnelOption = ProfileFormProps["tunnels"][number];
+
 export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile.full_name ?? "");
@@ -57,6 +61,8 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     (profile.disciplines ?? []).join(", "),
   );
   const [homeTunnelId, setHomeTunnelId] = useState(profile.home_tunnel_id ?? "");
+  const [tunnelSearch, setTunnelSearch] = useState("");
+  const [isTunnelListOpen, setIsTunnelListOpen] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState(profile.website_url ?? "");
   const [youtubeUrl, setYoutubeUrl] = useState(profile.youtube_url ?? "");
   const [mobileCountryCode, setMobileCountryCode] = useState(() =>
@@ -91,12 +97,28 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
-  const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
   const [error, setError] = useState("");
-  const normalizedPhonePreview = normalizePhoneToE164(
-    mobileCountryCode,
-    mobileNumber,
+
+  const selectedTunnel = useMemo(
+    () => tunnels.find((tunnel) => tunnel.id === homeTunnelId),
+    [homeTunnelId, tunnels],
   );
+  const tunnelMatches = useMemo(() => {
+    const query = tunnelSearch.trim().toLowerCase();
+
+    if (!query) {
+      return tunnels.slice(0, 8);
+    }
+
+    return tunnels
+      .filter((tunnel) =>
+        `${tunnel.name} ${tunnel.city} ${tunnel.country}`.toLowerCase().includes(query),
+      )
+      .slice(0, 8);
+  }, [tunnelSearch, tunnels]);
+  const parsedDisciplines = useMemo(() => parseCsv(disciplines), [disciplines]);
+  const primaryDiscipline = parsedDisciplines[0];
   const profileCompleteness = useMemo(
     () =>
       calculateProfileCompleteness({
@@ -104,28 +126,42 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
         full_name: fullName,
         country,
         city,
-        disciplines: parseCsv(disciplines),
+        disciplines: parsedDisciplines,
         home_tunnel_id: homeTunnelId,
         instagram_handle: instagram,
       }),
-    [city, country, disciplines, fullName, homeTunnelId, instagram, profileImageUrl],
+    [city, country, fullName, homeTunnelId, instagram, parsedDisciplines, profileImageUrl],
   );
+  const normalizedPhonePreview = normalizePhoneToE164(
+    mobileCountryCode,
+    mobileNumber,
+  );
+  const currentSnapshot = JSON.stringify({
+    fullName,
+    country,
+    city,
+    bio,
+    disciplines,
+    homeTunnelId,
+    websiteUrl,
+    youtubeUrl,
+    mobileCountryCode,
+    mobileNumber,
+    instagram,
+    profileImageUrl,
+    wantsToCreateOpportunities,
+    useLocationRecommendations,
+    latitude,
+    longitude,
+    preferredRadiusKm,
+  });
+  const [savedSnapshot, setSavedSnapshot] = useState(currentSnapshot);
+  const isDirty = currentSnapshot !== savedSnapshot;
 
   useEffect(() => {
     localStorage.setItem(PROFILE_OPENED_STORAGE_KEY, "true");
     window.dispatchEvent(new Event("flyloop-profile-opened"));
   }, []);
-
-  function focusProfileField(targetId: string) {
-    const element = document.getElementById(targetId);
-
-    if (!element) {
-      return;
-    }
-
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.setTimeout(() => element.focus({ preventScroll: true }), 250);
-  }
 
   function optionalText(value: string) {
     const trimmed = value.trim();
@@ -140,6 +176,17 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     }
 
     return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  }
+
+  function focusProfileField(targetId: string) {
+    const element = document.getElementById(targetId);
+
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => element.focus({ preventScroll: true }), 250);
   }
 
   function enableLocationRecommendations(enabled: boolean) {
@@ -170,11 +217,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
         setLatitude(nextLatitude);
         setLongitude(nextLongitude);
         setLocationStatus("Location recommendations are enabled.");
-        void saveLocationRecommendationPreference(
-          true,
-          nextLatitude,
-          nextLongitude,
-        );
+        void saveLocationRecommendationPreference(true, nextLatitude, nextLongitude);
       },
       () => {
         setUseLocationRecommendations(false);
@@ -221,7 +264,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     }
 
     setError("");
-    setMessage("");
+    setToast("");
 
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
@@ -282,14 +325,22 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     }
 
     setProfileImageUrl(nextUrl);
-    setMessage("Profile photo updated.");
+    setSavedSnapshot((previous) =>
+      JSON.stringify({ ...JSON.parse(previous), profileImageUrl: nextUrl }),
+    );
+    setToast("✅ Profile photo updated.");
     router.refresh();
   }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!isDirty) {
+      return;
+    }
+
     setIsLoading(true);
-    setMessage("");
+    setToast("");
     setError("");
 
     const supabase = createSupabaseBrowserClient();
@@ -307,10 +358,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     const fallbackName = user.email?.split("@")[0] ?? "Flyloop user";
     const cleanFullName = fullName.trim() || fallbackName;
     const cleanRadius = Math.max(1, Number(preferredRadiusKm) || 1000);
-    const normalizedPhone = normalizePhoneToE164(
-      mobileCountryCode,
-      mobileNumber,
-    );
+    const normalizedPhone = normalizePhoneToE164(mobileCountryCode, mobileNumber);
 
     if (!mobileCountryCode) {
       setIsLoading(false);
@@ -325,14 +373,13 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     }
 
     const hasLocation = latitude !== null && longitude !== null;
-    const locationRecommendationsEnabled =
-      useLocationRecommendations && hasLocation;
+    const locationRecommendationsEnabled = useLocationRecommendations && hasLocation;
     const profileValues = {
       full_name: cleanFullName,
       country: optionalText(country),
       city: optionalText(city),
       bio: optionalText(bio),
-      disciplines: parseCsv(disciplines),
+      disciplines: parsedDisciplines,
       home_tunnel_id: optionalText(homeTunnelId),
       website_url: optionalUrl(websiteUrl),
       youtube_url: optionalUrl(youtubeUrl),
@@ -364,10 +411,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     if (!saveError && !data) {
       const insertResult = await supabase
         .from("profiles")
-        .insert({
-          id: user.id,
-          ...profileValues,
-        })
+        .insert({ id: user.id, ...profileValues })
         .select(profileSelect)
         .maybeSingle();
 
@@ -411,274 +455,613 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     setLatitude(data.latitude ?? null);
     setLongitude(data.longitude ?? null);
     setPreferredRadiusKm(String(data.preferred_radius_km ?? 1000));
-    setMessage("Profile saved successfully.");
+    setSavedSnapshot(
+      JSON.stringify({
+        fullName: data.full_name ?? "",
+        country: data.country ?? "",
+        city: data.city ?? "",
+        bio: data.bio ?? "",
+        disciplines: (data.disciplines ?? []).join(", "),
+        homeTunnelId: data.home_tunnel_id ?? "",
+        websiteUrl: data.website_url ?? "",
+        youtubeUrl: data.youtube_url ?? "",
+        mobileCountryCode: data.mobile_country_code ?? fallbackMobileCountryCode,
+        mobileNumber: data.mobile_country_code
+          ? splitE164PhoneNumber(
+              data.whatsapp_number ?? data.phone,
+              data.mobile_country_code,
+            )
+          : "",
+        instagram: data.instagram_handle ?? "",
+        profileImageUrl: data.profile_image_url ?? "",
+        wantsToCreateOpportunities: data.wants_to_create_opportunities === true,
+        useLocationRecommendations: data.use_location_recommendations,
+        latitude: data.latitude ?? null,
+        longitude: data.longitude ?? null,
+        preferredRadiusKm: String(data.preferred_radius_km ?? 1000),
+      }),
+    );
+    setToast("✅ Profile updated successfully");
     router.refresh();
   }
 
   return (
     <>
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-black tracking-tight text-slate-950">
-              Profile Completion
-            </h2>
-            <p className="mt-1 text-sm font-bold text-sky-700">
-              {profileCompleteness.percent}% Complete
-            </p>
-          </div>
-          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
-            {profileCompleteness.completed}/{profileCompleteness.total}
-          </span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-sky-600 transition-all"
-            style={{ width: `${profileCompleteness.percent}%` }}
-          />
-        </div>
-        {profileCompleteness.isComplete ? (
-          <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
-            <p className="font-black">✅ Profile complete</p>
-            <p className="mt-1 leading-6">
-              Your profile can now be discovered by athletes, coaches and
-              organizers worldwide.
-            </p>
-          </div>
-        ) : (
-          <>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Complete your profile to improve your visibility for coaches,
-              athletes and organizers.
-            </p>
-            <div className="mt-3">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                Missing:
-              </p>
-              <ul className="mt-2 grid gap-1 pl-4 text-sm text-slate-700">
-                {profileCompleteness.missingFields.map((field) => (
-                  <li key={field.key} className="list-disc">
-                    <button
-                      type="button"
-                      onClick={() => focusProfileField(field.targetId)}
-                      className="font-bold text-sky-700 underline-offset-2 hover:underline"
-                    >
-                      {field.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        )}
-      </section>
+      <form onSubmit={save} className="mx-auto grid max-w-2xl gap-5 pb-8">
+        <ProfileHeader
+          fullName={fullName}
+          city={city}
+          country={country}
+          imageUrl={profileImageUrl}
+          isUploading={isUploading}
+          selectedTunnel={selectedTunnel}
+          primaryDiscipline={primaryDiscipline}
+          instagram={instagram}
+          onUpload={uploadPhoto}
+        />
 
-      <form
-        onSubmit={save}
-        className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
-      >
-      <div className="flex items-center gap-3">
-        <Avatar name={fullName} imageUrl={profileImageUrl} size="lg" />
-        <div className="min-w-0">
-          <label
-            id="profile-photo-upload"
-            tabIndex={-1}
-            className="inline-flex h-10 cursor-pointer items-center rounded-xl bg-sky-600 px-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
-          >
-            {isUploading ? "Uploading..." : "Upload photo"}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              disabled={isUploading}
-              className="sr-only"
-              onChange={(event) => void uploadPhoto(event.target.files?.[0])}
-            />
-          </label>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            JPG, PNG or WebP. Max 3 MB.
-          </p>
-        </div>
-      </div>
+        <ProfileCompletionCard
+          percent={profileCompleteness.percent}
+          completed={profileCompleteness.completed}
+          total={profileCompleteness.total}
+          isComplete={profileCompleteness.isComplete}
+          missingFields={profileCompleteness.missingFields}
+          onFocusField={focusProfileField}
+        />
 
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Name
-        <input
-          id="profile-full-name"
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-          className="field"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Profile Country
-        <input
-          id="profile-country"
-          value={country}
-          onChange={(event) => setCountry(event.target.value)}
-          className="field"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        City
-        <input
-          id="profile-city"
-          value={city}
-          onChange={(event) => setCity(event.target.value)}
-          className="field"
-          placeholder="Eloy"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Short bio
-        <textarea
-          value={bio}
-          onChange={(event) => setBio(event.target.value)}
-          className="field min-h-24 resize-y"
-          maxLength={500}
-          placeholder="A few lines about your flying, coaching, or tunnel interests."
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Disciplines
-        <input
-          id="profile-disciplines"
-          value={disciplines}
-          onChange={(event) => setDisciplines(event.target.value)}
-          className="field"
-          placeholder="FS, VFS, Dynamic, Freestyle"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Home Tunnel
-        <select
-          id="profile-home-tunnel"
-          value={homeTunnelId}
-          onChange={(event) => setHomeTunnelId(event.target.value)}
-          className="field"
+        <ProfileSection
+          title="Public Profile"
+          description="Visible to other Flyloop users."
         >
-          <option value="">No home tunnel</option>
-          {tunnels.map((tunnel) => (
-            <option key={tunnel.id} value={tunnel.id}>
-              {formatTunnelOption(tunnel)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
-        <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
-          Mobile Country Code
-          <select
-            required
-            className="field"
-            value={mobileCountryCode}
-            onChange={(event) => setMobileCountryCode(event.target.value)}
-            aria-label="Mobile country code"
-          >
-            {mobileCountryCodeOptions.map((option) => (
-              <option key={option.iso2} value={option.dialCode}>
-                {formatMobileCountryCodeLabel(option)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
-          Mobile Number
-          <input
-            required
-            inputMode="tel"
-            value={mobileNumber}
-            onChange={(event) => setMobileNumber(event.target.value)}
-            className="field"
-            placeholder="1624234820"
-            aria-label="Mobile number"
-          />
-        </label>
-      </div>
-      {normalizedPhonePreview ? (
-        <p className="-mt-3 text-xs font-semibold text-slate-500">
-          Stored as {normalizedPhonePreview}
-        </p>
-      ) : null}
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Instagram
-        <input
-          id="profile-instagram"
-          value={instagram}
-          onChange={(event) => setInstagram(event.target.value)}
-          className="field"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Website
-        <input
-          value={websiteUrl}
-          onChange={(event) => setWebsiteUrl(event.target.value)}
-          className="field"
-          placeholder="https://example.com"
-        />
-      </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        YouTube
-        <input
-          value={youtubeUrl}
-          onChange={(event) => setYoutubeUrl(event.target.value)}
-          className="field"
-          placeholder="https://youtube.com/@yourchannel"
-        />
-      </label>
-
-      <div className="grid gap-3 rounded-2xl bg-slate-50 p-4">
-        <Toggle
-          checked={wantsToCreateOpportunities}
-          label="I want to organize Camps or Huck Jams"
-          description="Create and manage camps or Huck Jams while keeping athlete features."
-          onChange={setWantsToCreateOpportunities}
-        />
-        <Toggle
-          checked={useLocationRecommendations}
-          label="Use location-based recommendations"
-          description="Use your browser location to sort nearby opportunities."
-          onChange={enableLocationRecommendations}
-        />
-        <label className="grid gap-1 text-sm font-bold text-slate-700">
-          Search radius
-          <div className="flex items-center gap-2">
+          <Field label="Name">
             <input
-              type="number"
-              min="1"
-              value={preferredRadiusKm}
-              onChange={(event) => setPreferredRadiusKm(event.target.value)}
+              id="profile-full-name"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
               className="field"
+              placeholder="Marc Hobi"
             />
-            <span className="text-sm font-semibold text-slate-500">km</span>
+          </Field>
+          <CountryField value={country} onChange={setCountry} />
+          <Field label="City">
+            <input
+              id="profile-city"
+              value={city}
+              onChange={(event) => setCity(event.target.value)}
+              className="field"
+              placeholder="Glarus"
+            />
+          </Field>
+          <Field
+            label="Short Bio"
+            helper="Tell people what you fly, coach, organize or want to learn."
+          >
+            <textarea
+              value={bio}
+              onChange={(event) => setBio(event.target.value)}
+              className="field min-h-28 resize-y py-3"
+              maxLength={500}
+              placeholder="A few lines about your flying, coaching, or tunnel interests."
+            />
+          </Field>
+        </ProfileSection>
+
+        <ProfileSection
+          title="Flying"
+          description="Used for discovery and recommendations."
+        >
+          <Field
+            label="Disciplines"
+            helper="Your first discipline becomes your primary profile chip."
+          >
+            <input
+              id="profile-disciplines"
+              value={disciplines}
+              onChange={(event) => setDisciplines(event.target.value)}
+              className="field"
+              placeholder="Belly, VFS, Dynamic, Freestyle"
+            />
+          </Field>
+          <TunnelCombobox
+            matches={tunnelMatches}
+            selectedTunnel={selectedTunnel}
+            tunnelSearch={tunnelSearch}
+            isOpen={isTunnelListOpen}
+            onSearch={(value) => {
+              setTunnelSearch(value);
+              setIsTunnelListOpen(true);
+            }}
+            onFocus={() => setIsTunnelListOpen(true)}
+            onSelect={(tunnel) => {
+              setHomeTunnelId(tunnel.id);
+              setTunnelSearch("");
+              setIsTunnelListOpen(false);
+            }}
+          />
+        </ProfileSection>
+
+        <ProfileSection
+          title="Social Links"
+          description="Instagram helps coaches and athletes discover your flying."
+        >
+          <Field
+            label="Instagram"
+            helper="Add Instagram so athletes can see your flying."
+          >
+            <input
+              id="profile-instagram"
+              value={instagram}
+              onChange={(event) => setInstagram(event.target.value)}
+              className="field"
+              placeholder="@mhobi"
+            />
+          </Field>
+          <Field label="Website">
+            <input
+              value={websiteUrl}
+              onChange={(event) => setWebsiteUrl(event.target.value)}
+              className="field"
+              placeholder="https://example.com"
+            />
+          </Field>
+          <Field label="YouTube">
+            <input
+              value={youtubeUrl}
+              onChange={(event) => setYoutubeUrl(event.target.value)}
+              className="field"
+              placeholder="https://youtube.com/@yourchannel"
+            />
+          </Field>
+        </ProfileSection>
+
+        <ProfileSection
+          title="Preferences"
+          description="Private settings that shape your Flyloop experience."
+        >
+          <SettingsRow
+            title="Organize Camps and Huck Jams"
+            description="Create and manage opportunities."
+            checked={wantsToCreateOpportunities}
+            onChange={setWantsToCreateOpportunities}
+          />
+          <SettingsRow
+            title="Location Recommendations"
+            description="Use your location for nearby opportunities."
+            checked={useLocationRecommendations}
+            onChange={enableLocationRecommendations}
+          />
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Search Radius</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Select your home tunnel to improve recommendations.
+                </p>
+              </div>
+              <label className="flex max-w-36 shrink-0 items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  value={preferredRadiusKm}
+                  onChange={(event) => setPreferredRadiusKm(event.target.value)}
+                  className="field text-right"
+                  aria-label="Search radius"
+                />
+                <span className="text-sm font-bold text-slate-500">km</span>
+              </label>
+            </div>
           </div>
-        </label>
-        {locationStatus ? (
-          <p className="rounded-xl bg-white p-3 text-sm font-semibold text-slate-600">
-            {locationStatus}
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
+            <Field label="Mobile Country Code">
+              <select
+                required
+                className="field"
+                value={mobileCountryCode}
+                onChange={(event) => setMobileCountryCode(event.target.value)}
+                aria-label="Mobile country code"
+              >
+                {mobileCountryCodeOptions.map((option) => (
+                  <option key={option.iso2} value={option.dialCode}>
+                    {formatMobileCountryCodeLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Mobile Number">
+              <input
+                required
+                inputMode="tel"
+                value={mobileNumber}
+                onChange={(event) => setMobileNumber(event.target.value)}
+                className="field"
+                placeholder="1624234820"
+                aria-label="Mobile number"
+              />
+            </Field>
+          </div>
+          {normalizedPhonePreview ? (
+            <p className="-mt-2 text-xs font-semibold text-slate-500">
+              Stored privately as {normalizedPhonePreview}
+            </p>
+          ) : null}
+          {locationStatus ? (
+            <p className="rounded-xl bg-white p-3 text-sm font-semibold text-slate-600">
+              {locationStatus}
+            </p>
+          ) : null}
+        </ProfileSection>
+
+        {toast ? (
+          <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+            {toast}
           </p>
         ) : null}
-      </div>
+        {error ? (
+          <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+            {error}
+          </p>
+        ) : null}
 
-      {message ? (
-        <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
-          {error}
-        </p>
-      ) : null}
-      <button
-        type="submit"
-        disabled={isLoading}
-        className="mt-2 h-12 rounded-xl bg-sky-600 text-sm font-bold text-white disabled:bg-slate-300"
-      >
-        {isLoading ? "Saving..." : "Save profile"}
-      </button>
+        <button
+          type="submit"
+          disabled={!isDirty || isLoading}
+          className="hidden h-12 rounded-xl bg-sky-600 text-sm font-bold text-white disabled:bg-slate-300 md:block"
+        >
+          {isLoading ? "Saving..." : "Save Changes"}
+        </button>
+
+        {isDirty ? (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur md:hidden">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="h-12 w-full rounded-xl bg-sky-600 text-sm font-bold text-white disabled:bg-slate-300"
+            >
+              {isLoading ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        ) : null}
       </form>
     </>
+  );
+}
+
+function ProfileHeader({
+  fullName,
+  city,
+  country,
+  imageUrl,
+  isUploading,
+  selectedTunnel,
+  primaryDiscipline,
+  instagram,
+  onUpload,
+}: {
+  fullName: string;
+  city: string;
+  country: string;
+  imageUrl: string;
+  isUploading: boolean;
+  selectedTunnel?: TunnelOption;
+  primaryDiscipline?: string;
+  instagram: string;
+  onUpload: (file: File | undefined) => void;
+}) {
+  const displayName = fullName.trim() || "Your Flyloop Profile";
+  const location = [city.trim(), country.trim()].filter(Boolean).join(", ");
+  const cleanInstagram = instagram.trim().replace(/^@/, "");
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white px-5 py-7 text-center shadow-sm">
+      <label className="group relative mx-auto grid size-[120px] cursor-pointer place-items-center rounded-full">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={`${displayName} profile photo`}
+            className="size-[120px] rounded-full object-cover ring-4 ring-sky-50"
+          />
+        ) : (
+          <span className="grid size-[120px] place-items-center rounded-full bg-sky-50 text-4xl font-black text-sky-700 ring-4 ring-sky-100">
+            {getInitials(displayName)}
+          </span>
+        )}
+        <span className="absolute bottom-1 right-1 grid size-9 place-items-center rounded-full bg-sky-600 text-white shadow-lg ring-4 ring-white">
+          <Camera size={17} />
+        </span>
+        <input
+          id="profile-photo-upload"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={isUploading}
+          className="sr-only"
+          onChange={(event) => onUpload(event.target.files?.[0])}
+        />
+      </label>
+      <p className="mt-3 text-xs font-bold text-slate-500">
+        Profiles with photos receive more attention.
+      </p>
+      <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">
+        {displayName}
+      </h2>
+      <p className="mt-1 text-sm font-semibold text-slate-500">
+        {location || "Add your city and country"}
+      </p>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <ProfileChip text={selectedTunnel?.name ?? "Select Home Tunnel"} />
+        <ProfileChip text={primaryDiscipline ?? "Add Discipline"} />
+        {cleanInstagram ? <ProfileChip text={`@${cleanInstagram}`} /> : null}
+      </div>
+    </section>
+  );
+}
+
+function ProfileCompletionCard({
+  percent,
+  completed,
+  total,
+  isComplete,
+  missingFields,
+  onFocusField,
+}: {
+  percent: number;
+  completed: number;
+  total: number;
+  isComplete: boolean;
+  missingFields: ReturnType<typeof calculateProfileCompleteness>["missingFields"];
+  onFocusField: (targetId: string) => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-black tracking-tight text-slate-950">
+            Profile Completion
+          </h2>
+          <p className="mt-1 text-sm font-bold text-sky-700">{percent}% Complete</p>
+        </div>
+        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+          {completed}/{total}
+        </span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-sky-600 transition-all"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      {isComplete ? (
+        <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+          <p className="font-black">✅ Profile complete</p>
+          <p className="mt-1 leading-6">
+            Your profile can now be discovered by athletes, coaches and
+            organizers worldwide.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Complete your profile to improve your visibility for coaches,
+            athletes and organizers.
+          </p>
+          <div className="mt-3">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Missing:
+            </p>
+            <ul className="mt-2 grid gap-1 pl-4 text-sm text-slate-700">
+              {missingFields.map((field) => (
+                <li key={field.key} className="list-disc">
+                  <button
+                    type="button"
+                    onClick={() => onFocusField(field.targetId)}
+                    className="font-bold text-sky-700 underline-offset-2 hover:underline"
+                  >
+                    {field.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ProfileSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="border-b border-slate-100 pb-4">
+        <h2 className="text-xl font-black tracking-tight text-slate-950">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+      </div>
+      <div className="mt-4 grid gap-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  helper,
+  children,
+}: {
+  label: string;
+  helper?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="grid gap-1.5 text-sm font-bold text-slate-700">
+      {label}
+      {children}
+      {helper ? (
+        <span className="text-xs leading-5 font-semibold text-slate-500">{helper}</span>
+      ) : null}
+    </label>
+  );
+}
+
+function CountryField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label="Country">
+      <input
+        id="profile-country"
+        list="profile-country-options"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="field"
+        placeholder="Switzerland"
+        autoComplete="country-name"
+      />
+      <datalist id="profile-country-options">
+        {countryOptions.map((countryName) => (
+          <option key={countryName} value={countryName} />
+        ))}
+      </datalist>
+    </Field>
+  );
+}
+
+function TunnelCombobox({
+  matches,
+  selectedTunnel,
+  tunnelSearch,
+  isOpen,
+  onSearch,
+  onFocus,
+  onSelect,
+}: {
+  matches: TunnelOption[];
+  selectedTunnel?: TunnelOption;
+  tunnelSearch: string;
+  isOpen: boolean;
+  onSearch: (value: string) => void;
+  onFocus: () => void;
+  onSelect: (tunnel: TunnelOption) => void;
+}) {
+  return (
+    <div className="grid gap-1.5 text-sm font-bold text-slate-700">
+      <span>Home Tunnel</span>
+      <div className="relative">
+        <input
+          id="profile-home-tunnel"
+          className="field"
+          value={tunnelSearch}
+          onChange={(event) => onSearch(event.target.value)}
+          onFocus={onFocus}
+          placeholder={
+            selectedTunnel
+              ? formatTunnelOption(selectedTunnel)
+              : "Search tunnel, city or country"
+          }
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls="profile-home-tunnel-options"
+          autoComplete="off"
+        />
+        {selectedTunnel && !tunnelSearch ? (
+          <p className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+            Selected: {formatTunnelOption(selectedTunnel)}
+          </p>
+        ) : null}
+        {isOpen ? (
+          <div
+            id="profile-home-tunnel-options"
+            role="listbox"
+            className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+          >
+            {matches.length > 0 ? (
+              matches.map((tunnel) => (
+                <button
+                  key={tunnel.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedTunnel?.id === tunnel.id}
+                  className="grid w-full gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-sky-50"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onSelect(tunnel)}
+                >
+                  <span className="text-sm font-black text-slate-900">
+                    {tunnel.name}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {[tunnel.city, tunnel.country].filter(Boolean).join(", ")}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-sm font-semibold text-slate-500">
+                No tunnel matches.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+      <p className="text-xs leading-5 font-semibold text-slate-500">
+        Select your home tunnel to improve recommendations.
+      </p>
+    </div>
+  );
+}
+
+function SettingsRow({
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4">
+      <span>
+        <span className="block text-sm font-black text-slate-900">{title}</span>
+        <span className="mt-1 block text-sm leading-6 text-slate-500">
+          {description}
+        </span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="peer sr-only"
+      />
+      <span
+        className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+          checked ? "bg-sky-600" : "bg-slate-200"
+        }`}
+      >
+        <span
+          className={`absolute top-1 size-5 rounded-full bg-white shadow transition ${
+            checked ? "left-6" : "left-1"
+          }`}
+        />
+      </span>
+    </label>
+  );
+}
+
+function ProfileChip({ text }: { text: string }) {
+  return (
+    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-bold text-slate-700">
+      {text}
+    </span>
   );
 }
 
@@ -699,31 +1082,15 @@ function formatTunnelOption(tunnel: {
   return location ? `${tunnel.name} - ${location}` : tunnel.name;
 }
 
-function Toggle({
-  checked,
-  label,
-  description,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  description: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="flex items-start justify-between gap-3 rounded-xl bg-white p-3">
-      <span>
-        <span className="block text-sm font-black text-slate-800">{label}</span>
-        <span className="mt-1 block text-xs leading-5 text-slate-500">
-          {description}
-        </span>
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 size-5 shrink-0"
-      />
-    </label>
-  );
+function getInitials(name?: string | null) {
+  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
+
+  if (parts.length === 0) {
+    return "F";
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }

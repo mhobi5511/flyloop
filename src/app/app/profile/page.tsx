@@ -28,39 +28,32 @@ export default async function ProfilePage() {
 
   return (
     <AppShell active="profile">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-black tracking-tight">Profile</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Public profile details are visible to other Flyloop users. Phone and
-          WhatsApp stay private.
-        </p>
-        <ProfileForm
-          tunnels={(tunnels ?? []) as TunnelOption[]}
-          profile={
-            profile ?? {
-              full_name: "",
-              country: "",
-              city: "",
-              bio: "",
-              disciplines: [],
-              home_tunnel_id: null,
-              website_url: "",
-              youtube_url: "",
-              mobile_country_code: null,
-              phone: "",
-              whatsapp_number: "",
-              instagram_handle: "",
-              profile_image_url: "",
-              is_organizer: false,
-              wants_to_create_opportunities: false,
-              use_location_recommendations: false,
-              latitude: null,
-              longitude: null,
-              preferred_radius_km: 1000,
-            }
+      <ProfileForm
+        tunnels={(tunnels ?? []) as TunnelOption[]}
+        profile={
+          profile ?? {
+            full_name: "",
+            country: "",
+            city: "",
+            bio: "",
+            disciplines: [],
+            home_tunnel_id: null,
+            website_url: "",
+            youtube_url: "",
+            mobile_country_code: null,
+            phone: "",
+            whatsapp_number: "",
+            instagram_handle: "",
+            profile_image_url: "",
+            is_organizer: false,
+            wants_to_create_opportunities: false,
+            use_location_recommendations: false,
+            latitude: null,
+            longitude: null,
+            preferred_radius_km: 1000,
           }
-        />
-      </div>
+        }
+      />
     </AppShell>
   );
 }
