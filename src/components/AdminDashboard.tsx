@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { AlertTriangle, MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type AdminTunnel = {
@@ -24,6 +24,14 @@ export type AdminUserOverview = {
   email: string | null;
   is_organizer: boolean | null;
   wants_to_create_opportunities: boolean | null;
+};
+
+export type AdminStats = {
+  totalUsers: number;
+  coaches: number;
+  athletesOnly: number;
+  campsCreated: number;
+  huckJamsCreated: number;
 };
 
 type TunnelDraft = Omit<AdminTunnel, "id">;
@@ -53,22 +61,16 @@ const emptyTunnel: TunnelDraft = {
   header_image_url: "",
 };
 
-type ResetSummary = {
-  notifications_deleted: number;
-  interests_deleted: number;
-  opportunities_deleted: number;
-};
-
 export function AdminDashboard({
   initialTunnels,
   initialMissingCoordinateCount,
+  stats,
   users,
-  canResetOpportunities,
 }: {
   initialTunnels: AdminTunnel[];
   initialMissingCoordinateCount: number;
+  stats: AdminStats;
   users: AdminUserOverview[];
-  canResetOpportunities: boolean;
 }) {
   const [tunnels, setTunnels] = useState(initialTunnels);
   const [query, setQuery] = useState("");
@@ -84,19 +86,16 @@ export function AdminDashboard({
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeStatus, setGeocodeStatus] = useState("");
   const [geocodeResult, setGeocodeResult] = useState<GeocodeSummary | null>(null);
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-  const [resetConfirmation, setResetConfirmation] = useState("");
-  const [isResetting, setIsResetting] = useState(false);
-  const [resetResult, setResetResult] = useState<ResetSummary | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const hasTunnelQuery = query.trim().length > 0;
 
   const filteredTunnels = useMemo(() => {
     const normalized = query.trim().toLowerCase();
 
     if (!normalized) {
-      return tunnels;
+      return [];
     }
 
     return tunnels.filter((tunnel) =>
@@ -104,9 +103,6 @@ export function AdminDashboard({
         tunnel.name,
         tunnel.city,
         tunnel.country,
-        tunnel.region,
-        tunnel.website,
-        tunnel.size,
       ]
         .filter(Boolean)
         .join(" ")
@@ -341,87 +337,8 @@ export function AdminDashboard({
     setGeocodeStatus(`${summary.updated} of ${summary.total} tunnels geocoded`);
   }
 
-  function openResetModal() {
-    setResetConfirmation("");
-    setResetResult(null);
-    setMessage("");
-    setError("");
-    setIsResetModalOpen(true);
-  }
-
-  function closeResetModal() {
-    if (isResetting) {
-      return;
-    }
-
-    setIsResetModalOpen(false);
-    setResetConfirmation("");
-  }
-
-  async function resetOpportunities() {
-    if (!canResetOpportunities || resetConfirmation !== "RESET") {
-      return;
-    }
-
-    setIsResetting(true);
-    setResetResult(null);
-    setMessage("");
-    setError("");
-
-    const response = await fetch("/api/admin/reset-opportunities", {
-      method: "POST",
-    });
-
-    setIsResetting(false);
-
-    if (!response.ok) {
-      setError("Could not reset opportunities. Check admin access and try again.");
-      return;
-    }
-
-    const payload = (await response.json()) as { summary: ResetSummary };
-    setResetResult(payload.summary);
-    setIsResetModalOpen(false);
-    setResetConfirmation("");
-    setMessage(
-      `Reset complete: deleted ${payload.summary.opportunities_deleted} opportunities, ${payload.summary.interests_deleted} applications and ${payload.summary.notifications_deleted} notifications.`,
-    );
-  }
-
   return (
     <div className="grid gap-6">
-      {canResetOpportunities ? (
-        <section className="rounded-2xl border border-rose-200 bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-black tracking-tight text-rose-950">
-                Danger Zone
-              </h2>
-              <p className="text-sm font-semibold text-rose-700">
-                Remove all Camp and Huck Jam test data while keeping users,
-                profiles and tunnels.
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={isResetting}
-              onClick={openResetModal}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-3 text-sm font-bold text-white shadow-sm disabled:bg-slate-300"
-            >
-              <Trash2 size={16} />
-              Reset all opportunities
-            </button>
-          </div>
-          {resetResult ? (
-            <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
-              Last reset deleted {resetResult.opportunities_deleted} opportunities,
-              {resetResult.interests_deleted} applications and{" "}
-              {resetResult.notifications_deleted} notifications.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -429,7 +346,7 @@ export function AdminDashboard({
               Tunnel Management
             </h2>
             <p className="text-sm font-semibold text-slate-500">
-              {filteredTunnels.length} tunnels
+              Search by tunnel name, city or country.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -461,6 +378,16 @@ export function AdminDashboard({
           </div>
         </div>
 
+        <label className="mt-3 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3">
+          <Search size={16} className="text-slate-400" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search tunnel, city or country"
+            className="min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-slate-400"
+          />
+        </label>
+
         <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
           <p>{missingCoordinateCount} tunnels still miss coordinates.</p>
           {isGeocoding || geocodeStatus ? (
@@ -487,16 +414,6 @@ export function AdminDashboard({
           ) : null}
         </div>
 
-        <label className="mt-3 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3">
-          <Search size={16} className="text-slate-400" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search tunnels"
-            className="min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-slate-400"
-          />
-        </label>
-
         {message ? (
           <p className="mt-3 rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
             {message}
@@ -508,21 +425,41 @@ export function AdminDashboard({
           </p>
         ) : null}
 
-        <div className="mt-4 hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="text-xs uppercase text-slate-400">
-              <tr>
-                <th className="py-2 pr-3">Tunnel</th>
-                <th className="py-2 pr-3">Location</th>
-                <th className="py-2 pr-3">Region</th>
-                <th className="py-2 pr-3">Size</th>
-                <th className="py-2 pr-3">Header</th>
-                <th className="py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+        {hasTunnelQuery ? (
+          <>
+            <p className="mt-3 text-sm font-bold text-slate-500">
+              {filteredTunnels.length} matching tunnels
+            </p>
+            <div className="mt-3 hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[860px] text-left text-sm">
+                <thead className="text-xs uppercase text-slate-400">
+                  <tr>
+                    <th className="py-2 pr-3">Tunnel</th>
+                    <th className="py-2 pr-3">Location</th>
+                    <th className="py-2 pr-3">Region</th>
+                    <th className="py-2 pr-3">Size</th>
+                    <th className="py-2 pr-3">Header</th>
+                    <th className="py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTunnels.map((tunnel) => (
+                    <TunnelTableRow
+                      key={tunnel.id}
+                      tunnel={tunnel}
+                      uploading={uploadingTunnelId === tunnel.id}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTunnel}
+                      onUpload={uploadHeader}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:hidden">
               {filteredTunnels.map((tunnel) => (
-                <TunnelTableRow
+                <TunnelCard
                   key={tunnel.id}
                   tunnel={tunnel}
                   uploading={uploadingTunnelId === tunnel.id}
@@ -531,24 +468,15 @@ export function AdminDashboard({
                   onUpload={uploadHeader}
                 />
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </>
+        ) : (
+          <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+            Enter a search term to find and edit tunnels.
+          </p>
+        )}
 
-        <div className="mt-4 grid gap-3 md:hidden">
-          {filteredTunnels.map((tunnel) => (
-            <TunnelCard
-              key={tunnel.id}
-              tunnel={tunnel}
-              uploading={uploadingTunnelId === tunnel.id}
-              onEdit={openEdit}
-              onDelete={setDeleteTunnel}
-              onUpload={uploadHeader}
-            />
-          ))}
-        </div>
-
-        {filteredTunnels.length === 0 ? (
+        {hasTunnelQuery && filteredTunnels.length === 0 ? (
           <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
             No tunnels match your search.
           </p>
@@ -556,37 +484,14 @@ export function AdminDashboard({
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <h2 className="text-xl font-black tracking-tight">Tunnel Images</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredTunnels.map((tunnel) => (
-            <div key={tunnel.id} className="rounded-xl border border-slate-200 p-3">
-              {tunnel.header_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={tunnel.header_image_url}
-                  alt=""
-                  className="h-28 w-full rounded-xl object-cover"
-                />
-              ) : (
-                <div className="h-28 rounded-xl bg-gradient-to-br from-sky-100 to-cyan-50" />
-              )}
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-sm font-black text-slate-900">
-                  {tunnel.name}
-                </p>
-                <ImageUploader
-                  tunnel={tunnel}
-                  uploading={uploadingTunnelId === tunnel.id}
-                  onUpload={uploadHeader}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <h2 className="text-xl font-black tracking-tight">User Overview</h2>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Total users" value={stats.totalUsers} />
+          <StatCard label="Coaches" value={stats.coaches} />
+          <StatCard label="Athletes only" value={stats.athletesOnly} />
+          <StatCard label="Camps created" value={stats.campsCreated} />
+          <StatCard label="Huck Jams created" value={stats.huckJamsCreated} />
+        </div>
         <div className="mt-3 grid gap-2">
           {users.map((user) => (
             <div
@@ -681,53 +586,19 @@ export function AdminDashboard({
         </div>
       ) : null}
 
-      {isResetModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
-            <div className="flex items-start gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-100 text-rose-700">
-                <AlertTriangle size={20} />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-xl font-black tracking-tight">
-                  Reset all opportunities?
-                </h2>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  This will delete all Camps, Huck Jams, applications, statuses
-                  and related notifications. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <label className="mt-4 grid gap-1 text-sm font-bold text-slate-700">
-              <span>Type RESET to confirm</span>
-              <input
-                value={resetConfirmation}
-                onChange={(event) => setResetConfirmation(event.target.value)}
-                className="field"
-                placeholder="RESET"
-              />
-            </label>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={isResetting}
-                onClick={closeResetModal}
-                className="h-10 rounded-xl border border-slate-200 text-sm font-bold text-slate-700 disabled:text-slate-400"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={resetConfirmation !== "RESET" || isResetting}
-                onClick={() => void resetOpportunities()}
-                className="h-10 rounded-xl bg-rose-600 text-sm font-bold text-white disabled:bg-slate-300"
-              >
-                {isResetting ? "Resetting..." : "Reset"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+        {value}
+      </p>
     </div>
   );
 }
