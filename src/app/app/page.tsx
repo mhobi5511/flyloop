@@ -157,14 +157,19 @@ export default async function AppHomePage({
 
     return (
       item.opportunity.status === "published" &&
+      item.opportunity.endDate >= today &&
       item.opportunity.availableSpots > 0 &&
       item.opportunity.createdBy !== user.id &&
       (!viewerStatus || !interactedStatuses.has(viewerStatus))
     );
   });
-  const discoveryFeed = joinable
-    .filter((item) => !useRadiusFilter || item.isNearby)
-    .sort(compareFeedItems);
+  const nearbyDiscoveryFeed = useRadiusFilter
+    ? joinable.filter((item) => item.isNearby).sort(compareFeedItems)
+    : joinable.sort(compareFeedItems);
+  const isUsingGlobalFallback = useRadiusFilter && nearbyDiscoveryFeed.length === 0;
+  const discoveryFeed = isUsingGlobalFallback
+    ? [...joinable].sort(compareStartDate)
+    : nearbyDiscoveryFeed;
   const visibleDiscoveryFeed = discoveryFeed.slice(0, 5);
   const globalSearchOpportunities = mapped
     .filter(
@@ -217,6 +222,11 @@ export default async function AppHomePage({
             </Link>
           ) : null}
         </div>
+        {isUsingGlobalFallback && visibleDiscoveryFeed.length > 0 ? (
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            No nearby opportunities found. Showing upcoming opportunities worldwide.
+          </p>
+        ) : null}
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {visibleDiscoveryFeed.length > 0 ? (
             visibleDiscoveryFeed.map((item) => (
@@ -303,6 +313,13 @@ function compareFeedItems(a: FeedItem, b: FeedItem) {
     Number(b.isFollowedCoach) - Number(a.isFollowedCoach) ||
     Number(b.isFollowedTunnel) - Number(a.isFollowedTunnel) ||
     Number(b.isPopular) - Number(a.isPopular) ||
+    sortTimestamp(b.opportunity.createdAt) - sortTimestamp(a.opportunity.createdAt)
+  );
+}
+
+function compareStartDate(a: FeedItem, b: FeedItem) {
+  return (
+    Date.parse(a.opportunity.startDate) - Date.parse(b.opportunity.startDate) ||
     sortTimestamp(b.opportunity.createdAt) - sortTimestamp(a.opportunity.createdAt)
   );
 }
