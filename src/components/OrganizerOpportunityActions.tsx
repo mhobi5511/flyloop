@@ -11,6 +11,7 @@ type OrganizerOpportunityActionsProps = {
   shareLabel: string;
   shareText: string;
   shareUrl: string;
+  hasTimetable: boolean;
 };
 
 export function OrganizerOpportunityActions({
@@ -18,6 +19,7 @@ export function OrganizerOpportunityActions({
   shareLabel,
   shareText,
   shareUrl,
+  hasTimetable,
 }: OrganizerOpportunityActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -57,6 +59,12 @@ export function OrganizerOpportunityActions({
         className="flex h-10 items-center justify-center rounded-xl bg-sky-600 px-3 text-sm font-bold text-white transition hover:bg-sky-700"
       >
         Edit Opportunity
+      </Link>
+      <Link
+        href={`/app/organizer/opportunities/${opportunityId}/timetable`}
+        className="flex h-10 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 px-3 text-sm font-bold text-sky-700 transition hover:bg-sky-100"
+      >
+        {hasTimetable ? "Edit Timetable" : "Set Timetable"}
       </Link>
       <ShareOpportunityButton
         label={shareLabel}

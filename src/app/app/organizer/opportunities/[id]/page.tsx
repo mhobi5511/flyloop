@@ -78,7 +78,11 @@ export default async function OrganizerOpportunityPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [{ data: profile }, { data: opportunity }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: opportunity },
+    { count: timetableSlotCount },
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("is_organizer,wants_to_create_opportunities")
@@ -90,6 +94,10 @@ export default async function OrganizerOpportunityPage({
       .eq("id", id)
       .eq("created_by", user?.id)
       .maybeSingle(),
+    supabase
+      .from("opportunity_time_slots")
+      .select("id", { count: "exact", head: true })
+      .eq("opportunity_id", id),
   ]);
 
   if (!opportunity) {
@@ -215,6 +223,7 @@ export default async function OrganizerOpportunityPage({
               shareLabel={shareLabel}
               shareText={shareText}
               shareUrl={publicUrl}
+              hasTimetable={(timetableSlotCount ?? 0) > 0}
             />
           </div>
         </div>
