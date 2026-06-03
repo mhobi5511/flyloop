@@ -11,12 +11,8 @@ import {
   MessageCircle,
   Users,
   WalletCards,
-  XCircle,
 } from "lucide-react";
-import {
-  releaseParticipantTimesForm,
-  sendTimetableBookingReminderForm,
-} from "@/app/app/organizer/opportunities/actions";
+import { sendTimetableBookingReminderForm } from "@/app/app/organizer/opportunities/actions";
 import { AppShell } from "@/components/AppShell";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
 import {
@@ -26,6 +22,7 @@ import {
 import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
+import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
 import {
   formatDateRange,
   formatOpportunityType,
@@ -294,17 +291,23 @@ export default async function OrganizerOpportunityPage({
                   currentOpportunity.end_date,
                 )}
               </p>
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-sm font-semibold text-slate-700">
               <p className="flex items-center gap-2">
-                <Users size={16} className="text-sky-700" />
-                {currentOpportunity.available_spots}/
-                {currentOpportunity.total_capacity} open
+                <Users size={16} className="shrink-0 text-sky-700" />
+                <span className="min-w-0">
+                  {currentOpportunity.available_spots}/
+                  {currentOpportunity.total_capacity} open
+                </span>
               </p>
               <p className="flex items-center gap-2">
-                <WalletCards size={16} className="text-sky-700" />
-                {formatPrice(
-                  Number(currentOpportunity.price),
-                  currentOpportunity.currency,
-                )}
+                <WalletCards size={16} className="shrink-0 text-sky-700" />
+                <span className="min-w-0 break-words">
+                  {formatPrice(
+                    Number(currentOpportunity.price),
+                    currentOpportunity.currency,
+                  )}
+                </span>
               </p>
             </div>
           </div>
@@ -323,33 +326,8 @@ export default async function OrganizerOpportunityPage({
       {timetableSlots.length > 0 ? (
         <details className="group mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <summary className="cursor-pointer list-none">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-xl font-black tracking-tight">Timetable</h2>
-                <div className="mt-2 grid grid-cols-1 gap-2 text-sm font-bold text-slate-700 sm:grid-cols-3">
-                  <p>
-                    <span className="text-slate-500">Booked Slots: </span>
-                    <span className="font-black text-slate-950">
-                      {timetableSummary.bookedSlots} / {timetableSummary.totalSlots}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-500">Booked Minutes: </span>
-                    <span className="font-black text-slate-950">
-                      {timetableSummary.totalBookedMinutes}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-500">Estimated Revenue: </span>
-                    <span className="font-black text-slate-950">
-                      {formatTimetableMoney(
-                        timetableSummary.estimatedRevenue,
-                        currentOpportunity.currency,
-                      )}
-                    </span>
-                  </p>
-                </div>
-              </div>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-black tracking-tight">Timetable</h2>
               <span className="inline-flex h-9 items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-black text-white transition group-open:hidden">
                 Expand
               </span>
@@ -360,18 +338,21 @@ export default async function OrganizerOpportunityPage({
           </summary>
 
           <div className="mt-4 border-t border-slate-100 pt-4">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <TimetableStat
+                  label="Booked Slots / Total Slots"
+                  value={`${timetableSummary.bookedSlots} / ${timetableSummary.totalSlots}`}
+                  caption="Slots Booked"
+                />
+                <TimetableStat
+                  label="Booked Minutes"
+                  value={`${timetableSummary.totalBookedMinutes} min`}
+                  caption="booked"
+                />
+              </div>
               <TimetableStat
-                label="Slots booked"
-                value={`${timetableSummary.bookedSlots} / ${timetableSummary.totalSlots}`}
-                caption="Slots Booked"
-              />
-              <TimetableStat
-                label="Booked minutes"
-                value={timetableSummary.totalBookedMinutes}
-              />
-              <TimetableStat
-                label="Est. revenue"
+                label="Est. Revenue"
                 value={formatTimetableMoney(
                   timetableSummary.estimatedRevenue,
                   currentOpportunity.currency,
@@ -379,24 +360,24 @@ export default async function OrganizerOpportunityPage({
               />
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <Link
                 href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.csv`}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
               >
                 <Download size={15} /> CSV
               </Link>
               <Link
                 href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.pdf`}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
               >
-                <FileDown size={15} /> Download PDF
+                <FileDown size={15} /> PDF
               </Link>
               <Link
                 href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.txt`}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
               >
-                <FileText size={15} /> Download Formatted Text
+                <FileText size={15} /> Text
               </Link>
             </div>
 
@@ -434,20 +415,12 @@ export default async function OrganizerOpportunityPage({
                                   {booking.minutes} min
                                 </p>
                               </div>
-                              <form
-                                action={releaseParticipantTimesForm.bind(
-                                  null,
-                                  currentOpportunity.id,
-                                  booking.userId,
-                                )}
-                              >
-                                <button
-                                  type="submit"
-                                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 px-2 text-xs font-black text-rose-700 transition hover:bg-rose-50"
-                                >
-                                  <XCircle size={14} /> Release Times
-                                </button>
-                              </form>
+                              <div className="grid justify-items-end">
+                                <ReleaseSlotBookingButton
+                                  opportunityId={currentOpportunity.id}
+                                  bookingId={booking.id}
+                                />
+                              </div>
                             </div>
                           ))}
                           {Array.from({ length: slot.openSpots }).map((_, index) => (

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { deleteOpportunity } from "@/app/app/opportunities/actions";
 import { ShareOpportunityButton } from "./ShareOpportunityButton";
@@ -66,20 +67,27 @@ export function OrganizerOpportunityActions({
       >
         {hasTimetable ? "Edit Timetable" : "Set Timetable"}
       </Link>
-      <ShareOpportunityButton
-        label={shareLabel}
-        shareText={shareText}
-        url={shareUrl}
-        compact
-      />
-      <button
-        type="button"
-        disabled={isPending}
-        onClick={remove}
-        className="flex h-10 w-full items-center justify-center rounded-xl border border-rose-200 px-3 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:text-slate-400"
-      >
-        {isPending ? "Working..." : "Delete Opportunity"}
-      </button>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <ShareOpportunityButton
+          label={shareLabel}
+          shareText={shareText}
+          url={shareUrl}
+          compact
+          fill
+        />
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={remove}
+          title="Delete Opportunity"
+          className="flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl border border-rose-200 px-2 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:text-slate-400 sm:px-3"
+        >
+          <Trash2 size={16} />
+          <span className="sr-only sm:not-sr-only">
+            {isPending ? "Working..." : "Delete Opportunity"}
+          </span>
+        </button>
+      </div>
       {message ? (
         <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
           {message}

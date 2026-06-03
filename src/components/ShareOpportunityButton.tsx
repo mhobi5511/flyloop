@@ -8,6 +8,7 @@ type ShareOpportunityButtonProps = {
   shareText: string;
   url: string;
   compact?: boolean;
+  fill?: boolean;
   variant?: "secondary" | "primary";
 };
 
@@ -16,6 +17,7 @@ export function ShareOpportunityButton({
   shareText,
   url,
   compact = false,
+  fill = false,
   variant = "secondary",
 }: ShareOpportunityButtonProps) {
   const [message, setMessage] = useState("");
@@ -56,7 +58,7 @@ export function ShareOpportunityButton({
   }
 
   return (
-    <div className="grid gap-1">
+    <div className={`grid min-w-0 gap-1 ${fill ? "w-full" : ""}`}>
       <button
         type="button"
         onClick={share}
@@ -64,9 +66,10 @@ export function ShareOpportunityButton({
           variant === "primary"
             ? "bg-sky-600 text-white hover:bg-sky-700"
             : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-        } ${compact ? "h-10 px-3 text-sm" : "h-11 px-4 text-sm"}`}
+        } ${compact ? "h-10 px-3 text-sm" : "h-11 px-4 text-sm"} ${fill ? "w-full min-w-0" : ""}`}
       >
-        <Share2 size={16} /> {label}
+        <Share2 size={16} className="shrink-0" />
+        <span className="truncate">{label}</span>
       </button>
       {message ? (
         <p className="text-center text-xs font-bold text-sky-700">{message}</p>
