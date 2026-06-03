@@ -102,7 +102,7 @@ export function LoginForm() {
           className="field"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
+          placeholder="Enter email address"
         />
       </label>
       <label className="grid gap-1 text-sm font-bold text-slate-700">

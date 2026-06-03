@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Camera } from "lucide-react";
+import { CountrySelect, normalizeCountrySelection } from "@/components/CountrySelect";
 import {
   fallbackMobileCountryCode,
   formatMobileCountryCodeLabel,
@@ -53,7 +54,7 @@ type TunnelOption = ProfileFormProps["tunnels"][number];
 export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile.full_name ?? "");
-  const [country, setCountry] = useState(() => normalizeProfileCountry(profile.country));
+  const [country, setCountry] = useState(() => normalizeCountrySelection(profile.country));
   const [city, setCity] = useState(profile.city ?? "");
   const [bio, setBio] = useState(profile.bio ?? "");
   const [disciplines, setDisciplines] = useState(
@@ -431,7 +432,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     }
 
     setFullName(data.full_name ?? "");
-    setCountry(normalizeProfileCountry(data.country));
+    setCountry(normalizeCountrySelection(data.country));
     setCity(data.city ?? "");
     setBio(data.bio ?? "");
     setDisciplines((data.disciplines ?? []).join(", "));
@@ -457,7 +458,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     setSavedSnapshot(
       JSON.stringify({
         fullName: data.full_name ?? "",
-        country: normalizeProfileCountry(data.country),
+        country: normalizeCountrySelection(data.country),
         city: data.city ?? "",
         bio: data.bio ?? "",
         disciplines: (data.disciplines ?? []).join(", "),
@@ -518,17 +519,21 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               className="field"
-              placeholder="Marc Hobi"
+              placeholder="Enter full name"
             />
           </Field>
-          <CountryField value={country} onChange={setCountry} />
+          <CountrySelect
+            id="profile-country"
+            value={country}
+            onChange={setCountry}
+          />
           <Field label="City">
             <input
               id="profile-city"
               value={city}
               onChange={(event) => setCity(event.target.value)}
               className="field"
-              placeholder="Glarus"
+              placeholder="Enter city"
             />
           </Field>
           <Field
@@ -558,7 +563,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
               value={disciplines}
               onChange={(event) => setDisciplines(event.target.value)}
               className="field"
-              placeholder="Belly, VFS, Dynamic, Freestyle"
+              placeholder="Enter disciplines"
             />
           </Field>
           <TunnelCombobox
@@ -592,7 +597,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
               value={instagram}
               onChange={(event) => setInstagram(event.target.value)}
               className="field"
-              placeholder="@mhobi"
+              placeholder="Enter Instagram username"
             />
           </Field>
           <Field label="Website">
@@ -600,7 +605,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
               value={websiteUrl}
               onChange={(event) => setWebsiteUrl(event.target.value)}
               className="field"
-              placeholder="https://example.com"
+              placeholder="Enter website URL"
             />
           </Field>
           <Field label="YouTube">
@@ -608,7 +613,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
               value={youtubeUrl}
               onChange={(event) => setYoutubeUrl(event.target.value)}
               className="field"
-              placeholder="https://youtube.com/@yourchannel"
+              placeholder="Enter YouTube URL"
             />
           </Field>
         </ProfileSection>
@@ -673,7 +678,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
                 value={mobileNumber}
                 onChange={(event) => setMobileNumber(event.target.value)}
                 className="field"
-                placeholder="1624234820"
+                placeholder="Enter phone number"
                 aria-label="Mobile number"
               />
             </Field>
@@ -907,6 +912,8 @@ function Field({
   );
 }
 
+// Kept temporarily to avoid changing picker internals beyond this form cleanup.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CountryField({
   value,
   onChange,
@@ -1059,11 +1066,7 @@ function TunnelCombobox({
           value={tunnelSearch}
           onChange={(event) => onSearch(event.target.value)}
           onFocus={onFocus}
-          placeholder={
-            selectedTunnel
-              ? formatTunnelOption(selectedTunnel)
-              : "Search tunnel, city or country"
-          }
+          placeholder="Search tunnel, city or country"
           role="combobox"
           aria-expanded={isOpen}
           aria-controls="profile-home-tunnel-options"
@@ -1192,6 +1195,7 @@ function getInitials(name?: string | null) {
     .join("");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function normalizeProfileCountry(country?: string | null) {
   const value = country?.trim();
 

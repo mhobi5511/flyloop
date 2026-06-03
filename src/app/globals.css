@@ -41,6 +41,16 @@ textarea {
   background: #ffffff;
 }
 
+.field::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+  opacity: 1;
+}
+
+.field:focus::placeholder {
+  color: transparent;
+}
+
 .field:focus {
   border-color: #38bdf8;
 }

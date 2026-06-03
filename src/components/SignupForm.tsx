@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { CountrySelect } from "@/components/CountrySelect";
 import {
   fallbackMobileCountryCode,
   formatMobileCountryCodeLabel,
@@ -131,18 +132,15 @@ export function SignupForm() {
           className="field"
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
-          placeholder="Your name"
+          placeholder="Enter full name"
         />
       </label>
-      <label className="grid gap-1 text-sm font-bold text-slate-700">
-        Profile Country
-        <input
-          className="field"
-          value={country}
-          onChange={(event) => setCountry(event.target.value)}
-          placeholder="Germany"
-        />
-      </label>
+      <CountrySelect
+        id="signup-country"
+        label="Profile Country"
+        value={country}
+        onChange={setCountry}
+      />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
         <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
           Mobile Country Code
@@ -168,7 +166,7 @@ export function SignupForm() {
             className="field"
             value={mobileNumber}
             onChange={(event) => setMobileNumber(event.target.value)}
-            placeholder="1624234820"
+            placeholder="Enter phone number"
             aria-label="Mobile number"
           />
         </label>
@@ -184,7 +182,7 @@ export function SignupForm() {
           className="field"
           value={instagram}
           onChange={(event) => setInstagram(event.target.value)}
-          placeholder="yourhandle"
+          placeholder="Enter Instagram username"
         />
       </label>
       <label className="grid gap-1 text-sm font-bold text-slate-700">
@@ -195,7 +193,7 @@ export function SignupForm() {
           className="field"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
+          placeholder="Enter email address"
         />
       </label>
       <label className="grid gap-1 text-sm font-bold text-slate-700">

@@ -23,12 +23,26 @@ type CreateOpportunityFormProps = {
 };
 
 const currencies = ["EUR", "CHF", "USD", "PLN", "GBP"];
+const languageOptions = [
+  "English",
+  "German",
+  "French",
+  "Spanish",
+  "Italian",
+  "Polish",
+  "Portuguese",
+  "Dutch",
+  "Swedish",
+  "Danish",
+  "Norwegian",
+  "Czech",
+];
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const premiumFieldClass =
-  "block h-[3.25rem] w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none focus:border-sky-400";
+  "block h-[3.25rem] w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 const dateFieldClass =
-  "block box-border h-14 w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 text-base outline-none focus:border-sky-400";
+  "block box-border h-14 w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 text-base outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 
 function isoDateFromNow(days: number) {
   const date = new Date();
@@ -56,6 +70,13 @@ function daysUntil(dateValue: string) {
 
 function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function splitCsv(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function validateOpportunity(values: {
@@ -147,7 +168,9 @@ export function CreateOpportunityForm({
   const [description, setDescription] = useState(
     initialOpportunity?.description ?? "",
   );
-  const [languages, setLanguages] = useState(initialOpportunity?.languages ?? "");
+  const [languages, setLanguages] = useState<string[]>(() =>
+    splitCsv(initialOpportunity?.languages ?? ""),
+  );
   const [disciplines, setDisciplines] = useState(
     initialOpportunity?.disciplines ?? "",
   );
@@ -235,7 +258,7 @@ export function CreateOpportunityForm({
         totalCapacity: Number(totalCapacity),
         minMinutesOrHours,
         description,
-        languages,
+        languages: languages.join(", "),
         disciplines,
         skillLevel,
       };
@@ -285,10 +308,10 @@ export function CreateOpportunityForm({
             onChange={(event) => setTitle(event.target.value)}
             placeholder={
               type === "camp"
-                ? "Optional, e.g. Dynamic Camp"
+                ? "Enter optional camp title"
                 : selectedTunnel
-                  ? `Optional, e.g. Huck Jam at ${selectedTunnel.name}`
-                  : "Optional"
+                  ? "Enter optional huck jam title"
+                  : "Enter optional title"
             }
           />
         </Field>
@@ -404,7 +427,7 @@ export function CreateOpportunityForm({
               className="field"
               value={minMinutesOrHours}
               onChange={(event) => setMinMinutesOrHours(event.target.value)}
-              placeholder={type === "camp" ? "45 min per athlete" : "10 min blocks"}
+              placeholder="Enter minimum time"
             />
           </Field>
           <Field label="Skill level">
@@ -412,15 +435,13 @@ export function CreateOpportunityForm({
               className="field"
               value={skillLevel}
               onChange={(event) => setSkillLevel(event.target.value)}
-              placeholder={type === "camp" ? "Intermediate" : "All levels"}
+              placeholder="Enter skill level"
             />
           </Field>
           <Field label="Languages">
-            <input
-              className="field"
-              value={languages}
-              onChange={(event) => setLanguages(event.target.value)}
-              placeholder="English, German"
+            <LanguageSelector
+              selectedLanguages={languages}
+              onChange={setLanguages}
             />
           </Field>
           <Field label="Disciplines">
@@ -428,7 +449,7 @@ export function CreateOpportunityForm({
               className="field"
               value={disciplines}
               onChange={(event) => setDisciplines(event.target.value)}
-              placeholder={type === "camp" ? "Dynamic, Angles" : "Belly, Backfly, Dynamic"}
+              placeholder="Enter disciplines"
             />
           </Field>
         </div>
@@ -533,11 +554,7 @@ function TunnelCombobox({
           value={tunnelSearch}
           onChange={(event) => onSearch(event.target.value)}
           onFocus={onFocus}
-          placeholder={
-            selectedTunnel
-              ? `${selectedTunnel.name} - ${selectedTunnel.city}, ${selectedTunnel.country}`
-              : "Search tunnel, city or country"
-          }
+          placeholder="Search tunnel, city or country"
           role="combobox"
           aria-expanded={isOpen}
           aria-controls="tunnel-options"
@@ -581,6 +598,70 @@ function TunnelCombobox({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function LanguageSelector({
+  selectedLanguages,
+  onChange,
+}: {
+  selectedLanguages: string[];
+  onChange: (languages: string[]) => void;
+}) {
+  const availableLanguages = languageOptions.filter(
+    (language) => !selectedLanguages.includes(language),
+  );
+
+  function addLanguage(value: string) {
+    if (!value || selectedLanguages.includes(value)) {
+      return;
+    }
+
+    onChange([...selectedLanguages, value]);
+  }
+
+  function removeLanguage(value: string) {
+    onChange(selectedLanguages.filter((language) => language !== value));
+  }
+
+  return (
+    <div className="grid gap-2">
+      <select
+        className="field text-slate-400"
+        value=""
+        onChange={(event) => addLanguage(event.target.value)}
+        aria-label="Select one or more languages"
+      >
+        <option value="">
+          {selectedLanguages.length === 0
+            ? "Select one or more languages"
+            : "Add another language"}
+        </option>
+        {availableLanguages.map((language) => (
+          <option key={language} value={language}>
+            {language}
+          </option>
+        ))}
+      </select>
+      {selectedLanguages.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedLanguages.map((language) => (
+            <button
+              key={language}
+              type="button"
+              onClick={() => removeLanguage(language)}
+              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-sky-50 px-2.5 text-xs font-black text-sky-700"
+              aria-label={`Remove ${language}`}
+            >
+              {language}
+              <span aria-hidden="true" className="text-sky-500">
+                x
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
