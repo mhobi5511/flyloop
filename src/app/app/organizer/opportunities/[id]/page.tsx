@@ -4,6 +4,7 @@ import {
   AtSign,
   Bell,
   CalendarDays,
+  Clock3,
   Download,
   FileDown,
   FileText,
@@ -40,12 +41,18 @@ import {
   groupTimetableSlotsByDay,
   type TimetableSlot,
 } from "@/lib/timetable";
-import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
+import type {
+  BookingMode,
+  InterestStatus,
+  OpportunityStatus,
+  OpportunityType,
+} from "@/lib/types";
 
 type OrganizerOpportunity = {
   id: string;
   title: string;
   type: OpportunityType;
+  booking_mode: BookingMode;
   status: OpportunityStatus;
   start_date: string;
   end_date: string;
@@ -139,7 +146,7 @@ export default async function OrganizerOpportunityPage({
       .maybeSingle(),
     supabase
       .from("opportunities")
-      .select("id,title,type,status,start_date,end_date,total_capacity,available_spots,price,currency,description,tunnel_profiles(name,city,country)")
+      .select("id,title,type,booking_mode,status,start_date,end_date,total_capacity,available_spots,price,currency,description,tunnel_profiles(name,city,country)")
       .eq("id", id)
       .eq("created_by", user?.id)
       .maybeSingle(),
@@ -165,6 +172,7 @@ export default async function OrganizerOpportunityPage({
     .from("opportunity_interests")
     .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
+    .neq("status", "timetable_reminder")
     .order("created_at", { ascending: false });
   const { data: timetableRows } = await supabase
     .from("opportunity_time_slots")
@@ -223,6 +231,7 @@ export default async function OrganizerOpportunityPage({
     {
       id: currentOpportunity.id,
       type: currentOpportunity.type,
+      bookingMode: currentOpportunity.booking_mode,
       title: currentOpportunity.title,
       tunnelId: "",
       tunnelName,
@@ -296,10 +305,22 @@ export default async function OrganizerOpportunityPage({
               <p className="flex items-center gap-2">
                 <Users size={16} className="shrink-0 text-sky-700" />
                 <span className="min-w-0">
-                  {currentOpportunity.available_spots}/
-                  {currentOpportunity.total_capacity} open
+                  {hasPublishedTimetable
+                    ? currentOpportunity.total_capacity -
+                      currentOpportunity.available_spots
+                    : currentOpportunity.available_spots}{" "}
+                  / {currentOpportunity.total_capacity}{" "}
+                  {hasPublishedTimetable ? "athletes" : "Spots Available"}
                 </span>
               </p>
+              {hasPublishedTimetable ? (
+                <p className="flex items-center gap-2">
+                  <Clock3 size={16} className="shrink-0 text-sky-700" />
+                  <span className="min-w-0">
+                    {timetableSummary.totalAvailableMinutes} min available
+                  </span>
+                </p>
+              ) : null}
               <p className="flex items-center gap-2">
                 <WalletCards size={16} className="shrink-0 text-sky-700" />
                 <span className="min-w-0 break-words">

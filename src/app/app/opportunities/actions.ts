@@ -23,7 +23,7 @@ export async function sendOpportunityInterest(
 
   const { data: opportunity, error: opportunityError } = await supabase
     .from("opportunities")
-    .select("id,status,available_spots,created_by")
+    .select("id,status,available_spots,created_by,booking_mode")
     .eq("id", opportunityId)
     .maybeSingle();
 
@@ -40,6 +40,13 @@ export async function sendOpportunityInterest(
     return {
       ok: false,
       message: "You manage this opportunity from the organizer dashboard.",
+    };
+  }
+
+  if (opportunity.booking_mode !== "approval_required") {
+    return {
+      ok: false,
+      message: "This opportunity uses direct time booking.",
     };
   }
 
@@ -93,6 +100,97 @@ export async function sendOpportunityInterest(
       "You will receive an update when your status changes.",
     ].join("\n"),
     status: "pending",
+  };
+}
+
+export async function setTimetableReminder(
+  opportunityId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("id,status,type,booking_mode,created_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityError) {
+    console.error("Reminder opportunity lookup failed", opportunityError);
+    return { ok: false, message: "Could not set reminder. Please try again." };
+  }
+
+  if (!opportunity || opportunity.status !== "published") {
+    return { ok: false, message: "This opportunity is no longer available." };
+  }
+
+  if (opportunity.created_by === user.id) {
+    return {
+      ok: false,
+      message: "You manage this opportunity from the organizer dashboard.",
+    };
+  }
+
+  if (opportunity.booking_mode !== "direct_time_booking") {
+    return { ok: false, message: "This opportunity uses applications first." };
+  }
+
+  const { data: existingInterest, error: existingError } = await supabase
+    .from("opportunity_interests")
+    .select("status")
+    .eq("opportunity_id", opportunityId)
+    .eq("athlete_id", user.id)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Reminder duplicate lookup failed", existingError);
+    return { ok: false, message: "Could not set reminder. Please try again." };
+  }
+
+  if (existingInterest) {
+    return {
+      ok: true,
+      message:
+        existingInterest.status === "timetable_reminder"
+          ? "You'll be notified when times are available."
+          : `You already joined this opportunity. Current status: ${formatInterestStatus(existingInterest.status)}.`,
+      status: existingInterest.status as InterestStatus,
+    };
+  }
+
+  const { error } = await supabase.from("opportunity_interests").insert({
+    opportunity_id: opportunityId,
+    athlete_id: user.id,
+    status: "timetable_reminder",
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        ok: true,
+        message: "You'll be notified when times are available.",
+        status: "timetable_reminder",
+      };
+    }
+
+    console.error("Reminder creation failed", error);
+    return { ok: false, message: "Could not set reminder. Please try again." };
+  }
+
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath("/app/dashboard");
+
+  return {
+    ok: true,
+    message: "You'll be notified when times are available.",
+    status: "timetable_reminder",
   };
 }
 

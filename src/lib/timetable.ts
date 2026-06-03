@@ -49,12 +49,18 @@ export function getTimetableSummary(slots: TimetableSlot[], hourlyPrice: number)
       slot.bookings.reduce((bookingTotal, booking) => bookingTotal + booking.minutes, 0),
     0,
   );
+  const totalTimetableMinutes = slots.reduce(
+    (total, slot) => total + slot.durationMinutes * slot.capacity,
+    0,
+  );
 
   return {
     totalSlots,
     bookedSlots,
     openSlots: Math.max(totalSlots - bookedSlots, 0),
+    totalTimetableMinutes,
     totalBookedMinutes,
+    totalAvailableMinutes: Math.max(totalTimetableMinutes - totalBookedMinutes, 0),
     estimatedRevenue: (hourlyPrice / 60) * totalBookedMinutes,
   };
 }

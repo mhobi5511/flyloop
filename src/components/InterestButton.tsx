@@ -131,6 +131,10 @@ function statusButtonLabel(status: InterestStatus) {
     return "Waitlist";
   }
 
+  if (status === "timetable_reminder") {
+    return "Reminder set";
+  }
+
   return "Pending";
 }
 
@@ -145,6 +149,10 @@ function statusHint(status: InterestStatus) {
 
   if (status === "waitlist") {
     return "You are on the waitlist for this opportunity.";
+  }
+
+  if (status === "timetable_reminder") {
+    return "You'll be notified when times are available.";
   }
 
   return [
@@ -177,7 +185,7 @@ function statusIconClass(status: InterestStatus) {
     return "text-rose-600";
   }
 
-  if (status === "waitlist") {
+  if (status === "waitlist" || status === "timetable_reminder") {
     return "text-yellow-600";
   }
 

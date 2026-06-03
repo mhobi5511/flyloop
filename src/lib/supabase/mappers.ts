@@ -3,6 +3,7 @@ import type { Opportunity } from "@/lib/types";
 export type HomeFeedRow = {
   id: string;
   type: "camp" | "huck_jam";
+  booking_mode?: "approval_required" | "direct_time_booking" | null;
   title: string;
   coach_id: string | null;
   tunnel_id: string;
@@ -35,6 +36,8 @@ export type HomeFeedRow = {
   tunnel_longitude?: number | string | null;
   tunnel_distance_km?: number | null;
   location_label?: string | null;
+  has_published_timetable?: boolean | null;
+  remaining_timetable_minutes?: number | string | null;
   is_followed_coach?: boolean | null;
 };
 
@@ -42,6 +45,9 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
   return {
     id: row.id,
     type: row.type,
+    bookingMode:
+      row.booking_mode ??
+      (row.type === "huck_jam" ? "direct_time_booking" : "approval_required"),
     title: row.title,
     coachId: row.coach_id ?? undefined,
     coachName: row.coach_name ?? undefined,
@@ -62,6 +68,14 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
     currency: row.currency,
     totalCapacity: row.total_capacity,
     availableSpots: row.available_spots,
+    hasPublishedTimetable: Boolean(row.has_published_timetable),
+    remainingTimetableMinutes:
+      row.remaining_timetable_minutes === null ||
+      row.remaining_timetable_minutes === undefined
+        ? undefined
+        : typeof row.remaining_timetable_minutes === "string"
+          ? Number.parseInt(row.remaining_timetable_minutes, 10)
+          : row.remaining_timetable_minutes,
     minMinutesOrHours: row.min_minutes_or_hours ?? undefined,
     description: row.description ?? "",
     languages: row.languages ?? [],

@@ -47,11 +47,25 @@ export default async function SlotBookingPage({
       .maybeSingle(),
   ]);
 
-  if (!row || (viewerInterest?.status as InterestStatus | undefined) !== "accepted") {
+  if (!row) {
     notFound();
   }
 
   const opportunity = mapOpportunity(row as HomeFeedRow);
+  const viewerInterestStatus =
+    (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
+  const canBook =
+    viewerInterestStatus === "accepted" ||
+    (opportunity.bookingMode === "direct_time_booking" &&
+      (!viewerInterestStatus ||
+        viewerInterestStatus === "timetable_reminder") &&
+      opportunity.status === "published" &&
+      opportunity.availableSpots > 0);
+
+  if (!canBook) {
+    notFound();
+  }
+
   const { data: slotRows, error: slotError } = await supabase.rpc(
     "get_published_opportunity_slots",
     { target_opportunity_id: opportunity.id },

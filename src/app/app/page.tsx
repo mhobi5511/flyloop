@@ -51,6 +51,7 @@ const interactedStatuses = new Set<InterestStatus>([
   "waitlist",
   "declined",
   "withdrawn",
+  "timetable_reminder",
 ]);
 
 export default async function AppHomePage({

@@ -7,7 +7,7 @@ import {
   updateOpportunity,
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
-import type { OpportunityType } from "@/lib/types";
+import type { BookingMode, OpportunityType } from "@/lib/types";
 
 export type TunnelOption = {
   id: string;
@@ -81,6 +81,7 @@ function splitCsv(value: string) {
 
 function validateOpportunity(values: {
   type: OpportunityType;
+  bookingMode: BookingMode;
   tunnelId: string;
   startDate: string;
   endDate: string;
@@ -91,6 +92,13 @@ function validateOpportunity(values: {
 }) {
   if (values.type !== "camp" && values.type !== "huck_jam") {
     return "Please choose an opportunity type.";
+  }
+
+  if (
+    values.bookingMode !== "approval_required" &&
+    values.bookingMode !== "direct_time_booking"
+  ) {
+    return "Please choose a booking mode.";
   }
 
   if (!uuidPattern.test(values.tunnelId)) {
@@ -143,6 +151,12 @@ export function CreateOpportunityForm({
   const [isPending, startTransition] = useTransition();
   const [type, setType] = useState<OpportunityType>(
     initialOpportunity?.type ?? "camp",
+  );
+  const [bookingMode, setBookingMode] = useState<BookingMode>(
+    initialOpportunity?.bookingMode ??
+      (initialOpportunity?.type === "huck_jam"
+        ? "direct_time_booking"
+        : "approval_required"),
   );
   const [title, setTitle] = useState(initialOpportunity?.title ?? "");
   const [tunnelId, setTunnelId] = useState(initialOpportunity?.tunnelId ?? "");
@@ -213,6 +227,11 @@ export function CreateOpportunityForm({
 
   function updateType(nextType: OpportunityType) {
     setType(nextType);
+    if (!initialOpportunity) {
+      setBookingMode(
+        nextType === "huck_jam" ? "direct_time_booking" : "approval_required",
+      );
+    }
     if (!endDateTouched && startDate) {
       setEndDate(nextType === "camp" ? addDays(startDate, 5) : startDate);
     }
@@ -231,6 +250,7 @@ export function CreateOpportunityForm({
 
     const validationError = validateOpportunity({
       type,
+      bookingMode,
       tunnelId,
       startDate,
       endDate,
@@ -248,6 +268,7 @@ export function CreateOpportunityForm({
     startTransition(async () => {
       const values = {
         type,
+        bookingMode,
         title,
         tunnelId,
         startDate,
@@ -315,6 +336,24 @@ export function CreateOpportunityForm({
             }
           />
         </Field>
+      </div>
+
+      <SectionTitle eyebrow="Booking mode" title="Choose how participants join" />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <BookingModeOption
+          value="approval_required"
+          selectedValue={bookingMode}
+          title="Approval Required"
+          description="Participants apply first. You decide who gets accepted. Accepted participants can then select times."
+          onChange={setBookingMode}
+        />
+        <BookingModeOption
+          value="direct_time_booking"
+          selectedValue={bookingMode}
+          title="Direct Time Booking"
+          description="Participants can immediately select available times. Booking a slot confirms participation."
+          onChange={setBookingMode}
+        />
       </div>
 
       <SectionTitle eyebrow="Location" title="Choose the tunnel" />
@@ -599,6 +638,47 @@ function TunnelCombobox({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function BookingModeOption({
+  value,
+  selectedValue,
+  title,
+  description,
+  onChange,
+}: {
+  value: BookingMode;
+  selectedValue: BookingMode;
+  title: string;
+  description: string;
+  onChange: (value: BookingMode) => void;
+}) {
+  const isSelected = selectedValue === value;
+
+  return (
+    <label
+      className={`grid cursor-pointer gap-1 rounded-2xl border px-3 py-2.5 text-sm transition ${
+        isSelected
+          ? "border-sky-300 bg-sky-50"
+          : "border-slate-200 bg-white hover:bg-slate-50"
+      }`}
+    >
+      <span className="flex items-center gap-2 font-black text-slate-950">
+        <input
+          type="radio"
+          name="bookingMode"
+          value={value}
+          checked={isSelected}
+          onChange={() => onChange(value)}
+          className="size-4 accent-sky-600"
+        />
+        {title}
+      </span>
+      <span className="pl-6 text-xs font-semibold leading-5 text-slate-600">
+        {description}
+      </span>
+    </label>
   );
 }
 

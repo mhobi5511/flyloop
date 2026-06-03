@@ -79,6 +79,22 @@ export function formatPriceLabel(type: Opportunity["type"]) {
   return type === "huck_jam" ? "shared flying time" : "per hour incl. coaching";
 }
 
+export function getCapacityLines(opportunity: Opportunity) {
+  const acceptedAthletes = Math.max(
+    opportunity.totalCapacity - opportunity.availableSpots,
+    0,
+  );
+
+  if (!opportunity.hasPublishedTimetable) {
+    return [`${opportunity.availableSpots} / ${opportunity.totalCapacity} Spots Available`];
+  }
+
+  return [
+    `${acceptedAthletes} / ${opportunity.totalCapacity} Athletes`,
+    `${opportunity.remainingTimetableMinutes ?? 0} min available`,
+  ];
+}
+
 export function getPublicOpportunityPath(id: string) {
   return `/opportunity/${id}`;
 }

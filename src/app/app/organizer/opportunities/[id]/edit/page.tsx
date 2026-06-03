@@ -6,11 +6,12 @@ import {
   type TunnelOption,
 } from "@/components/CreateOpportunityForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { OpportunityType } from "@/lib/types";
+import type { BookingMode, OpportunityType } from "@/lib/types";
 
 type OpportunityEditRow = {
   id: string;
   type: OpportunityType;
+  booking_mode: BookingMode | null;
   title: string;
   tunnel_id: string;
   start_date: string;
@@ -50,7 +51,7 @@ export default async function EditOrganizerOpportunityPage({
         .order("name", { ascending: true }),
       supabase
         .from("opportunities")
-        .select("id,type,title,tunnel_id,start_date,end_date,registration_deadline,price,currency,total_capacity,min_minutes_or_hours,description,languages,disciplines,skill_level")
+        .select("id,type,booking_mode,title,tunnel_id,start_date,end_date,registration_deadline,price,currency,total_capacity,min_minutes_or_hours,description,languages,disciplines,skill_level")
         .eq("id", id)
         .eq("created_by", user?.id)
         .maybeSingle(),
@@ -89,6 +90,11 @@ export default async function EditOrganizerOpportunityPage({
           initialOpportunity={{
             id: row.id,
             type: row.type,
+            bookingMode:
+              row.booking_mode ??
+              (row.type === "huck_jam"
+                ? "direct_time_booking"
+                : "approval_required"),
             title: row.title,
             tunnelId: row.tunnel_id,
             startDate: row.start_date,

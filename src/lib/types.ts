@@ -2,12 +2,15 @@ export type OpportunityType = "camp" | "huck_jam";
 
 export type OpportunityStatus = "draft" | "published" | "full" | "cancelled";
 
+export type BookingMode = "approval_required" | "direct_time_booking";
+
 export type InterestStatus =
   | "pending"
   | "accepted"
   | "declined"
   | "waitlist"
-  | "withdrawn";
+  | "withdrawn"
+  | "timetable_reminder";
 
 export type ContactMethod = "whatsapp" | "instagram" | "email";
 
@@ -49,6 +52,7 @@ export type Tunnel = {
 export type Opportunity = {
   id: string;
   type: OpportunityType;
+  bookingMode: BookingMode;
   title: string;
   coachId?: string;
   coachName?: string;
@@ -68,6 +72,8 @@ export type Opportunity = {
   currency: string;
   totalCapacity: number;
   availableSpots: number;
+  hasPublishedTimetable?: boolean;
+  remainingTimetableMinutes?: number;
   minMinutesOrHours?: string;
   description: string;
   languages: string[];

@@ -4,6 +4,7 @@ import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { Badge } from "./Badge";
 import {
   formatDateRange,
+  getCapacityLines,
   formatPrice,
   formatPriceLabel,
   opportunityViewModel,
@@ -38,6 +39,7 @@ export function OpportunityCard({
   const statusBorder = opportunity.viewerInterestStatus
     ? applicantBorderClass(opportunity.viewerInterestStatus)
     : "";
+  const capacityLines = getCapacityLines(opportunity);
 
   return (
     <Link
@@ -104,13 +106,21 @@ export function OpportunityCard({
       ) : null}
 
       {dense ? (
-        <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+        <>
+          <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
           <CalendarDays size={14} className="shrink-0 text-sky-600" />
           <span className="line-clamp-1">
             {formatDateRange(opportunity.startDate, opportunity.endDate)} •{" "}
-            {opportunity.availableSpots} spots
+            {capacityLines[0]}
           </span>
-        </div>
+          </div>
+          {capacityLines[1] ? (
+            <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+              <Users size={14} className="shrink-0 text-sky-600" />
+              <span>{capacityLines[1]}</span>
+            </div>
+          ) : null}
+        </>
       ) : (
         <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
           <div className="flex items-center gap-1.5">
@@ -123,8 +133,14 @@ export function OpportunityCard({
           </div>
           <div className="flex items-center gap-1.5">
             <Users size={15} className="text-sky-600" />
-            <span>{opportunity.availableSpots} spots</span>
+            <span>{capacityLines[0]}</span>
           </div>
+          {capacityLines[1] ? (
+            <div className="flex items-center gap-1.5">
+              <Users size={15} className="text-sky-600" />
+              <span>{capacityLines[1]}</span>
+            </div>
+          ) : null}
         </div>
       )}
     </Link>

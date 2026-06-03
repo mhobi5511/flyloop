@@ -7,8 +7,10 @@ import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
+import { TimetableReminderButton } from "@/components/TimetableReminderButton";
 import {
   formatDateRange,
+  getCapacityLines,
   formatPrice,
   formatOpportunityType,
   getOpportunityShareText,
@@ -77,9 +79,8 @@ export default async function OpportunityDetailPage({
     redirect(`/app/organizer/opportunities/${opportunity.id}`);
   }
 
-  const isAccepted = viewerInterestStatus === "accepted";
   const [{ count: publishedSlotCount }, { data: bookingRows }] =
-    isAccepted && user
+    user
       ? await Promise.all([
           supabase
             .from("opportunity_time_slots")
@@ -95,6 +96,16 @@ export default async function OpportunityDetailPage({
         ])
       : [{ count: 0 }, { data: [] }];
   const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
+  const isAccepted = viewerInterestStatus === "accepted";
+  const isUnavailable =
+    opportunity.status !== "published" || opportunity.availableSpots <= 0;
+  const canDirectBook =
+    opportunity.bookingMode === "direct_time_booking" &&
+    (!viewerInterestStatus ||
+      viewerInterestStatus === "accepted" ||
+      viewerInterestStatus === "timetable_reminder");
+  const canSelectTimes =
+    hasPublishedTimetable && (isAccepted || (canDirectBook && !isUnavailable));
   const bookedTimes = ((bookingRows ?? []) as BookingRow[])
     .map((booking) => {
       const slot = Array.isArray(booking.opportunity_time_slots)
@@ -123,8 +134,6 @@ export default async function OpportunityDetailPage({
   );
   const bookedEstimate = (opportunity.price / 60) * bookedMinutes;
 
-  const isUnavailable =
-    opportunity.status !== "published" || opportunity.availableSpots <= 0;
   const isLastMinute =
     opportunity.isLastMinute ?? isLastMinuteOpportunity(opportunity);
   const description = getMeaningfulDescription(opportunity.description);
@@ -142,6 +151,7 @@ export default async function OpportunityDetailPage({
     minMinutesOrHours: opportunity.minMinutesOrHours,
     registrationDeadline: opportunity.registrationDeadline,
   });
+  const capacityLines = getCapacityLines(opportunity);
 
   return (
     <AppShell active="home">
@@ -168,8 +178,14 @@ export default async function OpportunityDetailPage({
             </p>
             <p className="flex items-center gap-2">
               <Users size={16} className="text-sky-700" />
-              {opportunity.availableSpots} of {opportunity.totalCapacity} spots open
+              {capacityLines[0]}
             </p>
+            {capacityLines[1] ? (
+              <p className="flex items-center gap-2">
+                <Clock3 size={16} className="text-sky-700" />
+                {capacityLines[1]}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -244,16 +260,25 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
-          <div className="mt-4">
-            <InterestButton
-              opportunityId={opportunity.id}
-              disabled={isUnavailable}
-              initialStatus={viewerInterestStatus}
-              compact
-            />
-          </div>
+          {opportunity.bookingMode === "approval_required" ? (
+            <div className="mt-4">
+              <InterestButton
+                opportunityId={opportunity.id}
+                disabled={isUnavailable}
+                initialStatus={viewerInterestStatus}
+                compact
+              />
+            </div>
+          ) : !hasPublishedTimetable && !isUnavailable ? (
+            <div className="mt-4">
+              <TimetableReminderButton
+                opportunityId={opportunity.id}
+                initialStatus={viewerInterestStatus}
+              />
+            </div>
+          ) : null}
 
-          {isAccepted && hasPublishedTimetable ? (
+          {canSelectTimes ? (
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
               <Link
                 href={`/app/opportunities/${opportunity.id}/times`}

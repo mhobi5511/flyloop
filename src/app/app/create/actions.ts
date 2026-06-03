@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendNewTunnelNotification } from "@/lib/email/tunnel-notifications";
 import { regions } from "@/lib/location";
-import type { OpportunityType } from "@/lib/types";
+import type { BookingMode, OpportunityType } from "@/lib/types";
 
 const supportedCurrencies = ["EUR", "CHF", "USD", "PLN", "GBP"] as const;
 type Currency = (typeof supportedCurrencies)[number];
@@ -14,6 +14,7 @@ const uuidPattern =
 
 type PublishOpportunityInput = {
   type: OpportunityType;
+  bookingMode: BookingMode;
   title: string;
   tunnelId: string;
   startDate: string;
@@ -65,6 +66,10 @@ function isValidDate(value: string) {
 
 function isSupportedCurrency(value: string): value is Currency {
   return supportedCurrencies.includes(value as Currency);
+}
+
+function isBookingMode(value: string): value is BookingMode {
+  return value === "approval_required" || value === "direct_time_booking";
 }
 
 function inferRegion(country: string) {
@@ -151,6 +156,10 @@ export async function publishOpportunity(
     return { ok: false, message: "Please choose an opportunity type." };
   }
 
+  if (!isBookingMode(input.bookingMode)) {
+    return { ok: false, message: "Please choose a booking mode." };
+  }
+
   if (!uuidPattern.test(input.tunnelId)) {
     return { ok: false, message: "Please select a tunnel before publishing." };
   }
@@ -217,6 +226,7 @@ export async function publishOpportunity(
     .from("opportunities")
     .insert({
       type: input.type,
+      booking_mode: input.bookingMode,
       title,
       coach_id: null,
       tunnel_id: input.tunnelId,
@@ -275,6 +285,10 @@ export async function updateOpportunity(
 
   if (input.type !== "camp" && input.type !== "huck_jam") {
     return { ok: false, message: "Please choose an opportunity type." };
+  }
+
+  if (!isBookingMode(input.bookingMode)) {
+    return { ok: false, message: "Please choose a booking mode." };
   }
 
   if (!uuidPattern.test(input.tunnelId)) {
@@ -368,6 +382,7 @@ export async function updateOpportunity(
     .from("opportunities")
     .update({
       type: input.type,
+      booking_mode: input.bookingMode,
       title,
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
