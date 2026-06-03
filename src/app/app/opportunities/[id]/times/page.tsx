@@ -11,6 +11,7 @@ type SlotAvailabilityRow = {
   id: string;
   slot_date: string;
   start_time: string;
+  duration_minutes: number;
   capacity: number;
   booked_count: number;
   remaining_capacity: number;
@@ -65,6 +66,7 @@ export default async function SlotBookingPage({
     id: slot.id,
     slotDate: slot.slot_date,
     startTime: slot.start_time,
+    durationMinutes: slot.duration_minutes,
     capacity: slot.capacity,
     bookedCount: slot.booked_count,
     remainingCapacity: slot.remaining_capacity,

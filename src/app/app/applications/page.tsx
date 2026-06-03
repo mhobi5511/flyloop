@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Clock3 } from "lucide-react";
 import {
   ApplicationStatusBadge,
   applicantBorderClass,
@@ -77,6 +78,16 @@ type ApplicationsSearchParams = {
   tunnel?: string;
 };
 
+type UserBookingRow = {
+  id: string;
+  opportunity_id: string;
+  minutes: number;
+  opportunity_time_slots:
+    | { slot_date: string; start_time: string }
+    | Array<{ slot_date: string; start_time: string }>
+    | null;
+};
+
 const activeStatuses: InterestStatus[] = [
   "pending",
   "accepted",
@@ -107,6 +118,31 @@ export default async function ApplicationsPage({
   ]);
   const activeRows = ((applications ?? []) as ApplicationRow[]).filter((application) =>
     activeStatuses.includes(application.status),
+  );
+  const acceptedOpportunityIds = activeRows
+    .filter((application) => application.status === "accepted")
+    .map((application) => getOpportunity(application)?.id)
+    .filter((opportunityId): opportunityId is string => Boolean(opportunityId));
+  const [{ data: publishedSlotRows }, { data: bookingRows }] =
+    acceptedOpportunityIds.length > 0 && user
+      ? await Promise.all([
+          supabase
+            .from("opportunity_time_slots")
+            .select("opportunity_id")
+            .in("opportunity_id", acceptedOpportunityIds)
+            .eq("is_published", true),
+          supabase
+            .from("opportunity_slot_bookings")
+            .select("id,opportunity_id,minutes,opportunity_time_slots(slot_date,start_time)")
+            .in("opportunity_id", acceptedOpportunityIds)
+            .eq("user_id", user.id),
+        ])
+      : [{ data: [] }, { data: [] }];
+  const opportunitiesWithPublishedTimetable = new Set(
+    (publishedSlotRows ?? []).map((slot) => slot.opportunity_id),
+  );
+  const bookingsByOpportunity = groupBookingsByOpportunity(
+    (bookingRows ?? []) as UserBookingRow[],
   );
   const monthOptions = getMonthOptions(activeRows);
   const tunnelOptions = getTunnelOptions(activeRows);
@@ -170,7 +206,7 @@ export default async function ApplicationsPage({
           type="submit"
           className="col-span-2 h-10 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm sm:col-span-1"
         >
-          Apply
+          Filter
         </button>
       </form>
 
@@ -216,13 +252,43 @@ export default async function ApplicationsPage({
                     </p>
                   </div>
                 </div>
-                <Link
-                  href={`/app/opportunities/${opportunity.id}`}
-                  className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700"
-                >
-                  Details
-                </Link>
+                <div className="grid shrink-0 gap-1.5">
+                  <Link
+                    href={`/app/opportunities/${opportunity.id}`}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 text-center text-xs font-bold text-slate-700"
+                  >
+                    Details
+                  </Link>
+                  {application.status === "accepted" &&
+                  opportunitiesWithPublishedTimetable.has(opportunity.id) ? (
+                    <Link
+                      href={`/app/opportunities/${opportunity.id}/times`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-black text-white"
+                    >
+                      <Clock3 size={13} /> Select Times
+                    </Link>
+                  ) : null}
+                </div>
               </div>
+              {(bookingsByOpportunity.get(opportunity.id) ?? []).length > 0 ? (
+                <div className="mt-3">
+                  <p className="text-xs font-black uppercase text-slate-500">
+                    Booked times
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(bookingsByOpportunity.get(opportunity.id) ?? []).map(
+                      (booking) => (
+                        <span
+                          key={booking.id}
+                          className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700"
+                        >
+                          {formatBookedTime(booking.date, booking.time)}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ) : null}
               {application.status === "pending" || application.status === "waitlist" ? (
                 <div className="mt-3">
                   <WithdrawApplicationButton interestId={application.id} />
@@ -316,4 +382,46 @@ function formatMonthLabel(value: string) {
     month: "long",
     year: "numeric",
   }).format(date);
+}
+
+function groupBookingsByOpportunity(bookings: UserBookingRow[]) {
+  const groupedBookings = new Map<
+    string,
+    Array<{ id: string; date: string; time: string; minutes: number }>
+  >();
+
+  for (const booking of bookings) {
+    const slot = Array.isArray(booking.opportunity_time_slots)
+      ? booking.opportunity_time_slots[0]
+      : booking.opportunity_time_slots;
+
+    if (!slot) {
+      continue;
+    }
+
+    const opportunityBookings = groupedBookings.get(booking.opportunity_id) ?? [];
+    opportunityBookings.push({
+      id: booking.id,
+      date: slot.slot_date,
+      time: slot.start_time,
+      minutes: booking.minutes,
+    });
+    groupedBookings.set(
+      booking.opportunity_id,
+      opportunityBookings.sort((a, b) =>
+        `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`),
+      ),
+    );
+  }
+
+  return groupedBookings;
+}
+
+function formatBookedTime(dateValue: string, timeValue: string) {
+  const date = new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${dateValue}T00:00:00`));
+
+  return `${date}, ${timeValue.slice(0, 5)}`;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Clock3, Send } from "lucide-react";
+import { Check, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { bookOpportunitySlots } from "@/app/app/opportunities/actions";
 
@@ -9,6 +9,7 @@ type SlotOption = {
   id: string;
   slotDate: string;
   startTime: string;
+  durationMinutes: number;
   capacity: number;
   bookedCount: number;
   remainingCapacity: number;
@@ -22,8 +23,6 @@ type SlotBookingSelectorProps = {
   slots: SlotOption[];
 };
 
-const minutesPerSelectedSlot = 15;
-
 export function SlotBookingSelector({
   opportunityId,
   hourlyPrice,
@@ -31,17 +30,28 @@ export function SlotBookingSelector({
   slots,
 }: SlotBookingSelectorProps) {
   const router = useRouter();
-  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
+  const bookedSlotIds = useMemo(
+    () => slots.filter((slot) => slot.userHasBooking).map((slot) => slot.id),
+    [slots],
+  );
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(bookedSlotIds);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
+  const newSelectedSlotIds = selectedSlotIds.filter(
+    (slotId) => !bookedSlotIds.includes(slotId),
+  );
   const selectedCount = selectedSlotIds.length;
-  const totalMinutes = selectedCount * minutesPerSelectedSlot;
+  const totalMinutes = selectedSlots.reduce(
+    (sum, slot) => sum + slot.durationMinutes,
+    0,
+  );
   const estimatedTotal = (hourlyPrice / 60) * totalMinutes;
   const groupedSlots = useMemo(() => groupSlotsByDay(slots), [slots]);
 
   function toggleSlot(slot: SlotOption) {
-    if (slot.remainingCapacity <= 0 || slot.userHasBooking || isPending) {
+    if (slot.userHasBooking || slot.remainingCapacity <= 0 || isPending) {
       return;
     }
 
@@ -59,7 +69,7 @@ export function SlotBookingSelector({
     setError("");
 
     startTransition(async () => {
-      const result = await bookOpportunitySlots(opportunityId, selectedSlotIds);
+      const result = await bookOpportunitySlots(opportunityId, newSelectedSlotIds);
 
       if (!result.ok) {
         setError(result.message);
@@ -67,7 +77,7 @@ export function SlotBookingSelector({
       }
 
       setMessage(result.message);
-      setSelectedSlotIds([]);
+      setSelectedSlotIds((current) => [...new Set([...current, ...newSelectedSlotIds])]);
       window.setTimeout(() => {
         router.push(`/app/opportunities/${opportunityId}`);
         router.refresh();
@@ -76,19 +86,19 @@ export function SlotBookingSelector({
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       {groupedSlots.length > 0 ? (
         groupedSlots.map((day) => (
           <section
             key={day.date}
             className="rounded-2xl border border-slate-200 bg-white shadow-sm"
           >
-            <header className="rounded-t-2xl border-b border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-sm font-black uppercase text-slate-500">
+            <header className="rounded-t-2xl border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs font-black uppercase text-slate-500">
                 {formatSlotDate(day.date)}
               </p>
             </header>
-            <div className="grid gap-2 p-3">
+            <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3">
               {day.slots.map((slot) => {
                 const isSelected = selectedSlotIds.includes(slot.id);
                 const isFull = slot.remainingCapacity <= 0;
@@ -100,38 +110,41 @@ export function SlotBookingSelector({
                     type="button"
                     disabled={disabled}
                     onClick={() => toggleSlot(slot)}
-                    className={`grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
-                      isSelected
-                        ? "border-sky-300 bg-sky-50"
+                    className={`min-h-20 rounded-xl border px-2.5 py-2 text-left transition ${
+                      slot.userHasBooking
+                        ? "border-emerald-300 bg-emerald-50"
+                        : isSelected
+                          ? "border-sky-300 bg-sky-50"
                         : "border-slate-200 bg-white hover:bg-slate-50"
                     } disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <Clock3
-                        size={16}
-                        className={isSelected ? "text-sky-700" : "text-slate-400"}
-                      />
-                      <span>
-                        <span className="block text-base font-black text-slate-950">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="block text-lg font-black leading-5 text-slate-950">
                           {formatSlotTime(slot.startTime)}
                         </span>
-                        <span className="text-xs font-bold text-slate-500">
-                          {slot.userHasBooking
-                            ? "Booked by you"
-                            : isFull
-                              ? "Full"
-                              : `${slot.remainingCapacity} open`}
+                        <span className="mt-1 block text-xs font-black text-slate-600">
+                          {slot.durationMinutes} min
                         </span>
                       </span>
+                      <span
+                        className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${
+                          slot.userHasBooking
+                            ? "border-emerald-500 bg-emerald-600 text-white"
+                            : isSelected
+                              ? "border-sky-500 bg-sky-600 text-white"
+                              : "border-slate-200 bg-white text-transparent"
+                        }`}
+                      >
+                        <Check size={14} />
+                      </span>
                     </span>
-                    <span
-                      className={`flex size-7 items-center justify-center rounded-full border ${
-                        isSelected
-                          ? "border-sky-500 bg-sky-600 text-white"
-                          : "border-slate-200 bg-white text-transparent"
-                      }`}
-                    >
-                      <Check size={15} />
+                    <span className="mt-2 block text-[0.68rem] font-black uppercase text-slate-500">
+                      {slot.userHasBooking
+                        ? "Booked"
+                        : isFull
+                          ? "Full"
+                          : `${slot.remainingCapacity} open`}
                     </span>
                   </button>
                 );
@@ -156,7 +169,7 @@ export function SlotBookingSelector({
         </div>
         <button
           type="button"
-          disabled={isPending || selectedCount === 0}
+          disabled={isPending || newSelectedSlotIds.length === 0}
           onClick={bookSlots}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >

@@ -11,6 +11,19 @@ type ActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
+type ExistingTimetableSlotWithBookings = {
+  id: string;
+  slot_date: string;
+  start_time: string;
+  duration_minutes: number;
+  capacity: number;
+  is_published: boolean;
+  opportunity_slot_bookings:
+    | Array<{ user_id: string }>
+    | { user_id: string }
+    | null;
+};
+
 export async function updateApplicantStatus(
   interestId: string,
   status: InterestStatus,
@@ -138,7 +151,7 @@ export async function saveCampTimetable(
 
   const { data: opportunity, error: opportunityError } = await supabase
     .from("opportunities")
-    .select("id,created_by")
+    .select("id,created_by,title")
     .eq("id", opportunityId)
     .maybeSingle();
 
@@ -153,7 +166,7 @@ export async function saveCampTimetable(
 
   const { data: existingSlots, error: existingError } = await supabase
     .from("opportunity_time_slots")
-    .select("id")
+    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(user_id)")
     .eq("opportunity_id", opportunityId);
 
   if (existingError) {
@@ -161,7 +174,16 @@ export async function saveCampTimetable(
     return { ok: false, message: "Could not save timetable. Please try again." };
   }
 
-  const existingIds = new Set((existingSlots ?? []).map((slot) => slot.id));
+  const existingSlotRows = (existingSlots ??
+    []) as ExistingTimetableSlotWithBookings[];
+  const existingIds = new Set(existingSlotRows.map((slot) => slot.id));
+  const affectedParticipantIds = getAffectedTimetableParticipantIds(
+    existingSlotRows,
+    normalizedSlots,
+  );
+  const hasPublishedSlots = existingSlotRows.some((slot) => slot.is_published);
+  const shouldNotifyInitialPublish =
+    publish && !hasPublishedSlots && normalizedSlots.length > 0;
   const submittedIds = new Set(
     normalizedSlots
       .map((slot) => slot.id)
@@ -215,15 +237,35 @@ export async function saveCampTimetable(
     }
   }
 
-  if (publish) {
-    const { error: notificationError } = await supabase.rpc(
-      "notify_timetable_published",
-      { target_opportunity_id: opportunityId },
+  if (affectedParticipantIds.size > 0) {
+    const { error: affectedNotificationError } = await supabase.rpc(
+      "notify_timetable_bookings_changed",
+      {
+        target_opportunity_id: opportunityId,
+        affected_user_ids: [...affectedParticipantIds],
+      },
     );
 
-    if (notificationError) {
-      console.error("Timetable notification RPC failed", notificationError);
+    if (affectedNotificationError) {
+      console.error(
+        "Affected timetable notification RPC failed",
+        affectedNotificationError,
+      );
       return { ok: false, message: "Timetable saved, but notifications failed." };
+    }
+  }
+
+  if (publish) {
+    if (shouldNotifyInitialPublish) {
+      const { error: notificationError } = await supabase.rpc(
+        "notify_timetable_published",
+        { target_opportunity_id: opportunityId },
+      );
+
+      if (notificationError) {
+        console.error("Timetable notification RPC failed", notificationError);
+        return { ok: false, message: "Timetable saved, but notifications failed." };
+      }
     }
   }
 
@@ -237,6 +279,48 @@ export async function saveCampTimetable(
   }
 
   return { ok: true, message: "Timetable draft saved." };
+}
+
+function getAffectedTimetableParticipantIds(
+  existingSlots: ExistingTimetableSlotWithBookings[],
+  normalizedSlots: ReturnType<typeof normalizeTimetableSlots>,
+) {
+  const affectedParticipantIds = new Set<string>();
+  const submittedSlotsById = new Map(
+    normalizedSlots
+      .filter((slot) => slot.id)
+      .map((slot) => [slot.id as string, slot]),
+  );
+
+  for (const existingSlot of existingSlots) {
+    const bookings = Array.isArray(existingSlot.opportunity_slot_bookings)
+      ? existingSlot.opportunity_slot_bookings
+      : existingSlot.opportunity_slot_bookings
+        ? [existingSlot.opportunity_slot_bookings]
+        : [];
+
+    if (bookings.length === 0) {
+      continue;
+    }
+
+    const submittedSlot = submittedSlotsById.get(existingSlot.id);
+    const wasRemoved = !submittedSlot;
+    const wasChanged = submittedSlot
+      ? existingSlot.slot_date !== submittedSlot.slotDate ||
+        normalizeTime(existingSlot.start_time) !== submittedSlot.startTime ||
+        existingSlot.duration_minutes !== submittedSlot.durationMinutes
+      : false;
+
+    if (!wasRemoved && !wasChanged) {
+      continue;
+    }
+
+    for (const booking of bookings) {
+      affectedParticipantIds.add(booking.user_id);
+    }
+  }
+
+  return affectedParticipantIds;
 }
 
 function normalizeTimetableSlots(slots: TimetableSlotInput[]) {
