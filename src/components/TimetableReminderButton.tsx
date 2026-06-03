@@ -3,22 +3,20 @@
 import { useState, useTransition } from "react";
 import { Bell, CheckCircle2 } from "lucide-react";
 import { setTimetableReminder } from "@/app/app/opportunities/actions";
-import type { InterestStatus } from "@/lib/types";
 
 type TimetableReminderButtonProps = {
   opportunityId: string;
-  initialStatus?: InterestStatus;
+  initialReminderSet?: boolean;
 };
 
 export function TimetableReminderButton({
   opportunityId,
-  initialStatus,
+  initialReminderSet = false,
 }: TimetableReminderButtonProps) {
-  const [status, setStatus] = useState<InterestStatus | undefined>(initialStatus);
+  const [hasReminder, setHasReminder] = useState(initialReminderSet);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
-  const hasReminder = status === "timetable_reminder";
 
   function remindMe() {
     setMessage("");
@@ -32,7 +30,7 @@ export function TimetableReminderButton({
         return;
       }
 
-      setStatus(result.status ?? "timetable_reminder");
+      setHasReminder(true);
       setMessage(result.message);
     });
   }

@@ -172,7 +172,7 @@ export default async function OrganizerOpportunityPage({
     .from("opportunity_interests")
     .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
-    .neq("status", "timetable_reminder")
+    .neq("interest_type", "timetable_reminder")
     .order("created_at", { ascending: false });
   const { data: timetableRows } = await supabase
     .from("opportunity_time_slots")

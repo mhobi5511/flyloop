@@ -40,12 +40,16 @@ export function InterestButton({
 
       const { data } = await supabase
         .from("opportunity_interests")
-        .select("status")
+        .select("status,interest_type")
         .eq("opportunity_id", opportunityId)
         .eq("athlete_id", user.id)
         .maybeSingle();
 
-      setInterestStatus((data?.status as InterestStatus | undefined) ?? null);
+      setInterestStatus(
+        data?.interest_type === "timetable_reminder"
+          ? null
+          : ((data?.status as InterestStatus | undefined) ?? null),
+      );
     }
 
     if (!initialStatus) {
@@ -131,10 +135,6 @@ function statusButtonLabel(status: InterestStatus) {
     return "Waitlist";
   }
 
-  if (status === "timetable_reminder") {
-    return "Reminder set";
-  }
-
   return "Pending";
 }
 
@@ -149,10 +149,6 @@ function statusHint(status: InterestStatus) {
 
   if (status === "waitlist") {
     return "You are on the waitlist for this opportunity.";
-  }
-
-  if (status === "timetable_reminder") {
-    return "You'll be notified when times are available.";
   }
 
   return [
@@ -185,7 +181,7 @@ function statusIconClass(status: InterestStatus) {
     return "text-rose-600";
   }
 
-  if (status === "waitlist" || status === "timetable_reminder") {
+  if (status === "waitlist") {
     return "text-yellow-600";
   }
 

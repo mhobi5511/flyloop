@@ -26,6 +26,7 @@ type HomeProfile = {
 type InterestRow = {
   opportunity_id: string;
   status: InterestStatus;
+  interest_type: string | null;
 };
 
 type HomeSearchParams = {
@@ -51,7 +52,6 @@ const interactedStatuses = new Set<InterestStatus>([
   "waitlist",
   "declined",
   "withdrawn",
-  "timetable_reminder",
 ]);
 
 export default async function AppHomePage({
@@ -111,7 +111,7 @@ export default async function AppHomePage({
     opportunityIds.length > 0
       ? await supabase
           .from("opportunity_interests")
-          .select("opportunity_id,status")
+          .select("opportunity_id,status,interest_type")
           .eq("athlete_id", user.id)
           .in("opportunity_id", opportunityIds)
       : { data: [] };
@@ -122,7 +122,7 @@ export default async function AppHomePage({
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
-      interest.status,
+      interest.interest_type === "timetable_reminder" ? undefined : interest.status,
     ]),
   );
   const userLat = parseCoordinate(homeProfile?.latitude);

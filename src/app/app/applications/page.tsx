@@ -19,6 +19,7 @@ import type { InterestStatus, OpportunityType } from "@/lib/types";
 type ApplicationRow = {
   id: string;
   status: InterestStatus;
+  interest_type: string | null;
   created_at: string;
   opportunities:
     | {
@@ -112,11 +113,12 @@ export default async function ApplicationsPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("id,status,created_at,opportunities(id,title,type,start_date,end_date,price,currency,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
+      .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,price,currency,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
   ]);
   const activeRows = ((applications ?? []) as ApplicationRow[]).filter((application) =>
+    application.interest_type !== "timetable_reminder" &&
     activeStatuses.includes(application.status),
   );
   const acceptedOpportunityIds = activeRows

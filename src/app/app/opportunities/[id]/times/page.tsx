@@ -41,7 +41,7 @@ export default async function SlotBookingPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("status")
+      .select("status,interest_type")
       .eq("opportunity_id", id)
       .eq("athlete_id", user.id)
       .maybeSingle(),
@@ -54,11 +54,12 @@ export default async function SlotBookingPage({
   const opportunity = mapOpportunity(row as HomeFeedRow);
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
+  const viewerHasTimetableReminder =
+    viewerInterest?.interest_type === "timetable_reminder";
   const canBook =
     viewerInterestStatus === "accepted" ||
     (opportunity.bookingMode === "direct_time_booking" &&
-      (!viewerInterestStatus ||
-        viewerInterestStatus === "timetable_reminder") &&
+      (!viewerInterestStatus || viewerHasTimetableReminder) &&
       opportunity.status === "published" &&
       opportunity.availableSpots > 0);
 

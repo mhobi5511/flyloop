@@ -7,7 +7,6 @@ const labels: Record<InterestStatus, string> = {
   waitlist: "Waitlist",
   declined: "Declined",
   withdrawn: "Withdrawn",
-  timetable_reminder: "Reminder Set",
 };
 
 const icons: Record<InterestStatus, string> = {
@@ -16,7 +15,6 @@ const icons: Record<InterestStatus, string> = {
   waitlist: "i",
   declined: "x",
   withdrawn: "-",
-  timetable_reminder: "i",
 };
 
 export function ApplicationStatusBadge({ status }: { status: InterestStatus }) {
@@ -37,7 +35,7 @@ export function applicationStatusTone(status: InterestStatus) {
     return "red";
   }
 
-  if (status === "waitlist" || status === "timetable_reminder") {
+  if (status === "waitlist") {
     return "blue";
   }
 
@@ -61,7 +59,7 @@ export function applicantBorderClass(status: InterestStatus) {
     return "border-l-4 border-l-rose-500";
   }
 
-  if (status === "waitlist" || status === "timetable_reminder") {
+  if (status === "waitlist") {
     return "border-l-4 border-l-sky-500";
   }
 

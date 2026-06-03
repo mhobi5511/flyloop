@@ -67,13 +67,15 @@ export default async function OpportunityDetailPage({
     user && user.id !== opportunity.createdBy
       ? await supabase
           .from("opportunity_interests")
-          .select("status")
+          .select("status,interest_type")
           .eq("opportunity_id", opportunity.id)
           .eq("athlete_id", user.id)
           .maybeSingle()
       : { data: null };
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
+  const viewerHasTimetableReminder =
+    viewerInterest?.interest_type === "timetable_reminder";
   const isOrganizer = user?.id === opportunity.createdBy;
   if (isOrganizer) {
     redirect(`/app/organizer/opportunities/${opportunity.id}`);
@@ -103,7 +105,7 @@ export default async function OpportunityDetailPage({
     opportunity.bookingMode === "direct_time_booking" &&
     (!viewerInterestStatus ||
       viewerInterestStatus === "accepted" ||
-      viewerInterestStatus === "timetable_reminder");
+      viewerHasTimetableReminder);
   const canSelectTimes =
     hasPublishedTimetable && (isAccepted || (canDirectBook && !isUnavailable));
   const bookedTimes = ((bookingRows ?? []) as BookingRow[])
@@ -273,7 +275,7 @@ export default async function OpportunityDetailPage({
             <div className="mt-4">
               <TimetableReminderButton
                 opportunityId={opportunity.id}
-                initialStatus={viewerInterestStatus}
+                initialReminderSet={viewerHasTimetableReminder}
               />
             </div>
           ) : null}

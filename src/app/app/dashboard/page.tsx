@@ -28,7 +28,13 @@ type OrganizerOpportunityRow = {
     | { name: string; city: string | null; country: string | null }
     | Array<{ name: string; city: string | null; country: string | null }>
     | null;
-  opportunity_interests: Array<{ status: InterestStatus; created_at: string | null }> | null;
+  opportunity_interests:
+    | Array<{
+        status: InterestStatus;
+        interest_type: string | null;
+        created_at: string | null;
+      }>
+    | null;
 };
 
 type HealthStatus = "healthy" | "needs-attention" | "urgent";
@@ -123,7 +129,7 @@ export default async function OrganizerDashboardPage({
     supabase
       .from("opportunities")
       .select(
-        "id,title,type,status,start_date,end_date,registration_deadline,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,created_at)",
+        "id,title,type,status,start_date,end_date,registration_deadline,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,interest_type,created_at)",
       )
       .eq("created_by", user?.id)
       .order("start_date", { ascending: true }),
@@ -238,7 +244,9 @@ function toCardModel(
   const tunnel = Array.isArray(opportunity.tunnel_profiles)
     ? opportunity.tunnel_profiles[0]
     : opportunity.tunnel_profiles;
-  const interests = opportunity.opportunity_interests ?? [];
+  const interests = (opportunity.opportunity_interests ?? []).filter(
+    (interest) => interest.interest_type !== "timetable_reminder",
+  );
   const counts = Object.fromEntries(
     statuses.map((status) => [
       status,
@@ -327,7 +335,9 @@ function getOpportunityHealth({
   const capacity = Math.max(opportunity.total_capacity, 1);
   const bookedRatio = bookedSpots / capacity;
   const oldestPendingAgeDays = getOldestPendingAgeDays(
-    opportunity.opportunity_interests ?? [],
+    (opportunity.opportunity_interests ?? []).filter(
+      (interest) => interest.interest_type !== "timetable_reminder",
+    ),
     now,
   );
   const today = dateOnly(now);

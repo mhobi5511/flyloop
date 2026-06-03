@@ -8,6 +8,35 @@ type ActionResult =
   | { ok: true; message: string; status?: InterestStatus }
   | { ok: false; message: string };
 
+function debugSupabaseMessage(error: {
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string;
+}) {
+  return [
+    error.message,
+    error.details,
+    error.hint,
+    error.code ? `Code: ${error.code}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function reminderErrorMessage(error: {
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string;
+}) {
+  if (process.env.NODE_ENV !== "production") {
+    return debugSupabaseMessage(error) || "Could not set reminder.";
+  }
+
+  return "Could not set reminder. Please try again.";
+}
+
 export async function sendOpportunityInterest(
   opportunityId: string,
 ): Promise<ActionResult> {
@@ -144,23 +173,35 @@ export async function setTimetableReminder(
 
   const { data: existingInterest, error: existingError } = await supabase
     .from("opportunity_interests")
-    .select("status")
+    .select("status,interest_type")
     .eq("opportunity_id", opportunityId)
     .eq("athlete_id", user.id)
     .maybeSingle();
 
   if (existingError) {
-    console.error("Reminder duplicate lookup failed", existingError);
-    return { ok: false, message: "Could not set reminder. Please try again." };
+    console.error("Reminder duplicate lookup failed", {
+      opportunityId,
+      userId: user.id,
+      code: existingError.code,
+      message: existingError.message,
+      details: existingError.details,
+      hint: existingError.hint,
+      error: existingError,
+    });
+    return { ok: false, message: reminderErrorMessage(existingError) };
   }
 
   if (existingInterest) {
+    if (existingInterest.interest_type === "timetable_reminder") {
+      return {
+        ok: true,
+        message: "You'll be notified when times are available.",
+      };
+    }
+
     return {
       ok: true,
-      message:
-        existingInterest.status === "timetable_reminder"
-          ? "You'll be notified when times are available."
-          : `You already joined this opportunity. Current status: ${formatInterestStatus(existingInterest.status)}.`,
+      message: `You already joined this opportunity. Current status: ${formatInterestStatus(existingInterest.status)}.`,
       status: existingInterest.status as InterestStatus,
     };
   }
@@ -168,7 +209,7 @@ export async function setTimetableReminder(
   const { error } = await supabase.from("opportunity_interests").insert({
     opportunity_id: opportunityId,
     athlete_id: user.id,
-    status: "timetable_reminder",
+    interest_type: "timetable_reminder",
   });
 
   if (error) {
@@ -176,12 +217,19 @@ export async function setTimetableReminder(
       return {
         ok: true,
         message: "You'll be notified when times are available.",
-        status: "timetable_reminder",
       };
     }
 
-    console.error("Reminder creation failed", error);
-    return { ok: false, message: "Could not set reminder. Please try again." };
+    console.error("Reminder creation failed", {
+      opportunityId,
+      userId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      error,
+    });
+    return { ok: false, message: reminderErrorMessage(error) };
   }
 
   revalidatePath(`/app/opportunities/${opportunityId}`);
@@ -190,7 +238,6 @@ export async function setTimetableReminder(
   return {
     ok: true,
     message: "You'll be notified when times are available.",
-    status: "timetable_reminder",
   };
 }
 

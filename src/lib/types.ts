@@ -9,8 +9,9 @@ export type InterestStatus =
   | "accepted"
   | "declined"
   | "waitlist"
-  | "withdrawn"
-  | "timetable_reminder";
+  | "withdrawn";
+
+export type InterestType = "application" | "timetable_reminder";
 
 export type ContactMethod = "whatsapp" | "instagram" | "email";
 

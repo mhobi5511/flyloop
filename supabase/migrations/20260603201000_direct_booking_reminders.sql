@@ -2,6 +2,20 @@ update public.opportunities
 set booking_mode = 'approval_required'
 where booking_mode is null;
 
+alter table public.opportunity_interests
+  add column if not exists interest_type text not null default 'application';
+
+alter table public.opportunity_interests
+  drop constraint if exists opportunity_interests_interest_type_check;
+
+alter table public.opportunity_interests
+  add constraint opportunity_interests_interest_type_check
+  check (interest_type in ('application', 'timetable_reminder'));
+
+update public.opportunity_interests
+set interest_type = 'application'
+where interest_type is null;
+
 drop view if exists public.published_opportunities_with_context;
 
 create view public.published_opportunities_with_context as
@@ -65,7 +79,6 @@ create policy "Users create interests for published opportunities"
 on public.opportunity_interests for insert
 with check (
   athlete_id = auth.uid()
-  and status in ('pending', 'timetable_reminder')
   and exists (
     select 1 from public.profiles
     where id = auth.uid()
@@ -77,10 +90,27 @@ with check (
       and o.status = 'published'
       and o.available_spots > 0
       and (
-        (o.booking_mode = 'approval_required' and status = 'pending')
-        or (o.booking_mode = 'direct_time_booking' and status = 'timetable_reminder')
+        (
+          o.booking_mode = 'approval_required'
+          and opportunity_interests.status = 'pending'
+          and opportunity_interests.interest_type = 'application'
+        )
+        or (
+          o.booking_mode = 'direct_time_booking'
+          and opportunity_interests.status = 'pending'
+          and opportunity_interests.interest_type = 'timetable_reminder'
+        )
       )
   )
+);
+
+drop policy if exists "Users delete own timetable reminders" on public.opportunity_interests;
+
+create policy "Users delete own timetable reminders"
+on public.opportunity_interests for delete
+using (
+  athlete_id = auth.uid()
+  and interest_type = 'timetable_reminder'
 );
 
 drop policy if exists "Organizers read interested user profiles" on public.profiles;
@@ -95,7 +125,7 @@ using (
     join public.opportunities o on o.id = oi.opportunity_id
     where oi.athlete_id = profiles.id
       and o.created_by = auth.uid()
-      and oi.status <> 'timetable_reminder'
+      and oi.interest_type <> 'timetable_reminder'
   )
 );
 
@@ -184,6 +214,7 @@ end;
 $$;
 
 drop policy if exists "Accepted participants read own opportunity slots" on public.opportunity_time_slots;
+drop policy if exists "Accepted or direct participants read opportunity slots" on public.opportunity_time_slots;
 
 create policy "Accepted or direct participants read opportunity slots"
 on public.opportunity_time_slots for select
@@ -210,7 +241,8 @@ using (
           from public.opportunity_interests blocked
           where blocked.opportunity_id = opportunity_time_slots.opportunity_id
             and blocked.athlete_id = auth.uid()
-            and blocked.status not in ('accepted', 'timetable_reminder')
+            and blocked.status <> 'accepted'
+            and blocked.interest_type <> 'timetable_reminder'
         )
     )
   )
@@ -269,7 +301,8 @@ as $$
           from public.opportunity_interests blocked
           where blocked.opportunity_id = target_opportunity_id
             and blocked.athlete_id = auth.uid()
-            and blocked.status not in ('accepted', 'timetable_reminder')
+            and blocked.status <> 'accepted'
+            and blocked.interest_type <> 'timetable_reminder'
         )
       )
     )
@@ -338,7 +371,10 @@ begin
         using errcode = '42501';
     end if;
   else
-    if found and interest_record.status not in ('accepted', 'timetable_reminder') then
+    if found
+      and interest_record.status <> 'accepted'
+      and interest_record.interest_type <> 'timetable_reminder'
+    then
       raise exception 'This participation cannot book slots'
         using errcode = '42501';
     end if;
@@ -347,15 +383,19 @@ begin
       insert into public.opportunity_interests (
         opportunity_id,
         athlete_id,
-        status
+        status,
+        interest_type
       ) values (
         target_opportunity_id,
         current_user_id,
-        'accepted'
+        'accepted',
+        'application'
       );
-    elsif interest_record.status = 'timetable_reminder' then
+    elsif interest_record.interest_type = 'timetable_reminder' then
       update public.opportunity_interests
-      set status = 'accepted'
+      set
+        status = 'accepted',
+        interest_type = 'application'
       where id = interest_record.id;
     end if;
   end if;
@@ -454,7 +494,10 @@ begin
     target_opportunity_id
   from public.opportunity_interests oi
   where oi.opportunity_id = target_opportunity_id
-    and oi.status in ('accepted', 'timetable_reminder')
+    and (
+      oi.status = 'accepted'
+      or oi.interest_type = 'timetable_reminder'
+    )
     and oi.athlete_id <> opportunity_record.created_by
     and not exists (
       select 1
