@@ -204,3 +204,53 @@ export async function deleteOpportunity(
 
   return { ok: true, message: "Opportunity deleted." };
 }
+
+export async function bookOpportunitySlots(
+  opportunityId: string,
+  slotIds: string[],
+): Promise<ActionResult> {
+  const uniqueSlotIds = [...new Set(slotIds)].filter(Boolean);
+
+  if (uniqueSlotIds.length === 0) {
+    return { ok: false, message: "Select at least one slot." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { error } = await supabase.rpc("book_opportunity_slots", {
+    target_opportunity_id: opportunityId,
+    target_slot_ids: uniqueSlotIds,
+  });
+
+  if (error) {
+    console.error("Slot booking failed", {
+      opportunityId,
+      userId: user.id,
+      slotIds: uniqueSlotIds,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Could not book slots. Please try again.",
+    };
+  }
+
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/applications");
+  revalidatePath("/app/dashboard");
+
+  return { ok: true, message: "Your slots are booked." };
+}

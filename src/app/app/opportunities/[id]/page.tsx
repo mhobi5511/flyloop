@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarDays, Clock3, MapPin, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
@@ -21,6 +21,21 @@ import type { InterestStatus } from "@/lib/types";
 
 type OpportunityDetailRow = HomeFeedRow & {
   coach_profile_image_url?: string | null;
+};
+
+type BookingRow = {
+  id: string;
+  minutes: number;
+  opportunity_time_slots:
+    | {
+        slot_date: string;
+        start_time: string;
+      }
+    | Array<{
+        slot_date: string;
+        start_time: string;
+      }>
+    | null;
 };
 
 export default async function OpportunityDetailPage({
@@ -61,6 +76,47 @@ export default async function OpportunityDetailPage({
   if (isOrganizer) {
     redirect(`/app/organizer/opportunities/${opportunity.id}`);
   }
+
+  const isAccepted = viewerInterestStatus === "accepted";
+  const [{ count: publishedSlotCount }, { data: bookingRows }] =
+    isAccepted && user
+      ? await Promise.all([
+          supabase
+            .from("opportunity_time_slots")
+            .select("id", { count: "exact", head: true })
+            .eq("opportunity_id", opportunity.id)
+            .eq("is_published", true),
+          supabase
+            .from("opportunity_slot_bookings")
+            .select("id,minutes,opportunity_time_slots(slot_date,start_time)")
+            .eq("opportunity_id", opportunity.id)
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: true }),
+        ])
+      : [{ count: 0 }, { data: [] }];
+  const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
+  const bookedTimes = ((bookingRows ?? []) as BookingRow[])
+    .map((booking) => {
+      const slot = Array.isArray(booking.opportunity_time_slots)
+        ? booking.opportunity_time_slots[0]
+        : booking.opportunity_time_slots;
+
+      return slot
+        ? {
+            id: booking.id,
+            date: slot.slot_date,
+            time: slot.start_time,
+            minutes: booking.minutes,
+          }
+        : null;
+    })
+    .filter(
+      (
+        booking,
+      ): booking is { id: string; date: string; time: string; minutes: number } =>
+        Boolean(booking),
+    )
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
@@ -192,6 +248,34 @@ export default async function OpportunityDetailPage({
             />
           </div>
 
+          {isAccepted && hasPublishedTimetable ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+              <Link
+                href={`/app/opportunities/${opportunity.id}/times`}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+              >
+                <Clock3 size={17} /> Select Times
+              </Link>
+              {bookedTimes.length > 0 ? (
+                <div className="mt-3">
+                  <p className="text-xs font-black uppercase text-slate-500">
+                    Your booked times
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {bookedTimes.map((booking) => (
+                      <span
+                        key={booking.id}
+                        className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-black text-sky-700"
+                      >
+                        {formatBookedTime(booking.date, booking.time)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-3 flex flex-wrap gap-2">
             <ShareOpportunityButton
               label={shareLabel}
@@ -313,4 +397,13 @@ function formatRegistrationDeadline(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(date)}`;
+}
+
+function formatBookedTime(dateValue: string, timeValue: string) {
+  const date = new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${dateValue}T00:00:00`));
+
+  return `${date}, ${timeValue.slice(0, 5)}`;
 }
