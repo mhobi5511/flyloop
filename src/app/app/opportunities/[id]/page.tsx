@@ -76,6 +76,9 @@ export default async function OpportunityDetailPage({
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
     viewerInterest?.interest_type === "timetable_reminder";
+  const viewerApplicationStatus = viewerHasTimetableReminder
+    ? undefined
+    : viewerInterestStatus;
   const isOrganizer = user?.id === opportunity.createdBy;
   if (isOrganizer) {
     redirect(`/app/organizer/opportunities/${opportunity.id}`);
@@ -98,13 +101,17 @@ export default async function OpportunityDetailPage({
         ])
       : [{ count: 0 }, { data: [] }];
   const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
-  const isAccepted = viewerInterestStatus === "accepted";
+  const isAccepted = viewerApplicationStatus === "accepted";
+  const isDeclined = viewerApplicationStatus === "declined";
+  const isWaitlisted = viewerApplicationStatus === "waitlist";
+  const isBlockedFromBooking = isDeclined || isWaitlisted;
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
   const canDirectBook =
     opportunity.bookingMode === "direct_time_booking" &&
-    (!viewerInterestStatus ||
-      viewerInterestStatus === "accepted" ||
+    !isBlockedFromBooking &&
+    (!viewerApplicationStatus ||
+      viewerApplicationStatus === "accepted" ||
       viewerHasTimetableReminder);
   const canSelectTimes =
     hasPublishedTimetable && (isAccepted || (canDirectBook && !isUnavailable));
@@ -262,12 +269,18 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
-          {opportunity.bookingMode === "approval_required" ? (
+          {isDeclined ? (
+            <StatusMessage message="Your application was declined." />
+          ) : isWaitlisted ? (
+            <StatusMessage message="You are on the waitlist." />
+          ) : isAccepted && !hasPublishedTimetable ? (
+            <StatusMessage message="You are accepted. The timetable is not available yet." />
+          ) : opportunity.bookingMode === "approval_required" ? (
             <div className="mt-4">
               <InterestButton
                 opportunityId={opportunity.id}
                 disabled={isUnavailable}
-                initialStatus={viewerInterestStatus}
+                initialStatus={viewerApplicationStatus}
                 compact
               />
             </div>
@@ -380,6 +393,14 @@ function formatLocation(city?: string, country?: string) {
   }
 
   return city ?? country ?? "Location to be confirmed";
+}
+
+function StatusMessage({ message }: { message: string }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700">
+      {message}
+    </div>
+  );
 }
 
 function getMeaningfulDescription(description: string) {

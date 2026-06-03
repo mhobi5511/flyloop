@@ -199,6 +199,19 @@ export async function setTimetableReminder(
       };
     }
 
+    if (
+      existingInterest.status === "declined" ||
+      existingInterest.status === "waitlist"
+    ) {
+      return {
+        ok: false,
+        message:
+          existingInterest.status === "declined"
+            ? "Your application was declined."
+            : "You are on the waitlist.",
+      };
+    }
+
     return {
       ok: true,
       message: `You already joined this opportunity. Current status: ${formatInterestStatus(existingInterest.status)}.`,

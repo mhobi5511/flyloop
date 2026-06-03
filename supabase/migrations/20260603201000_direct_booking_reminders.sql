@@ -73,6 +73,111 @@ where o.status in ('published', 'full');
 
 grant select on public.published_opportunities_with_context to anon, authenticated;
 
+create or replace function public.notify_organizer_of_new_interest()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  organizer_id uuid;
+  opportunity_title text;
+  opportunity_type public.opportunity_type;
+  opportunity_start date;
+  tunnel_name text;
+  athlete_name text;
+  date_text text;
+begin
+  if new.interest_type = 'timetable_reminder' then
+    return new;
+  end if;
+
+  select o.created_by, o.title, o.type, o.start_date, t.name
+  into organizer_id, opportunity_title, opportunity_type, opportunity_start, tunnel_name
+  from public.opportunities o
+  join public.tunnel_profiles t on t.id = o.tunnel_id
+  where o.id = new.opportunity_id;
+
+  if organizer_id is null or organizer_id = new.athlete_id then
+    return new;
+  end if;
+
+  select p.full_name
+  into athlete_name
+  from public.profiles p
+  where p.id = new.athlete_id;
+
+  date_text := case
+    when opportunity_start is null then ''
+    else ' on ' || to_char(opportunity_start, 'Mon FMDD')
+  end;
+
+  insert into public.notifications (user_id, title, body, type, opportunity_id)
+  values (
+    organizer_id,
+    'New application for ' || coalesce(opportunity_title, 'your opportunity'),
+    coalesce(athlete_name, 'An athlete') || ' applied to ' ||
+      coalesce(opportunity_title, 'your opportunity') ||
+      ' at ' || coalesce(tunnel_name, 'the tunnel') || date_text || '.',
+    'new_interest',
+    new.opportunity_id
+  );
+
+  return new;
+end;
+$$;
+
+create or replace function public.notify_athlete_of_application_status_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  opportunity_title text;
+  notification_body text;
+begin
+  if old.interest_type = 'timetable_reminder'
+    or new.interest_type = 'timetable_reminder'
+  then
+    return new;
+  end if;
+
+  if old.status is not distinct from new.status then
+    return new;
+  end if;
+
+  select o.title
+  into opportunity_title
+  from public.opportunities o
+  where o.id = new.opportunity_id;
+
+  notification_body := case new.status
+    when 'accepted' then
+      'Your application for ' || coalesce(opportunity_title, 'this opportunity') || ' was accepted.'
+    when 'declined' then
+      'Your application for ' || coalesce(opportunity_title, 'this opportunity') || ' was declined.'
+    when 'waitlist' then
+      'You have been added to the waitlist for ' || coalesce(opportunity_title, 'this opportunity') || '.'
+    when 'pending' then
+      'Your application for ' || coalesce(opportunity_title, 'this opportunity') || ' is pending.'
+    else
+      'Your application for ' || coalesce(opportunity_title, 'this opportunity') || ' was updated.'
+  end;
+
+  insert into public.notifications (user_id, title, body, type, opportunity_id)
+  values (
+    new.athlete_id,
+    'Application status updated',
+    notification_body,
+    'application_status',
+    new.opportunity_id
+  );
+
+  return new;
+end;
+$$;
+
 drop policy if exists "Users create interests for published opportunities" on public.opportunity_interests;
 
 create policy "Users create interests for published opportunities"
