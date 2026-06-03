@@ -19,6 +19,15 @@ import {
 } from "@/lib/opportunities";
 import { phoneToWhatsAppPath } from "@/lib/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  formatTimetableDate,
+  formatTimetableMoney,
+  formatTimetableTime,
+  getTimetableOverviewRows,
+  getTimetableSummary,
+  groupTimetableRowsByDay,
+  type TimetableSlot,
+} from "@/lib/timetable";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
 type OrganizerOpportunity = {
@@ -61,6 +70,33 @@ type ApplicantRow = {
         whatsapp_number: string | null;
         instagram_handle: string | null;
         profile_image_url: string | null;
+      }>
+    | null;
+};
+
+type TimetableSlotRow = {
+  id: string;
+  slot_date: string;
+  start_time: string;
+  duration_minutes: number;
+  capacity: number;
+  opportunity_slot_bookings:
+    | Array<{
+        id: string;
+        minutes: number;
+        user_id: string;
+        profiles:
+          | {
+              full_name: string;
+              phone: string | null;
+              whatsapp_number: string | null;
+            }
+          | Array<{
+              full_name: string;
+              phone: string | null;
+              whatsapp_number: string | null;
+            }>
+          | null;
       }>
     | null;
 };
@@ -117,11 +153,48 @@ export default async function OrganizerOpportunityPage({
     .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
     .order("created_at", { ascending: false });
+  const { data: timetableRows } = await supabase
+    .from("opportunity_time_slots")
+    .select("id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+    .eq("opportunity_id", id)
+    .order("slot_date", { ascending: true })
+    .order("start_time", { ascending: true });
   const canCreate =
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
   const applicantRows = (applicants ?? []) as ApplicantRow[];
+  const timetableSlots = ((timetableRows ?? []) as TimetableSlotRow[]).map(
+    (slot): TimetableSlot => ({
+      id: slot.id,
+      slotDate: slot.slot_date,
+      startTime: slot.start_time,
+      durationMinutes: slot.duration_minutes,
+      capacity: slot.capacity,
+      bookings: (slot.opportunity_slot_bookings ?? []).map((booking) => {
+        const profile = Array.isArray(booking.profiles)
+          ? booking.profiles[0]
+          : booking.profiles;
+
+        return {
+          id: booking.id,
+          minutes: booking.minutes,
+          userId: booking.user_id,
+          athleteName: profile?.full_name ?? "Participant",
+          athletePhone: profile?.whatsapp_number ?? profile?.phone ?? "",
+        };
+      }),
+    }),
+  );
+  const timetableSummary = getTimetableSummary(
+    timetableSlots,
+    Number(currentOpportunity.price),
+  );
+  const timetableOverviewRows = getTimetableOverviewRows(
+    timetableSlots,
+    Number(currentOpportunity.price),
+  );
+  const timetableDays = groupTimetableRowsByDay(timetableOverviewRows);
   const publicUrl = getPublicOpportunityUrl(currentOpportunity.id);
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
   const typeLabel = formatOpportunityType(currentOpportunity.type);
@@ -229,6 +302,81 @@ export default async function OrganizerOpportunityPage({
         </div>
       </section>
 
+      {timetableSlots.length > 0 ? (
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Timetable</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                Flying slots and current bookings.
+              </p>
+            </div>
+            <Link
+              href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.csv`}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-black text-white transition hover:bg-slate-800"
+            >
+              Download Timetable CSV
+            </Link>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <TimetableStat label="Total slots" value={timetableSummary.totalSlots} />
+            <TimetableStat label="Booked slots" value={timetableSummary.bookedSlots} />
+            <TimetableStat label="Open slots" value={timetableSummary.openSlots} />
+            <TimetableStat
+              label="Booked minutes"
+              value={timetableSummary.totalBookedMinutes}
+            />
+            <TimetableStat
+              label="Est. revenue"
+              value={formatTimetableMoney(
+                timetableSummary.estimatedRevenue,
+                currentOpportunity.currency,
+              )}
+            />
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {timetableDays.map((day) => (
+              <section
+                key={day.date}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <h3 className="text-sm font-black uppercase text-slate-500">
+                  {formatTimetableDate(day.date)}
+                </h3>
+                <div className="mt-2 grid gap-1.5">
+                  {day.rows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[58px_1fr_auto] items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-sm"
+                    >
+                      <span className="font-black text-slate-950">
+                        {formatTimetableTime(row.startTime)}
+                      </span>
+                      <span
+                        className={
+                          row.status === "booked"
+                            ? "font-bold text-slate-800"
+                            : "font-bold text-slate-400"
+                        }
+                      >
+                        {row.status === "booked" ? row.athleteName : "open"}
+                      </span>
+                      <span className="text-xs font-black text-slate-500">
+                        {row.status === "booked"
+                          ? `${row.durationMinutes} min`
+                          : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="mt-4">
         <h2 className="text-xl font-black tracking-tight">Applicants</h2>
         <div className="mt-2 grid gap-2">
@@ -324,4 +472,19 @@ export default async function OrganizerOpportunityPage({
 
 function formatLocation(city?: string | null, country?: string | null) {
   return [city, country].filter(Boolean).join(", ");
+}
+
+function TimetableStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="rounded-xl bg-slate-50 px-3 py-2">
+      <p className="text-[0.68rem] font-black uppercase text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-slate-950">{value}</p>
+    </div>
+  );
 }

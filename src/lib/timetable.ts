@@ -1,0 +1,131 @@
+export type TimetableBooking = {
+  id: string;
+  minutes: number;
+  userId: string;
+  athleteName: string;
+  athletePhone: string;
+};
+
+export type TimetableSlot = {
+  id: string;
+  slotDate: string;
+  startTime: string;
+  durationMinutes: number;
+  capacity: number;
+  bookings: TimetableBooking[];
+};
+
+export type TimetableOverviewRow = {
+  id: string;
+  slotDate: string;
+  startTime: string;
+  durationMinutes: number;
+  athleteName: string;
+  athleteEmail: string;
+  athletePhone: string;
+  status: "booked" | "open";
+  estimatedPrice: number;
+};
+
+export function getTimetableSummary(slots: TimetableSlot[], hourlyPrice: number) {
+  const totalSlots = slots.reduce((total, slot) => total + slot.capacity, 0);
+  const bookedSlots = slots.reduce(
+    (total, slot) => total + slot.bookings.length,
+    0,
+  );
+  const totalBookedMinutes = slots.reduce(
+    (total, slot) =>
+      total +
+      slot.bookings.reduce((bookingTotal, booking) => bookingTotal + booking.minutes, 0),
+    0,
+  );
+
+  return {
+    totalSlots,
+    bookedSlots,
+    openSlots: Math.max(totalSlots - bookedSlots, 0),
+    totalBookedMinutes,
+    estimatedRevenue: (hourlyPrice / 60) * totalBookedMinutes,
+  };
+}
+
+export function getTimetableOverviewRows(
+  slots: TimetableSlot[],
+  hourlyPrice: number,
+) {
+  const rows: TimetableOverviewRow[] = [];
+
+  for (const slot of slots) {
+    for (const booking of slot.bookings) {
+      rows.push({
+        id: booking.id,
+        slotDate: slot.slotDate,
+        startTime: slot.startTime,
+        durationMinutes: booking.minutes,
+        athleteName: booking.athleteName,
+        athleteEmail: "",
+        athletePhone: booking.athletePhone,
+        status: "booked",
+        estimatedPrice: (hourlyPrice / 60) * booking.minutes,
+      });
+    }
+
+    const openCount = Math.max(slot.capacity - slot.bookings.length, 0);
+
+    for (let index = 0; index < openCount; index += 1) {
+      rows.push({
+        id: `${slot.id}-open-${index}`,
+        slotDate: slot.slotDate,
+        startTime: slot.startTime,
+        durationMinutes: slot.durationMinutes,
+        athleteName: "",
+        athleteEmail: "",
+        athletePhone: "",
+        status: "open",
+        estimatedPrice: 0,
+      });
+    }
+  }
+
+  return rows.sort((a, b) =>
+    `${a.slotDate} ${a.startTime} ${a.status}`.localeCompare(
+      `${b.slotDate} ${b.startTime} ${b.status}`,
+    ),
+  );
+}
+
+export function groupTimetableRowsByDay(rows: TimetableOverviewRow[]) {
+  const groups = new Map<string, TimetableOverviewRow[]>();
+
+  for (const row of rows) {
+    const dayRows = groups.get(row.slotDate) ?? [];
+    dayRows.push(row);
+    groups.set(row.slotDate, dayRows);
+  }
+
+  return [...groups.entries()]
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, dayRows]) => ({
+      date,
+      rows: dayRows.sort((a, b) =>
+        `${a.startTime} ${a.status}`.localeCompare(`${b.startTime} ${b.status}`),
+      ),
+    }));
+}
+
+export function formatTimetableDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+export function formatTimetableTime(value: string) {
+  return value.slice(0, 5);
+}
+
+export function formatTimetableMoney(value: number, currency: string) {
+  return `${new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(value)} ${currency}`;
+}
