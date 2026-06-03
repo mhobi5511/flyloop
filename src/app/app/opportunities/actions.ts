@@ -30,11 +30,7 @@ function reminderErrorMessage(error: {
   hint?: string | null;
   code?: string;
 }) {
-  if (process.env.NODE_ENV !== "production") {
-    return debugSupabaseMessage(error) || "Could not set reminder.";
-  }
-
-  return "Could not set reminder. Please try again.";
+  return debugSupabaseMessage(error) || "Could not set reminder. Please try again.";
 }
 
 export async function sendOpportunityInterest(
