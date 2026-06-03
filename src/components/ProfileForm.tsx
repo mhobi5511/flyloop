@@ -17,6 +17,11 @@ import {
   calculateProfileCompleteness,
   PROFILE_OPENED_STORAGE_KEY,
 } from "@/lib/profile-completeness";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushSupportState,
+} from "@/lib/push-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ProfileFormProps = {
@@ -40,6 +45,8 @@ type ProfileFormProps = {
     latitude: number | null;
     longitude: number | null;
     preferred_radius_km: number;
+    push_notifications_enabled?: boolean;
+    push_prompt_answered_at?: string | null;
   };
   tunnels: Array<{
     id: string;
@@ -94,6 +101,13 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   const [preferredRadiusKm, setPreferredRadiusKm] = useState(
     String(profile.preferred_radius_km ?? 1000),
   );
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(
+    profile.push_notifications_enabled === true,
+  );
+  const [pushPermission, setPushPermission] = useState<
+    NotificationPermission | "unsupported" | "unknown"
+  >("unknown");
+  const [pushStatus, setPushStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
@@ -161,6 +175,15 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   useEffect(() => {
     localStorage.setItem(PROFILE_OPENED_STORAGE_KEY, "true");
     window.dispatchEvent(new Event("flyloop-profile-opened"));
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const support = getPushSupportState();
+      setPushPermission(support.permission);
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, []);
 
   function optionalText(value: string) {
@@ -255,6 +278,37 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
 
     if (saveError) {
       console.error("Location recommendation preference save failed", saveError);
+    }
+  }
+
+  async function togglePushNotifications(enabled: boolean) {
+    setPushStatus("");
+    setError("");
+
+    try {
+      if (enabled) {
+        setPushStatus("Enabling push notifications...");
+        await enablePushNotifications();
+        setPushNotificationsEnabled(true);
+        setPushPermission(getPushSupportState().permission);
+        setPushStatus("Push notifications are on.");
+        return;
+      }
+
+      setPushStatus("Disabling push notifications...");
+      await disablePushNotifications();
+      setPushNotificationsEnabled(false);
+      setPushPermission(getPushSupportState().permission);
+      setPushStatus("Push notifications are off.");
+    } catch (pushError) {
+      console.error("Push notification preference update failed", pushError);
+      setPushNotificationsEnabled(false);
+      setPushPermission(getPushSupportState().permission);
+      setPushStatus(
+        pushError instanceof Error
+          ? pushError.message
+          : "Could not update push notifications.",
+      );
     }
   }
 
@@ -695,6 +749,30 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
           ) : null}
         </ProfileSection>
 
+        <ProfileSection
+          title="Notifications"
+          description="Private notification preferences."
+        >
+          <SettingsRow
+            title={`Push Notifications ${pushNotificationsEnabled ? "On" : "Off"}`}
+            description={
+              pushPermission === "denied"
+                ? "Push notifications are blocked in your browser settings."
+                : pushPermission === "unsupported"
+                  ? "Push notifications are not supported by this browser."
+                  : "We only notify you about relevant Flyloop activity."
+            }
+            checked={pushNotificationsEnabled && pushPermission !== "denied"}
+            disabled={pushPermission === "denied" || pushPermission === "unsupported"}
+            onChange={togglePushNotifications}
+          />
+          {pushStatus ? (
+            <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+              {pushStatus}
+            </p>
+          ) : null}
+        </ProfileSection>
+
         {toast ? (
           <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
             {toast}
@@ -1121,11 +1199,13 @@ function SettingsRow({
   title,
   description,
   checked,
+  disabled = false,
   onChange,
 }: {
   title: string;
   description: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -1139,12 +1219,13 @@ function SettingsRow({
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"
       />
       <span
         className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-          checked ? "bg-sky-600" : "bg-slate-200"
+          disabled ? "bg-slate-100" : checked ? "bg-sky-600" : "bg-slate-200"
         }`}
       >
         <span

@@ -12,6 +12,7 @@ import {
 import { NotificationBell } from "./NotificationBell";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { ProfileNavDot } from "./ProfileNavDot";
+import { PushNotificationPrompt } from "./PushNotificationPrompt";
 import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { unstable_rethrow } from "next/navigation";
@@ -68,6 +69,9 @@ async function getShellState() {
         isAdmin: false,
         organizerUnreadCount: 0,
         profileIncomplete: true,
+        pushNotificationsEnabled: false,
+        pushPromptAnsweredAt: null,
+        isAuthenticated: false,
       };
     }
 
@@ -75,7 +79,7 @@ async function getShellState() {
       await Promise.all([
         supabase
           .from("profiles")
-          .select("is_organizer,wants_to_create_opportunities,full_name,country,city,disciplines,home_tunnel_id,instagram_handle,profile_image_url")
+          .select("is_organizer,wants_to_create_opportunities,full_name,country,city,disciplines,home_tunnel_id,instagram_handle,profile_image_url,push_notifications_enabled,push_prompt_answered_at")
           .eq("id", user.id)
           .maybeSingle(),
         supabase
@@ -105,6 +109,9 @@ async function getShellState() {
       isAdmin: isAdmin(user),
       organizerUnreadCount: notificationResult.count ?? 0,
       profileIncomplete,
+      pushNotificationsEnabled: profile?.push_notifications_enabled === true,
+      pushPromptAnsweredAt: profile?.push_prompt_answered_at ?? null,
+      isAuthenticated: true,
     };
   } catch (error) {
     unstable_rethrow(error);
@@ -115,6 +122,9 @@ async function getShellState() {
       isAdmin: false,
       organizerUnreadCount: 0,
       profileIncomplete: true,
+      pushNotificationsEnabled: false,
+      pushPromptAnsweredAt: null,
+      isAuthenticated: false,
     };
   }
 }
@@ -198,6 +208,12 @@ export async function AppShell({
       <main className="mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5 md:pb-8">
         {children}
       </main>
+      {shellState.isAuthenticated ? (
+        <PushNotificationPrompt
+          enabled={shellState.pushNotificationsEnabled}
+          answeredAt={shellState.pushPromptAnsweredAt}
+        />
+      ) : null}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
         <div
           className="mx-auto grid max-w-md px-2 py-2"
