@@ -283,6 +283,107 @@ export async function saveCampTimetable(
   return { ok: true, message: "Timetable draft saved." };
 }
 
+export async function sendTimetableBookingReminder(
+  opportunityId: string,
+  participantId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { error } = await supabase.rpc("notify_timetable_booking_reminder", {
+    target_opportunity_id: opportunityId,
+    target_user_id: participantId,
+  });
+
+  if (error) {
+    console.error("Timetable reminder failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+
+  return { ok: true, message: "Reminder sent." };
+}
+
+export async function sendTimetableBookingReminderForm(
+  opportunityId: string,
+  participantId: string,
+): Promise<void> {
+  await sendTimetableBookingReminder(opportunityId, participantId);
+}
+
+export async function releaseParticipantTimes(
+  opportunityId: string,
+  participantId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: releasedCount, error } = await supabase.rpc(
+    "release_participant_slot_bookings",
+    {
+      target_opportunity_id: opportunityId,
+      target_user_id: participantId,
+    },
+  );
+
+  if (error) {
+    console.error("Participant timetable release failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return { ok: false, message: "Could not release times." };
+  }
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/applications");
+
+  return {
+    ok: true,
+    message:
+      Number(releasedCount) > 0
+        ? "Booked times released."
+      : "No booked times to release.",
+  };
+}
+
+export async function releaseParticipantTimesForm(
+  opportunityId: string,
+  participantId: string,
+): Promise<void> {
+  await releaseParticipantTimes(opportunityId, participantId);
+}
+
 function getAffectedTimetableParticipantIds(
   existingSlots: ExistingTimetableSlotWithBookings[],
   normalizedSlots: ReturnType<typeof normalizeTimetableSlots>,

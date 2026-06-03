@@ -1,6 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AtSign, CalendarDays, MapPin, MessageCircle, Users, WalletCards } from "lucide-react";
+import {
+  AtSign,
+  Bell,
+  CalendarDays,
+  Download,
+  FileDown,
+  FileText,
+  MapPin,
+  MessageCircle,
+  Users,
+  WalletCards,
+  XCircle,
+} from "lucide-react";
+import {
+  releaseParticipantTimesForm,
+  sendTimetableBookingReminderForm,
+} from "@/app/app/organizer/opportunities/actions";
 import { AppShell } from "@/components/AppShell";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
 import {
@@ -23,9 +39,8 @@ import {
   formatTimetableDate,
   formatTimetableMoney,
   formatTimetableTime,
-  getTimetableOverviewRows,
   getTimetableSummary,
-  groupTimetableRowsByDay,
+  groupTimetableSlotsByDay,
   type TimetableSlot,
 } from "@/lib/timetable";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
@@ -80,6 +95,7 @@ type TimetableSlotRow = {
   start_time: string;
   duration_minutes: number;
   capacity: number;
+  is_published: boolean;
   opportunity_slot_bookings:
     | Array<{
         id: string;
@@ -155,7 +171,7 @@ export default async function OrganizerOpportunityPage({
     .order("created_at", { ascending: false });
   const { data: timetableRows } = await supabase
     .from("opportunity_time_slots")
-    .select("id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
     .eq("opportunity_id", id)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
@@ -190,11 +206,13 @@ export default async function OrganizerOpportunityPage({
     timetableSlots,
     Number(currentOpportunity.price),
   );
-  const timetableOverviewRows = getTimetableOverviewRows(
-    timetableSlots,
-    Number(currentOpportunity.price),
+  const timetableDays = groupTimetableSlotsByDay(timetableSlots);
+  const hasPublishedTimetable = ((timetableRows ?? []) as TimetableSlotRow[]).some(
+    (slot) => slot.is_published,
   );
-  const timetableDays = groupTimetableRowsByDay(timetableOverviewRows);
+  const participantsWithBookings = new Set(
+    timetableSlots.flatMap((slot) => slot.bookings.map((booking) => booking.userId)),
+  );
   const publicUrl = getPublicOpportunityUrl(currentOpportunity.id);
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
   const typeLabel = formatOpportunityType(currentOpportunity.type);
@@ -303,78 +321,152 @@ export default async function OrganizerOpportunityPage({
       </section>
 
       {timetableSlots.length > 0 ? (
-        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-xl font-black tracking-tight">Timetable</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-600">
-                Flying slots and current bookings.
-              </p>
-            </div>
-            <Link
-              href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.csv`}
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-black text-white transition hover:bg-slate-800"
-            >
-              Download Timetable CSV
-            </Link>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            <TimetableStat label="Total slots" value={timetableSummary.totalSlots} />
-            <TimetableStat label="Booked slots" value={timetableSummary.bookedSlots} />
-            <TimetableStat label="Open slots" value={timetableSummary.openSlots} />
-            <TimetableStat
-              label="Booked minutes"
-              value={timetableSummary.totalBookedMinutes}
-            />
-            <TimetableStat
-              label="Est. revenue"
-              value={formatTimetableMoney(
-                timetableSummary.estimatedRevenue,
-                currentOpportunity.currency,
-              )}
-            />
-          </div>
-
-          <div className="mt-4 grid gap-3">
-            {timetableDays.map((day) => (
-              <section
-                key={day.date}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
-              >
-                <h3 className="text-sm font-black uppercase text-slate-500">
-                  {formatTimetableDate(day.date)}
-                </h3>
-                <div className="mt-2 grid gap-1.5">
-                  {day.rows.map((row) => (
-                    <div
-                      key={row.id}
-                      className="grid grid-cols-[58px_1fr_auto] items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-sm"
-                    >
-                      <span className="font-black text-slate-950">
-                        {formatTimetableTime(row.startTime)}
-                      </span>
-                      <span
-                        className={
-                          row.status === "booked"
-                            ? "font-bold text-slate-800"
-                            : "font-bold text-slate-400"
-                        }
-                      >
-                        {row.status === "booked" ? row.athleteName : "open"}
-                      </span>
-                      <span className="text-xs font-black text-slate-500">
-                        {row.status === "booked"
-                          ? `${row.durationMinutes} min`
-                          : ""}
-                      </span>
-                    </div>
-                  ))}
+        <details className="group mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black tracking-tight">Timetable</h2>
+                <div className="mt-2 grid grid-cols-1 gap-2 text-sm font-bold text-slate-700 sm:grid-cols-3">
+                  <p>
+                    <span className="text-slate-500">Booked Slots: </span>
+                    <span className="font-black text-slate-950">
+                      {timetableSummary.bookedSlots} / {timetableSummary.totalSlots}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Booked Minutes: </span>
+                    <span className="font-black text-slate-950">
+                      {timetableSummary.totalBookedMinutes}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Estimated Revenue: </span>
+                    <span className="font-black text-slate-950">
+                      {formatTimetableMoney(
+                        timetableSummary.estimatedRevenue,
+                        currentOpportunity.currency,
+                      )}
+                    </span>
+                  </p>
                 </div>
-              </section>
-            ))}
+              </div>
+              <span className="inline-flex h-9 items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-black text-white transition group-open:hidden">
+                Expand
+              </span>
+              <span className="hidden h-9 items-center justify-center rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 transition group-open:inline-flex">
+                Collapse
+              </span>
+            </div>
+          </summary>
+
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <TimetableStat
+                label="Slots booked"
+                value={`${timetableSummary.bookedSlots} / ${timetableSummary.totalSlots}`}
+                caption="Slots Booked"
+              />
+              <TimetableStat
+                label="Booked minutes"
+                value={timetableSummary.totalBookedMinutes}
+              />
+              <TimetableStat
+                label="Est. revenue"
+                value={formatTimetableMoney(
+                  timetableSummary.estimatedRevenue,
+                  currentOpportunity.currency,
+                )}
+              />
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.csv`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                <Download size={15} /> CSV
+              </Link>
+              <Link
+                href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.pdf`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                <FileDown size={15} /> Download PDF
+              </Link>
+              <Link
+                href={`/app/organizer/opportunities/${currentOpportunity.id}/timetable.txt`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                <FileText size={15} /> Download Formatted Text
+              </Link>
+            </div>
+
+            <div className="mt-4 grid gap-4">
+              {timetableDays.map((day) => (
+                <section key={day.date} className="grid gap-2">
+                  <h3 className="text-base font-black text-slate-950">
+                    {formatTimetableDate(day.date)}
+                  </h3>
+                  <div className="grid gap-3">
+                    {day.slots.map((slot) => (
+                      <article
+                        key={slot.id}
+                        className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+                      >
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-900 px-3 py-2 text-white">
+                          <p className="text-base font-black">
+                            {formatTimetableTime(slot.startTime)}
+                          </p>
+                          <p className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-black">
+                            {slot.bookings.length} / {slot.capacity} booked
+                          </p>
+                        </div>
+                        <div className="grid gap-1.5 p-2">
+                          {slot.bookings.map((booking) => (
+                            <div
+                              key={booking.id}
+                              className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg bg-white px-2.5 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-black text-slate-950">
+                                  {booking.athleteName || "Participant"}
+                                </p>
+                                <p className="text-xs font-bold text-slate-500">
+                                  {booking.minutes} min
+                                </p>
+                              </div>
+                              <form
+                                action={releaseParticipantTimesForm.bind(
+                                  null,
+                                  currentOpportunity.id,
+                                  booking.userId,
+                                )}
+                              >
+                                <button
+                                  type="submit"
+                                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 px-2 text-xs font-black text-rose-700 transition hover:bg-rose-50"
+                                >
+                                  <XCircle size={14} /> Release Times
+                                </button>
+                              </form>
+                            </div>
+                          ))}
+                          {Array.from({ length: slot.openSpots }).map((_, index) => (
+                            <div
+                              key={`${slot.id}-open-${index}`}
+                              className="rounded-lg border border-dashed border-slate-300 bg-white/70 px-2.5 py-2 text-sm font-bold text-slate-400"
+                            >
+                              Open Spot
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
-        </section>
+        </details>
       ) : null}
 
       <section className="mt-4">
@@ -386,6 +478,11 @@ export default async function OrganizerOpportunityPage({
               : applicant.profiles;
             const phone = profile?.whatsapp_number ?? profile?.phone ?? "";
             const instagram = profile?.instagram_handle ?? "";
+            const canSendTimetableReminder =
+              applicant.status === "accepted" &&
+              hasPublishedTimetable &&
+              Boolean(profile?.id) &&
+              !participantsWithBookings.has(profile?.id ?? "");
 
             return (
               <article
@@ -430,6 +527,27 @@ export default async function OrganizerOpportunityPage({
                           <p>{profile?.country ?? "Country not set"}</p>
                           <p>Phone: {phone || "Not provided"}</p>
                         </div>
+                        {canSendTimetableReminder && profile?.id ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700">
+                              No times booked
+                            </span>
+                            <form
+                              action={sendTimetableBookingReminderForm.bind(
+                                null,
+                                currentOpportunity.id,
+                                profile.id,
+                              )}
+                            >
+                              <button
+                                type="submit"
+                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-200 px-2.5 text-xs font-black text-amber-800 transition hover:bg-amber-50"
+                              >
+                                <Bell size={14} /> Send Reminder
+                              </button>
+                            </form>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -477,14 +595,19 @@ function formatLocation(city?: string | null, country?: string | null) {
 function TimetableStat({
   label,
   value,
+  caption,
 }: {
   label: string;
   value: number | string;
+  caption?: string;
 }) {
   return (
     <div className="rounded-xl bg-slate-50 px-3 py-2">
       <p className="text-[0.68rem] font-black uppercase text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-black text-slate-950">{value}</p>
+      {caption ? (
+        <p className="text-xs font-bold text-slate-500">{caption}</p>
+      ) : null}
     </div>
   );
 }

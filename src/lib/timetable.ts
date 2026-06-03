@@ -27,6 +27,16 @@ export type TimetableOverviewRow = {
   estimatedPrice: number;
 };
 
+export type TimetableSlotGroup = {
+  id: string;
+  slotDate: string;
+  startTime: string;
+  durationMinutes: number;
+  capacity: number;
+  bookings: TimetableBooking[];
+  openSpots: number;
+};
+
 export function getTimetableSummary(slots: TimetableSlot[], hourlyPrice: number) {
   const totalSlots = slots.reduce((total, slot) => total + slot.capacity, 0);
   const bookedSlots = slots.reduce(
@@ -47,6 +57,17 @@ export function getTimetableSummary(slots: TimetableSlot[], hourlyPrice: number)
     totalBookedMinutes,
     estimatedRevenue: (hourlyPrice / 60) * totalBookedMinutes,
   };
+}
+
+export function getTimetableSlotGroups(slots: TimetableSlot[]) {
+  return slots
+    .map((slot): TimetableSlotGroup => ({
+      ...slot,
+      openSpots: Math.max(slot.capacity - slot.bookings.length, 0),
+    }))
+    .sort((a, b) =>
+      `${a.slotDate} ${a.startTime}`.localeCompare(`${b.slotDate} ${b.startTime}`),
+    );
 }
 
 export function getTimetableOverviewRows(
@@ -94,6 +115,23 @@ export function getTimetableOverviewRows(
   );
 }
 
+export function groupTimetableSlotsByDay(slots: TimetableSlot[]) {
+  const groups = new Map<string, TimetableSlotGroup[]>();
+
+  for (const slot of getTimetableSlotGroups(slots)) {
+    const daySlots = groups.get(slot.slotDate) ?? [];
+    daySlots.push(slot);
+    groups.set(slot.slotDate, daySlots);
+  }
+
+  return [...groups.entries()]
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, daySlots]) => ({
+      date,
+      slots: daySlots,
+    }));
+}
+
 export function groupTimetableRowsByDay(rows: TimetableOverviewRow[]) {
   const groups = new Map<string, TimetableOverviewRow[]>();
 
@@ -128,4 +166,36 @@ export function formatTimetableMoney(value: number, currency: string) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 2,
   }).format(value)} ${currency}`;
+}
+
+export function formatTimetablePlainText({
+  opportunityTitle,
+  tunnelName,
+  slots,
+}: {
+  opportunityTitle: string;
+  tunnelName: string;
+  slots: TimetableSlot[];
+}) {
+  const lines = [`Camp: ${opportunityTitle}`, `Tunnel: ${tunnelName}`, ""];
+
+  for (const day of groupTimetableSlotsByDay(slots)) {
+    lines.push(formatTimetableDate(day.date), "");
+
+    for (const slot of day.slots) {
+      lines.push(formatTimetableTime(slot.startTime));
+
+      for (const booking of slot.bookings) {
+        lines.push(`- ${booking.athleteName || "Participant"} (${booking.minutes} min)`);
+      }
+
+      for (let index = 0; index < slot.openSpots; index += 1) {
+        lines.push("- Open");
+      }
+
+      lines.push("");
+    }
+  }
+
+  return lines.join("\n").trimEnd() + "\n";
 }
