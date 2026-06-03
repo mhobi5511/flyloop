@@ -114,6 +114,8 @@ export async function updateApplicantStatus(
   }
 
   revalidatePath(`/app/organizer/opportunities/${updatedInterest.opportunity_id}`);
+  revalidatePath(`/app/opportunities/${updatedInterest.opportunity_id}`);
+  revalidatePath(`/app/opportunities/${updatedInterest.opportunity_id}/times`);
   revalidatePath("/app/dashboard");
   revalidatePath("/app/applications");
 

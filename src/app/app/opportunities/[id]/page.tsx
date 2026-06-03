@@ -117,6 +117,11 @@ export default async function OpportunityDetailPage({
         Boolean(booking),
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const bookedMinutes = bookedTimes.reduce(
+    (total, booking) => total + booking.minutes,
+    0,
+  );
+  const bookedEstimate = (opportunity.price / 60) * bookedMinutes;
 
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
@@ -271,6 +276,32 @@ export default async function OpportunityDetailPage({
                       </span>
                     ))}
                   </div>
+                  <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-500">
+                          Your booked time
+                        </p>
+                        <p className="mt-1 text-lg font-black text-slate-950">
+                          {bookedMinutes} min
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-500">
+                          Estimated total
+                        </p>
+                        <p className="mt-1 text-lg font-black text-slate-950">
+                          {formatEstimatedPrice(
+                            bookedEstimate,
+                            opportunity.currency,
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                      This is an estimate based on your selected times and may change.
+                    </p>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -406,4 +437,10 @@ function formatBookedTime(dateValue: string, timeValue: string) {
   }).format(new Date(`${dateValue}T00:00:00`));
 
   return `${date}, ${timeValue.slice(0, 5)}`;
+}
+
+function formatEstimatedPrice(value: number, currency: string) {
+  return `${new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(value)} ${currency}`;
 }
