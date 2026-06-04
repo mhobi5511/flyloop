@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
 
@@ -112,7 +113,14 @@ export async function requestCampRemoval(
   }
 
   const requestedAt = new Date().toISOString();
-  const { data: updatedInterest, error } = await supabase
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (!adminSupabase) {
+    console.error("Camp removal request failed: missing admin Supabase client");
+    return { ok: false, message: "Could not send request. Please try again." };
+  }
+
+  const { data: updatedInterest, error } = await adminSupabase
     .from("opportunity_interests")
     .update({ removal_requested_at: requestedAt })
     .eq("id", interest.id)
@@ -138,7 +146,7 @@ export async function requestCampRemoval(
     .maybeSingle();
   const userName = profile?.full_name?.trim() || "A participant";
 
-  const { error: notificationError } = await supabase.from("notifications").insert({
+  const { error: notificationError } = await adminSupabase.from("notifications").insert({
     user_id: opportunity.created_by,
     title: "Participant wants to leave",
     body: `${userName} asked to leave ${opportunity.title}.`,

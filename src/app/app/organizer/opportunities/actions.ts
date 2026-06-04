@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   sendPendingPushNotificationsForOpportunity,
@@ -246,13 +247,20 @@ async function resolveCampRemovalRequest(
           type: "participant_removal_kept",
         };
 
-  const { error: notificationError } = await supabase.from("notifications").insert({
-    user_id: interest.athlete_id,
-    title: notification.title,
-    body: notification.body,
-    type: notification.type,
-    opportunity_id: opportunity.id,
-  });
+  const adminSupabase = createSupabaseAdminClient();
+  const { error: notificationError } = adminSupabase
+    ? await adminSupabase.from("notifications").insert({
+        user_id: interest.athlete_id,
+        title: notification.title,
+        body: notification.body,
+        type: notification.type,
+        opportunity_id: opportunity.id,
+      })
+    : {
+        error: {
+          message: "Missing admin Supabase client",
+        },
+      };
 
   if (notificationError) {
     console.error("Camp removal participant notification failed", {
