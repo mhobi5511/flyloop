@@ -168,7 +168,8 @@ export function NotificationBell() {
                 href={
                   notification.opportunity_id &&
                   (notification.type === "new_interest" ||
-                    notification.type === "new_time_booking")
+                    notification.type === "new_time_booking" ||
+                    notification.type === "timetable_reminder_interest")
                     ? `/app/organizer/opportunities/${notification.opportunity_id}`
                     : notification.opportunity_id
                     ? `/app/opportunities/${notification.opportunity_id}`

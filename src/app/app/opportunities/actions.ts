@@ -256,6 +256,11 @@ export async function setTimetableReminder(
     return { ok: false, message: reminderErrorMessage(error) };
   }
 
+  await sendServerPush([opportunity.created_by], "timetable_reminder_interest", {
+    opportunityId,
+    types: ["timetable_reminder_interest"],
+  });
+
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath("/app/dashboard");
 
