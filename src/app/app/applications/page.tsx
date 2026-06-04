@@ -8,7 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
 import {
-  formatDateRange,
+  formatOpportunityDate,
   formatSessionTimeRange,
   formatOpportunityType,
   formatPrice,
@@ -33,6 +33,7 @@ type ApplicationRow = {
         session_end: string | null;
         price: number | string;
         currency: string;
+        min_minutes_or_hours: string | null;
         tunnel_profiles:
           | { id: string; name: string; city: string | null; country: string | null }
           | Array<{ id: string; name: string; city: string | null; country: string | null }>
@@ -60,6 +61,7 @@ type ApplicationRow = {
         session_end: string | null;
         price: number | string;
         currency: string;
+        min_minutes_or_hours: string | null;
         tunnel_profiles:
           | { id: string; name: string; city: string | null; country: string | null }
           | Array<{ id: string; name: string; city: string | null; country: string | null }>
@@ -118,7 +120,7 @@ export default async function ApplicationsPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,session_start,session_end,price,currency,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
+      .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,session_start,session_end,price,currency,min_minutes_or_hours,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
   ]);
@@ -251,7 +253,11 @@ export default async function ApplicationsPage({
                       {tunnel?.name ?? "Tunnel"}
                     </p>
                     <p className="text-xs">
-                      {formatDateRange(opportunity.start_date, opportunity.end_date)}
+                      {formatOpportunityDate(
+                        opportunity.type,
+                        opportunity.start_date,
+                        opportunity.end_date,
+                      )}
                       {tunnel ? ` · ${formatLocation(tunnel.city, tunnel.country)}` : ""}
                     </p>
                     {opportunity.type === "huck_jam" ? (
@@ -266,7 +272,10 @@ export default async function ApplicationsPage({
                     <p className="text-xs font-semibold text-slate-700">
                       {formatPrice(Number(opportunity.price), opportunity.currency)}{" "}
                       <span className="text-slate-500">
-                        {formatPriceLabel(opportunity.type)}
+                        {formatPriceLabel(
+                          opportunity.type,
+                          opportunity.min_minutes_or_hours,
+                        )}
                       </span>
                     </p>
                   </div>

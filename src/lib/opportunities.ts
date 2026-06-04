@@ -69,6 +69,30 @@ export function formatDateRange(startDate: string, endDate: string) {
     : `${formattedStart} - ${formattedEnd}`;
 }
 
+export function formatOpportunityDate(
+  type: Opportunity["type"],
+  startDate: string,
+  endDate: string,
+) {
+  return type === "huck_jam"
+    ? formatSingleDate(startDate)
+    : formatDateRange(startDate, endDate);
+}
+
+export function formatSingleDate(value: string) {
+  const date = parseDate(value);
+
+  if (!date) {
+    return "Date to be confirmed";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 export function formatPrice(price: number, currency: string) {
   const currencyLabel = currency === "EUR" ? "€" : currency;
   return `${new Intl.NumberFormat("en", {
@@ -76,8 +100,15 @@ export function formatPrice(price: number, currency: string) {
   }).format(price)} ${currencyLabel}`;
 }
 
-export function formatPriceLabel(type: Opportunity["type"]) {
-  return type === "huck_jam" ? "Participation Fee" : "per 60 min";
+export function formatPriceLabel(type: Opportunity["type"], minutes?: string | null) {
+  return type === "huck_jam"
+    ? "Participation Fee"
+    : `per ${formatPriceAppliesToMinutes(minutes)} min`;
+}
+
+export function formatPriceAppliesToMinutes(minutes?: string | null) {
+  const parsed = Number(minutes);
+  return Number.isFinite(parsed) && parsed > 0 ? formatNumber(parsed) : "60";
 }
 
 export function formatSessionTimeRange(
@@ -121,18 +152,21 @@ export function getPublicOpportunityUrl(id: string) {
 
 export function getOpportunityShareText(opportunity: Opportunity, url: string) {
   const typeLabel = formatOpportunityType(opportunity.type);
-  const dateText = formatDateRange(opportunity.startDate, opportunity.endDate);
+  const dateText = formatOpportunityDate(
+    opportunity.type,
+    opportunity.startDate,
+    opportunity.endDate,
+  );
   const tunnelName = opportunity.tunnelName ?? "the tunnel";
 
   return [
-    `🔥 Join my ${typeLabel} on Flyloop`,
+    `Join my ${typeLabel} on Flyloop`,
     "",
     opportunity.title,
-    `📅 ${dateText}`,
-    `📍 ${tunnelName}`,
+    dateText,
+    tunnelName,
     "",
-    "",
-    "👇 Register now",
+    "Register now",
     "",
     url,
   ].join("\n");
@@ -145,4 +179,10 @@ function parseDate(value: string) {
 
 function formatSessionTime(value: string) {
   return value.slice(0, 5);
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(value);
 }

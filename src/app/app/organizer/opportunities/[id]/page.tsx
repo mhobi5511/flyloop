@@ -25,9 +25,10 @@ import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
 import {
-  formatDateRange,
+  formatOpportunityDate,
   formatOpportunityType,
   formatPrice,
+  formatPriceAppliesToMinutes,
   formatSessionTimeRange,
   getOpportunityShareText,
   getPublicOpportunityUrl,
@@ -63,6 +64,7 @@ type OrganizerOpportunity = {
   available_spots: number;
   price: number | string;
   currency: string;
+  min_minutes_or_hours: string | null;
   description: string | null;
   tunnel_profiles:
     | { name: string; city: string | null; country: string | null }
@@ -153,7 +155,7 @@ export default async function OrganizerOpportunityPage({
       .maybeSingle(),
     supabase
       .from("opportunities")
-      .select("id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,total_capacity,available_spots,price,currency,description,tunnel_profiles(name,city,country)")
+      .select("id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_profiles(name,city,country)")
       .eq("id", id)
       .eq("created_by", user?.id)
       .maybeSingle(),
@@ -321,7 +323,8 @@ export default async function OrganizerOpportunityPage({
               </p>
               <p className="flex items-center gap-2">
                 <CalendarDays size={16} className="text-sky-700" />
-                {formatDateRange(
+                {formatOpportunityDate(
+                  currentOpportunity.type,
                   currentOpportunity.start_date,
                   currentOpportunity.end_date,
                 )}
@@ -364,7 +367,11 @@ export default async function OrganizerOpportunityPage({
                     Number(currentOpportunity.price),
                     currentOpportunity.currency,
                   )}{" "}
-                  {isHuckJam ? "Participation Fee" : "per 60 min"}
+                  {isHuckJam
+                    ? "Participation Fee"
+                    : `per ${formatPriceAppliesToMinutes(
+                        currentOpportunity.min_minutes_or_hours,
+                      )} min`}
                 </span>
               </p>
             </div>

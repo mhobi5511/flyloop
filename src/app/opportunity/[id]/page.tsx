@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import {
-  formatDateRange,
+  formatOpportunityDate,
   formatOpportunityType,
   getPublicOpportunityPath,
   getPublicOpportunityUrl,
@@ -30,7 +30,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const opportunity = mapOpportunity(row);
   const typeLabel = formatOpportunityType(opportunity.type);
-  const description = `${opportunity.title} at ${opportunity.tunnelName ?? "the tunnel"} on ${formatDateRange(
+  const description = `${opportunity.title} at ${opportunity.tunnelName ?? "the tunnel"} on ${formatOpportunityDate(
+    opportunity.type,
     opportunity.startDate,
     opportunity.endDate,
   )}.`;

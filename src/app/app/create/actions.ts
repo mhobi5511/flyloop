@@ -71,6 +71,21 @@ function isValidTime(value: string) {
   return /^\d{2}:\d{2}$/.test(value);
 }
 
+function isValidPriceAppliesToMinutes(value: string) {
+  const trimmed = value.trim();
+
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    return false;
+  }
+
+  const minutes = Number(trimmed);
+  return Number.isFinite(minutes) && minutes > 0;
+}
+
+function priceAppliesToErrorMessage() {
+  return "Please enter a valid number of minutes, for example 60.";
+}
+
 function isSupportedCurrency(value: string): value is Currency {
   return supportedCurrencies.includes(value as Currency);
 }
@@ -178,11 +193,14 @@ export async function publishOpportunity(
     return { ok: false, message: "Please select a start date." };
   }
 
-  if (!isValidDate(input.endDate)) {
+  if (input.type === "camp" && !isValidDate(input.endDate)) {
     return { ok: false, message: "Please select an end date." };
   }
 
-  if (new Date(input.endDate) < new Date(input.startDate)) {
+  if (
+    input.type === "camp" &&
+    new Date(input.endDate) < new Date(input.startDate)
+  ) {
     return {
       ok: false,
       message: "End date must be the same as or after the start date.",
@@ -212,6 +230,13 @@ export async function publishOpportunity(
 
   if (!Number.isFinite(input.price) || input.price < 0) {
     return { ok: false, message: "Please enter a valid price." };
+  }
+
+  if (
+    input.type === "camp" &&
+    !isValidPriceAppliesToMinutes(input.minMinutesOrHours)
+  ) {
+    return { ok: false, message: priceAppliesToErrorMessage() };
   }
 
   if (!isSupportedCurrency(input.currency)) {
@@ -251,7 +276,7 @@ export async function publishOpportunity(
       coach_id: null,
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
-      end_date: input.endDate,
+      end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
       registration_deadline: input.registrationDeadline || null,
       session_start: input.type === "huck_jam" ? input.sessionStart : null,
       session_end: input.type === "huck_jam" ? input.sessionEnd : null,
@@ -260,7 +285,7 @@ export async function publishOpportunity(
       total_capacity: input.totalCapacity,
       available_spots: input.totalCapacity,
       min_minutes_or_hours:
-        input.type === "huck_jam" ? null : cleanText(input.minMinutesOrHours),
+        input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
       description: cleanText(input.description),
       languages: parseCsv(input.languages),
       disciplines: parseCsv(input.disciplines),
@@ -330,11 +355,17 @@ export async function updateOpportunity(
     return { ok: false, message: "Please select a tunnel before saving." };
   }
 
-  if (!isValidDate(input.startDate) || !isValidDate(input.endDate)) {
+  if (
+    !isValidDate(input.startDate) ||
+    (input.type === "camp" && !isValidDate(input.endDate))
+  ) {
     return { ok: false, message: "Please select valid dates." };
   }
 
-  if (new Date(input.endDate) < new Date(input.startDate)) {
+  if (
+    input.type === "camp" &&
+    new Date(input.endDate) < new Date(input.startDate)
+  ) {
     return {
       ok: false,
       message: "End date must be the same as or after the start date.",
@@ -364,6 +395,13 @@ export async function updateOpportunity(
 
   if (!Number.isFinite(input.price) || input.price < 0) {
     return { ok: false, message: "Please enter a valid price." };
+  }
+
+  if (
+    input.type === "camp" &&
+    !isValidPriceAppliesToMinutes(input.minMinutesOrHours)
+  ) {
+    return { ok: false, message: priceAppliesToErrorMessage() };
   }
 
   if (!isSupportedCurrency(input.currency)) {
@@ -431,7 +469,7 @@ export async function updateOpportunity(
       title,
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
-      end_date: input.endDate,
+      end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
       registration_deadline: input.registrationDeadline || null,
       session_start: input.type === "huck_jam" ? input.sessionStart : null,
       session_end: input.type === "huck_jam" ? input.sessionEnd : null,
@@ -440,7 +478,7 @@ export async function updateOpportunity(
       total_capacity: input.totalCapacity,
       available_spots: Math.max(input.totalCapacity - acceptedCount, 0),
       min_minutes_or_hours:
-        input.type === "huck_jam" ? null : cleanText(input.minMinutesOrHours),
+        input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
       description: cleanText(input.description),
       languages: parseCsv(input.languages),
       disciplines: parseCsv(input.disciplines),

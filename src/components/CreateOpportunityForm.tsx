@@ -95,6 +95,7 @@ function validateOpportunity(values: {
   price: string;
   currency: string;
   totalCapacity: string;
+  minMinutesOrHours: string;
 }) {
   if (values.type !== "camp" && values.type !== "huck_jam") {
     return "Please choose an opportunity type.";
@@ -119,11 +120,14 @@ function validateOpportunity(values: {
     return "Please select a start date.";
   }
 
-  if (!isValidDate(values.endDate)) {
+  if (values.type === "camp" && !isValidDate(values.endDate)) {
     return "Please select an end date.";
   }
 
-  if (new Date(values.endDate) < new Date(values.startDate)) {
+  if (
+    values.type === "camp" &&
+    new Date(values.endDate) < new Date(values.startDate)
+  ) {
     return "End date must be the same as or after the start date.";
   }
 
@@ -150,6 +154,10 @@ function validateOpportunity(values: {
     return "Please enter a valid price.";
   }
 
+  if (values.type === "camp" && getPriceAppliesToError(values.minMinutesOrHours)) {
+    return priceAppliesToErrorMessage;
+  }
+
   if (!currencies.includes(values.currency)) {
     return "Please choose a valid currency.";
   }
@@ -160,6 +168,27 @@ function validateOpportunity(values: {
   }
 
   return "";
+}
+
+const priceAppliesToErrorMessage =
+  "Please enter a valid number of minutes, for example 60.";
+
+function getPriceAppliesToError(value: string) {
+  const trimmed = value.trim();
+
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    return priceAppliesToErrorMessage;
+  }
+
+  const minutes = Number(trimmed);
+  return Number.isFinite(minutes) && minutes > 0
+    ? ""
+    : priceAppliesToErrorMessage;
+}
+
+function normalizeInitialPriceAppliesTo(value?: string) {
+  const trimmed = value?.trim() ?? "";
+  return getPriceAppliesToError(trimmed) ? "60" : trimmed;
 }
 
 export function CreateOpportunityForm({
@@ -204,7 +233,7 @@ export function CreateOpportunityForm({
     String(initialOpportunity?.totalCapacity ?? "8"),
   );
   const [minMinutesOrHours, setMinMinutesOrHours] = useState(
-    initialOpportunity?.minMinutesOrHours ?? "60 min",
+    normalizeInitialPriceAppliesTo(initialOpportunity?.minMinutesOrHours),
   );
   const [description, setDescription] = useState(
     initialOpportunity?.description ?? "",
@@ -251,17 +280,20 @@ export function CreateOpportunityForm({
     const diff = daysUntil(registrationDeadline);
     return diff >= 0 && diff <= 3;
   }, [registrationDeadline, capacityNumber]);
+  const priceAppliesToError =
+    type === "camp" ? getPriceAppliesToError(minMinutesOrHours) : "";
 
   function updateType(nextType: OpportunityType) {
     setType(nextType);
     if (nextType === "huck_jam") {
       setBookingMode("approval_required");
+      setEndDate(startDate);
       if (!initialOpportunity) {
         setPrice("50");
       }
     } else if (!initialOpportunity) {
       setPrice("550");
-      setMinMinutesOrHours("60 min");
+      setMinMinutesOrHours("60");
     }
     if (!endDateTouched && startDate) {
       setEndDate(nextType === "camp" ? addDays(startDate, 5) : startDate);
@@ -270,7 +302,9 @@ export function CreateOpportunityForm({
 
   function updateStartDate(value: string) {
     setStartDate(value);
-    if (!endDateTouched) {
+    if (type === "huck_jam") {
+      setEndDate(value);
+    } else if (!endDateTouched) {
       setEndDate(type === "camp" ? addDays(value, 5) : value);
     }
   }
@@ -291,6 +325,7 @@ export function CreateOpportunityForm({
       price,
       currency,
       totalCapacity,
+      minMinutesOrHours,
     });
 
     if (validationError) {
@@ -299,20 +334,21 @@ export function CreateOpportunityForm({
     }
 
     startTransition(async () => {
+      const effectiveEndDate = type === "huck_jam" ? startDate : endDate;
       const values = {
         type,
         bookingMode: type === "huck_jam" ? "approval_required" : bookingMode,
         title,
         tunnelId,
         startDate,
-        endDate,
+        endDate: effectiveEndDate,
         registrationDeadline,
         sessionStart,
         sessionEnd,
         price: Number(price),
         currency,
         totalCapacity: Number(totalCapacity),
-        minMinutesOrHours,
+        minMinutesOrHours: type === "camp" ? minMinutesOrHours.trim() : "",
         description,
         languages: languages.join(", "),
         disciplines,
@@ -421,8 +457,8 @@ export function CreateOpportunityForm({
         </p>
       ) : null}
       <div className="w-full max-w-full min-w-0 space-y-3">
-        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-          <Field label="Start date" required>
+        <div className={type === "camp" ? "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3" : ""}>
+          <Field label={type === "huck_jam" ? "Date" : "Start date"} required>
             <input
               type="date"
               className={dateFieldClass}
@@ -430,17 +466,19 @@ export function CreateOpportunityForm({
               onChange={(event) => updateStartDate(event.target.value)}
             />
           </Field>
-          <Field label="End date" required>
-            <input
-              type="date"
-              className={dateFieldClass}
-              value={endDate}
-              onChange={(event) => {
-                setEndDateTouched(true);
-                setEndDate(event.target.value);
-              }}
-            />
-          </Field>
+          {type === "camp" ? (
+            <Field label="End date" required>
+              <input
+                type="date"
+                className={dateFieldClass}
+                value={endDate}
+                onChange={(event) => {
+                  setEndDateTouched(true);
+                  setEndDate(event.target.value);
+                }}
+              />
+            </Field>
+          ) : null}
         </div>
         <Field label="Registration deadline">
           <input
@@ -463,6 +501,11 @@ export function CreateOpportunityForm({
             value={price}
             onChange={(event) => setPrice(event.target.value)}
           />
+          {type === "camp" ? (
+            <span className="text-xs font-semibold leading-5 text-slate-500">
+              Usually this is the price per hour including coaching.
+            </span>
+          ) : null}
         </Field>
         <Field label="Currency" required>
           <select
@@ -525,13 +568,30 @@ export function CreateOpportunityForm({
         </summary>
         <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
           {type === "camp" ? (
-            <Field label="Price applies to">
+            <Field label="Price applies to" required>
               <input
+                type="number"
+                min="1"
+                step="1"
                 className="field"
                 value={minMinutesOrHours}
+                onBlur={() => {
+                  if (!minMinutesOrHours.trim()) {
+                    setMinMinutesOrHours("60");
+                  }
+                }}
                 onChange={(event) => setMinMinutesOrHours(event.target.value)}
-                placeholder="60 min"
+                placeholder="60"
               />
+              <span className="text-xs font-semibold leading-5 text-slate-500">
+                Displayed as {price || "550"} {currency === "EUR" ? "€" : currency} per{" "}
+                {minMinutesOrHours || "60"} min
+              </span>
+              {priceAppliesToError ? (
+                <span className="text-xs font-bold leading-5 text-rose-600">
+                  {priceAppliesToError}
+                </span>
+              ) : null}
             </Field>
           ) : null}
           <Field label="Skill level">
@@ -582,7 +642,7 @@ export function CreateOpportunityForm({
 
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || Boolean(priceAppliesToError)}
         className="h-12 w-full rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
       >
         {isPending

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
-import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
+import { formatOpportunityDate, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
@@ -475,7 +475,11 @@ function OpportunityCard({
               {opportunity.location ? `, ${opportunity.location}` : ""}
             </p>
             <p className="mt-0.5 text-xs font-semibold text-slate-500">
-              {formatDateRange(opportunity.startDate, opportunity.endDate)}
+              {formatOpportunityDate(
+                opportunity.type,
+                opportunity.startDate,
+                opportunity.endDate,
+              )}
             </p>
           </div>
           <div className="shrink-0 text-right">

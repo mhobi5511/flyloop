@@ -3,8 +3,9 @@ import { CalendarDays, MapPin, Users } from "lucide-react";
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { Badge } from "./Badge";
 import {
-  formatDateRange,
+  formatOpportunityDate,
   formatPrice,
+  formatPriceAppliesToMinutes,
   formatPriceLabel,
   formatSessionTimeRange,
   getCapacityLines,
@@ -45,6 +46,11 @@ export function OpportunityCard({
     opportunity.type === "huck_jam"
       ? formatSessionTimeRange(opportunity.sessionStart, opportunity.sessionEnd)
       : "";
+  const dateLabel = formatOpportunityDate(
+    opportunity.type,
+    opportunity.startDate,
+    opportunity.endDate,
+  );
 
   return (
     <Link
@@ -97,7 +103,7 @@ export function OpportunityCard({
                 {formatPrice(opportunity.price, opportunity.currency)}
               </div>
               <div className="max-w-24 text-xs leading-4 text-sky-600">
-                {formatPriceLabel(opportunity.type)}
+                {formatPriceLabel(opportunity.type, opportunity.minMinutesOrHours)}
               </div>
             </>
           )}
@@ -115,7 +121,7 @@ export function OpportunityCard({
           <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
             <CalendarDays size={14} className="shrink-0 text-sky-600" />
             <span className="line-clamp-1">
-              {formatDateRange(opportunity.startDate, opportunity.endDate)}
+              {dateLabel}
               {sessionRange ? ` - ${sessionRange}` : ""} - {capacityLines[0]}
             </span>
           </div>
@@ -130,7 +136,7 @@ export function OpportunityCard({
         <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
           <div className="flex items-center gap-1.5">
             <CalendarDays size={15} className="text-sky-600" />
-            <span>{formatDateRange(opportunity.startDate, opportunity.endDate)}</span>
+            <span>{dateLabel}</span>
           </div>
           {sessionRange ? (
             <div className="flex items-center gap-1.5">
@@ -195,7 +201,9 @@ function formatCompactPrice(opportunity: Opportunity) {
   }).format(opportunity.price);
   const currencyLabel = opportunity.currency === "EUR" ? "€" : opportunity.currency;
   const suffix =
-    opportunity.type === "huck_jam" ? " Participation Fee" : " per 60 min";
+    opportunity.type === "huck_jam"
+      ? " Participation Fee"
+      : ` per ${formatPriceAppliesToMinutes(opportunity.minMinutesOrHours)} min`;
 
   return `${amount} ${currencyLabel}${suffix}`;
 }

@@ -9,7 +9,8 @@ import { InterestButton } from "@/components/InterestButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TimetableReminderButton } from "@/components/TimetableReminderButton";
 import {
-  formatDateRange,
+  formatOpportunityDate,
+  formatPriceAppliesToMinutes,
   formatSessionTimeRange,
   getCapacityLines,
   formatPrice,
@@ -193,7 +194,11 @@ export default async function OpportunityDetailPage({
           <div className="mt-2 grid gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
             <p className="flex items-center gap-2">
               <CalendarDays size={16} className="text-sky-700" />
-              {formatDateRange(opportunity.startDate, opportunity.endDate)}
+              {formatOpportunityDate(
+                opportunity.type,
+                opportunity.startDate,
+                opportunity.endDate,
+              )}
             </p>
             <p className="flex items-center gap-2">
               <Users size={16} className="text-sky-700" />
@@ -247,7 +252,11 @@ export default async function OpportunityDetailPage({
               {formatPrice(opportunity.price, opportunity.currency)}
             </p>
             <p className="mt-0.5 text-sm font-bold text-sky-800">
-              {isHuckJam ? "Participation Fee" : "per 60 min"}
+              {isHuckJam
+                ? "Participation Fee"
+                : `per ${formatPriceAppliesToMinutes(
+                    opportunity.minMinutesOrHours,
+                  )} min`}
             </p>
           </div>
 
@@ -453,7 +462,10 @@ function getDetailRows({
   const rows: Array<{ label: string; value: string }> = [];
 
   if (opportunityType === "camp" && minMinutesOrHours?.trim()) {
-    rows.push({ label: "Price applies to", value: minMinutesOrHours });
+    rows.push({
+      label: "Price applies to",
+      value: `${formatPriceAppliesToMinutes(minMinutesOrHours)} min`,
+    });
   }
 
   if (skillLevel?.trim()) {
