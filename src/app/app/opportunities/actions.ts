@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { sendPendingPushNotificationsForUsers } from "@/lib/push";
 import type { InterestStatus } from "@/lib/types";
 
 type ActionResult =
@@ -31,6 +32,15 @@ function reminderErrorMessage(error: {
   code?: string;
 }) {
   return debugSupabaseMessage(error) || "Could not set reminder. Please try again.";
+}
+
+async function sendServerPush(
+  userIds: string[],
+  context: string,
+  filter?: { opportunityId?: string; types?: string[] },
+) {
+  const result = await sendPendingPushNotificationsForUsers(userIds, filter);
+  console.log("Server push trigger completed", { context, result, userIds, filter });
 }
 
 export async function sendOpportunityInterest(
@@ -113,6 +123,11 @@ export async function sendOpportunityInterest(
     console.error("Interest creation failed", error);
     return { ok: false, message: "Could not send interest. Please try again." };
   }
+
+  await sendServerPush([opportunity.created_by], "new_interest", {
+    opportunityId,
+    types: ["new_interest"],
+  });
 
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath("/app/dashboard");

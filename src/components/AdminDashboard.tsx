@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Bell, MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type AdminTunnel = {
@@ -84,6 +84,7 @@ export function AdminDashboard({
     initialMissingCoordinateCount,
   );
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isSendingTestPush, setIsSendingTestPush] = useState(false);
   const [geocodeStatus, setGeocodeStatus] = useState("");
   const [geocodeResult, setGeocodeResult] = useState<GeocodeSummary | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -337,8 +338,52 @@ export function AdminDashboard({
     setGeocodeStatus(`${summary.updated} of ${summary.total} tunnels geocoded`);
   }
 
+  async function sendTestPush() {
+    setIsSendingTestPush(true);
+    setMessage("");
+    setError("");
+
+    const response = await fetch("/api/push/test", { method: "POST" });
+    const result = (await response.json().catch(() => ({}))) as {
+      notificationId?: string;
+      result?: { sent?: number; skipped?: string; error?: string };
+      error?: string;
+    };
+
+    setIsSendingTestPush(false);
+
+    if (!response.ok) {
+      setError(result.error ?? "Could not send test push.");
+      return;
+    }
+
+    setMessage(
+      `Test push queued. Notification ${result.notificationId ?? "created"}, sent ${result.result?.sent ?? 0}.`,
+    );
+  }
+
   return (
     <div className="grid gap-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black tracking-tight">Push Diagnostics</h2>
+            <p className="text-sm font-semibold text-slate-500">
+              Sends a real Web Push to your current admin user.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isSendingTestPush}
+            onClick={() => void sendTestPush()}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-bold text-white disabled:bg-slate-300"
+          >
+            <Bell size={16} />
+            {isSendingTestPush ? "Sending..." : "Send test push"}
+          </button>
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

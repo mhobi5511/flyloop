@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { sendPendingPushNotifications } from "@/lib/push-client";
 
 type Notification = {
   id: string;
@@ -25,20 +24,6 @@ export function NotificationBell() {
     let disposed = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let currentUserId: string | null = null;
-    let lastPushCheckAt = 0;
-
-    function queuePushSend() {
-      const now = Date.now();
-
-      if (now - lastPushCheckAt < 5000) {
-        return;
-      }
-
-      lastPushCheckAt = now;
-      void sendPendingPushNotifications().catch((pushError) => {
-        console.error("Pending push notification send failed", pushError);
-      });
-    }
 
     async function loadNotifications() {
       if (!currentUserId) {
@@ -61,9 +46,6 @@ export function NotificationBell() {
 
         if (!disposed) {
           setNotifications(data ?? []);
-          if ((data ?? []).length > 0) {
-            queuePushSend();
-          }
         }
       } catch (loadError) {
         console.error("Notification load failed", loadError);

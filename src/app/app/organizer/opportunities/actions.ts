@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  sendPendingPushNotificationsForOpportunity,
+  sendPendingPushNotificationsForUsers,
+} from "@/lib/push";
 import type { InterestStatus } from "@/lib/types";
 
 const editableStatuses: InterestStatus[] = ["accepted", "declined", "waitlist"];
@@ -23,6 +27,15 @@ type ExistingTimetableSlotWithBookings = {
     | { user_id: string }
     | null;
 };
+
+async function sendServerPush(
+  userIds: string[],
+  context: string,
+  filter?: { opportunityId?: string; types?: string[] },
+) {
+  const result = await sendPendingPushNotificationsForUsers(userIds, filter);
+  console.log("Server push trigger completed", { context, result, userIds, filter });
+}
 
 export async function updateApplicantStatus(
   interestId: string,
@@ -112,6 +125,11 @@ export async function updateApplicantStatus(
     });
     return { ok: false, message: "Applicant not found or not editable." };
   }
+
+  await sendServerPush([interest.athlete_id], "application_status", {
+    opportunityId: interest.opportunity_id,
+    types: ["application_status", "slot_bookings_released"],
+  });
 
   revalidatePath(`/app/organizer/opportunities/${updatedInterest.opportunity_id}`);
   revalidatePath(`/app/opportunities/${updatedInterest.opportunity_id}`);
@@ -255,6 +273,11 @@ export async function saveCampTimetable(
       );
       return { ok: false, message: "Timetable saved, but notifications failed." };
     }
+
+    await sendServerPush([...affectedParticipantIds], "timetable_booking_changed", {
+      opportunityId,
+      types: ["timetable_booking_changed"],
+    });
   }
 
   if (publish) {
@@ -268,6 +291,16 @@ export async function saveCampTimetable(
         console.error("Timetable notification RPC failed", notificationError);
         return { ok: false, message: "Timetable saved, but notifications failed." };
       }
+
+      const pushResult = await sendPendingPushNotificationsForOpportunity(
+        opportunityId,
+        ["timetable_published"],
+      );
+      console.log("Server push trigger completed", {
+        context: "timetable_published",
+        result: pushResult,
+        opportunityId,
+      });
     }
   }
 
@@ -314,6 +347,11 @@ export async function sendTimetableBookingReminder(
     });
     return { ok: false, message: "Could not send reminder." };
   }
+
+  await sendServerPush([participantId], "timetable_booking_reminder", {
+    opportunityId,
+    types: ["timetable_booking_reminder"],
+  });
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
 
@@ -362,6 +400,11 @@ export async function releaseParticipantTimes(
     return { ok: false, message: "Could not release times." };
   }
 
+  await sendServerPush([participantId], "slot_bookings_released_by_organizer", {
+    opportunityId,
+    types: ["slot_bookings_released_by_organizer"],
+  });
+
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
@@ -398,6 +441,12 @@ export async function releaseParticipantSlotBooking(
     return { ok: false, message: "Please log in again." };
   }
 
+  const { data: booking } = await supabase
+    .from("opportunity_slot_bookings")
+    .select("user_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+
   const { data: releasedCount, error } = await supabase.rpc(
     "release_opportunity_slot_booking",
     {
@@ -417,6 +466,13 @@ export async function releaseParticipantSlotBooking(
       hint: error.hint,
     });
     return { ok: false, message: "Could not release slot." };
+  }
+
+  if (booking?.user_id) {
+    await sendServerPush([booking.user_id], "slot_booking_released_by_organizer", {
+      opportunityId,
+      types: ["slot_booking_released_by_organizer"],
+    });
   }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);

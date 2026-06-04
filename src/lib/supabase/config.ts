@@ -3,6 +3,7 @@ export function getSupabaseConfig() {
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const hasValidUrl = Boolean(
     url?.startsWith("https://"),
   );
@@ -10,6 +11,7 @@ export function getSupabaseConfig() {
   return {
     url,
     anonKey,
+    serviceRoleKey,
     isConfigured: Boolean(hasValidUrl && anonKey),
   };
 }
@@ -26,5 +28,18 @@ export function getSupabaseConfigOrThrow() {
   return {
     url: config.url,
     anonKey: config.anonKey,
+  };
+}
+
+export function getSupabaseServiceConfig() {
+  const config = getSupabaseConfig();
+
+  if (!config.url || !config.serviceRoleKey) {
+    return null;
+  }
+
+  return {
+    url: config.url,
+    serviceRoleKey: config.serviceRoleKey,
   };
 }

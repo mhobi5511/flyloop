@@ -108,6 +108,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     NotificationPermission | "unsupported" | "unknown"
   >("unknown");
   const [pushStatus, setPushStatus] = useState("");
+  const [showIosPwaHint, setShowIosPwaHint] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
@@ -181,6 +182,11 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     const timeout = window.setTimeout(() => {
       const support = getPushSupportState();
       setPushPermission(support.permission);
+      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+      setShowIosPwaHint(isIos && !isStandalone);
     }, 0);
 
     return () => window.clearTimeout(timeout);
@@ -769,6 +775,11 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
           {pushStatus ? (
             <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
               {pushStatus}
+            </p>
+          ) : null}
+          {showIosPwaHint ? (
+            <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
+              On iPhone, push notifications work best when Flyloop is added to your Home Screen.
             </p>
           ) : null}
         </ProfileSection>

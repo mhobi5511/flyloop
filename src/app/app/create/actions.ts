@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendNewTunnelNotification } from "@/lib/email/tunnel-notifications";
+import { sendPendingPushNotificationsForOpportunity } from "@/lib/push";
 import { regions } from "@/lib/location";
 import type { BookingMode, OpportunityType } from "@/lib/types";
 
@@ -253,6 +254,15 @@ export async function publishOpportunity(
     return { ok: false, message: friendlyPublishError(error) };
   }
 
+  const pushResult = await sendPendingPushNotificationsForOpportunity(data.id, [
+    "new_opportunity",
+  ]);
+  console.log("Server push trigger completed", {
+    context: "new_opportunity",
+    opportunityId: data.id,
+    result: pushResult,
+  });
+
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
 
@@ -404,6 +414,15 @@ export async function updateOpportunity(
   if (error) {
     return { ok: false, message: friendlyPublishError(error) };
   }
+
+  const pushResult = await sendPendingPushNotificationsForOpportunity(opportunityId, [
+    "new_opportunity",
+  ]);
+  console.log("Server push trigger completed", {
+    context: "new_opportunity",
+    opportunityId,
+    result: pushResult,
+  });
 
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
