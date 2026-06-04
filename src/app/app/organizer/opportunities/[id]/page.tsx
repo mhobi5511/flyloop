@@ -16,6 +16,7 @@ import {
 import { sendTimetableBookingReminderForm } from "@/app/app/organizer/opportunities/actions";
 import { AppShell } from "@/components/AppShell";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
+import { CampRemovalRequestActions } from "@/components/CampRemovalRequestActions";
 import {
   ApplicationStatusBadge,
   applicantBorderClass,
@@ -76,6 +77,7 @@ type ApplicantRow = {
   id: string;
   status: InterestStatus;
   created_at: string;
+  removal_requested_at: string | null;
   profiles:
     | {
         id: string;
@@ -174,12 +176,12 @@ export default async function OrganizerOpportunityPage({
     .update({ read: true })
     .eq("user_id", user?.id)
     .eq("opportunity_id", id)
-    .eq("type", "new_interest")
+    .in("type", ["new_interest", "participant_removal_requested"])
     .eq("read", false);
 
   const { data: applicants } = await supabase
     .from("opportunity_interests")
-    .select("id,status,created_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
+    .select("id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
     .neq("interest_type", "timetable_reminder")
     .order("created_at", { ascending: false });
@@ -526,6 +528,10 @@ export default async function OrganizerOpportunityPage({
             const reminderAlreadySent = participantsWithReminders.has(
               profile?.id ?? "",
             );
+            const hasRemovalRequest =
+              !isHuckJam &&
+              applicant.status === "accepted" &&
+              Boolean(applicant.removal_requested_at);
 
             return (
               <article
@@ -565,6 +571,11 @@ export default async function OrganizerOpportunityPage({
                             </h3>
                           )}
                           <ApplicationStatusBadge status={applicant.status} />
+                          {hasRemovalRequest ? (
+                            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-black text-rose-700">
+                              Removal requested
+                            </span>
+                          ) : null}
                         </div>
                         <div className="mt-1 grid gap-0.5 text-xs text-slate-600">
                           <p>{profile?.country ?? "Country not set"}</p>
@@ -618,10 +629,15 @@ export default async function OrganizerOpportunityPage({
                       ) : null}
                     </div>
                   </div>
-                  <ApplicantStatusActions
-                    interestId={applicant.id}
-                    currentStatus={applicant.status}
-                  />
+                  <div className="grid gap-2 sm:justify-items-end">
+                    {hasRemovalRequest ? (
+                      <CampRemovalRequestActions interestId={applicant.id} />
+                    ) : null}
+                    <ApplicantStatusActions
+                      interestId={applicant.id}
+                      currentStatus={applicant.status}
+                    />
+                  </div>
                 </div>
               </article>
             );

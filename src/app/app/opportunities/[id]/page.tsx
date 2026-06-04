@@ -6,6 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
+import { RequestCampRemovalButton } from "@/components/RequestCampRemovalButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TimetableReminderButton } from "@/components/TimetableReminderButton";
 import {
@@ -71,7 +72,7 @@ export default async function OpportunityDetailPage({
     user && user.id !== opportunity.createdBy
       ? await supabase
           .from("opportunity_interests")
-          .select("status,interest_type")
+          .select("id,status,interest_type,removal_requested_at")
           .eq("opportunity_id", opportunity.id)
           .eq("athlete_id", user.id)
           .maybeSingle()
@@ -106,6 +107,8 @@ export default async function OpportunityDetailPage({
       : [{ count: 0 }, { data: [] }];
   const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
   const isAccepted = viewerApplicationStatus === "accepted";
+  const canRequestCampRemoval =
+    !isHuckJam && isAccepted && Boolean(viewerInterest?.id);
   const isDeclined = viewerApplicationStatus === "declined";
   const isWaitlisted = viewerApplicationStatus === "waitlist";
   const isBlockedFromBooking = isDeclined || isWaitlisted;
@@ -321,6 +324,13 @@ export default async function OpportunityDetailPage({
                 initialReminderSet={viewerHasTimetableReminder}
               />
             </div>
+          ) : null}
+
+          {canRequestCampRemoval && viewerInterest?.id ? (
+            <RequestCampRemovalButton
+              interestId={viewerInterest.id}
+              initialRequested={Boolean(viewerInterest.removal_requested_at)}
+            />
           ) : null}
 
           {canSelectTimes ? (

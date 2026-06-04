@@ -94,7 +94,7 @@ export async function updateApplicantStatus(
 
   const { data: updatedInterest, error } = await supabase
     .from("opportunity_interests")
-    .update({ status })
+    .update({ status, removal_requested_at: null })
     .eq("id", interestId)
     .select("id,status,opportunity_id")
     .maybeSingle();
@@ -138,6 +138,148 @@ export async function updateApplicantStatus(
   revalidatePath("/app/applications");
 
   return { ok: true, message: "Applicant status updated." };
+}
+
+export async function approveCampRemovalRequest(
+  interestId: string,
+): Promise<ActionResult> {
+  const result = await resolveCampRemovalRequest(interestId, "approve");
+  return result;
+}
+
+export async function keepCampParticipant(
+  interestId: string,
+): Promise<ActionResult> {
+  const result = await resolveCampRemovalRequest(interestId, "keep");
+  return result;
+}
+
+async function resolveCampRemovalRequest(
+  interestId: string,
+  decision: "approve" | "keep",
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: interest, error: lookupError } = await supabase
+    .from("opportunity_interests")
+    .select("id,opportunity_id,status,athlete_id,removal_requested_at,opportunities(id,title,type,created_by)")
+    .eq("id", interestId)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("Camp removal request lookup failed", {
+      interestId,
+      decision,
+      code: lookupError.code,
+      message: lookupError.message,
+      details: lookupError.details,
+      hint: lookupError.hint,
+    });
+    return { ok: false, message: "Could not update removal request." };
+  }
+
+  const opportunity = Array.isArray(interest?.opportunities)
+    ? interest?.opportunities[0]
+    : interest?.opportunities;
+
+  if (!interest || !opportunity || opportunity.created_by !== user.id) {
+    return { ok: false, message: "Removal request not found." };
+  }
+
+  if (opportunity.type !== "camp") {
+    return { ok: false, message: "Removal requests are only available for Camps." };
+  }
+
+  if (interest.status !== "accepted" || !interest.removal_requested_at) {
+    return { ok: false, message: "There is no active removal request." };
+  }
+
+  const updatePayload =
+    decision === "approve"
+      ? { status: "withdrawn" as InterestStatus, removal_requested_at: null }
+      : { removal_requested_at: null };
+
+  const { data: updatedInterest, error } = await supabase
+    .from("opportunity_interests")
+    .update(updatePayload)
+    .eq("id", interest.id)
+    .eq("status", "accepted")
+    .not("removal_requested_at", "is", null)
+    .select("id,status,opportunity_id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Camp removal request resolution failed", {
+      interestId,
+      opportunityId: interest.opportunity_id,
+      decision,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return { ok: false, message: "Could not update removal request." };
+  }
+
+  if (!updatedInterest) {
+    return { ok: false, message: "There is no active removal request." };
+  }
+
+  const notification =
+    decision === "approve"
+      ? {
+          title: "You were removed from the Camp",
+          body: `Your spot in ${opportunity.title} was released by the organizer.`,
+          type: "participant_removed_from_camp",
+        }
+      : {
+          title: "You're still in",
+          body: `The organizer kept your spot in ${opportunity.title}.`,
+          type: "participant_removal_kept",
+        };
+
+  const { error: notificationError } = await supabase.from("notifications").insert({
+    user_id: interest.athlete_id,
+    title: notification.title,
+    body: notification.body,
+    type: notification.type,
+    opportunity_id: opportunity.id,
+  });
+
+  if (notificationError) {
+    console.error("Camp removal participant notification failed", {
+      interestId,
+      decision,
+      error: notificationError,
+    });
+  } else {
+    await sendServerPush([interest.athlete_id], notification.type, {
+      opportunityId: opportunity.id,
+      types: [notification.type],
+    });
+  }
+
+  revalidatePath(`/app/organizer/opportunities/${opportunity.id}`);
+  revalidatePath(`/app/opportunities/${opportunity.id}`);
+  revalidatePath(`/app/opportunities/${opportunity.id}/times`);
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/applications");
+
+  return {
+    ok: true,
+    message:
+      decision === "approve"
+        ? "Participant removed and booked times released."
+        : "Participant kept in the Camp.",
+  };
 }
 
 export type TimetableSlotInput = {

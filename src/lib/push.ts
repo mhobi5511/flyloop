@@ -37,6 +37,9 @@ const relevantPushTypes = [
   "new_opportunity",
   "new_time_booking",
   "timetable_reminder_interest",
+  "participant_removal_requested",
+  "participant_removed_from_camp",
+  "participant_removal_kept",
   "opportunity_deleted",
 ] as const;
 
@@ -76,7 +79,8 @@ function notificationUrl(notification: NotificationRow) {
   const isOrganizerNotification =
     notification.type === "new_interest" ||
     notification.type === "new_time_booking" ||
-    notification.type === "timetable_reminder_interest";
+    notification.type === "timetable_reminder_interest" ||
+    notification.type === "participant_removal_requested";
   const path =
     notification.opportunity_id && isOrganizerNotification
       ? `/app/organizer/opportunities/${notification.opportunity_id}`
