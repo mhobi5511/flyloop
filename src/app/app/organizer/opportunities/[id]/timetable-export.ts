@@ -8,6 +8,7 @@ export type TimetableExportOpportunity = {
   title: string;
   price: number | string;
   currency: string;
+  priceAppliesToMinutes: string | null;
   tunnelName: string;
 };
 
@@ -17,6 +18,7 @@ type ExportOpportunityRow = {
   title: string;
   price: number | string;
   currency: string;
+  min_minutes_or_hours: string | null;
   tunnel_profiles:
     | { name: string | null }
     | Array<{ name: string | null }>
@@ -62,7 +64,7 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
 
   const { data: opportunity } = await supabase
     .from("opportunities")
-    .select("id,type,title,price,currency,tunnel_profiles(name)")
+    .select("id,type,title,price,currency,min_minutes_or_hours,tunnel_profiles(name)")
     .eq("id", opportunityId)
     .eq("created_by", user.id)
     .maybeSingle();
@@ -92,6 +94,7 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
     title: opportunityRow.title,
     price: opportunityRow.price,
     currency: opportunityRow.currency,
+    priceAppliesToMinutes: opportunityRow.min_minutes_or_hours,
     tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
   };
 

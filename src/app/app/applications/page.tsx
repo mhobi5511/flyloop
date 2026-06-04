@@ -15,6 +15,7 @@ import {
   formatPriceLabel,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { calculateEstimatedCost } from "@/lib/timetable";
 import type { InterestStatus, OpportunityType } from "@/lib/types";
 
 type ApplicationRow = {
@@ -317,6 +318,20 @@ export default async function ApplicationsPage({
                       ),
                     )}
                   </div>
+                  <p className="mt-2 text-xs font-bold text-slate-600">
+                    Estimated total:{" "}
+                    {formatMoney(
+                      calculateEstimatedCost(
+                        Number(opportunity.price),
+                        (bookingsByOpportunity.get(opportunity.id) ?? []).reduce(
+                          (total, booking) => total + booking.minutes,
+                          0,
+                        ),
+                        opportunity.min_minutes_or_hours,
+                      ),
+                      opportunity.currency,
+                    )}
+                  </p>
                 </div>
               ) : null}
               {application.status === "pending" || application.status === "waitlist" ? (
@@ -454,4 +469,10 @@ function formatBookedTime(dateValue: string, timeValue: string) {
   }).format(new Date(`${dateValue}T00:00:00`));
 
   return `${date}, ${timeValue.slice(0, 5)}`;
+}
+
+function formatMoney(value: number, currency: string) {
+  return `${new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(value)} ${currency}`;
 }

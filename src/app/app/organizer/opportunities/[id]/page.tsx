@@ -227,6 +227,7 @@ export default async function OrganizerOpportunityPage({
   const timetableSummary = getTimetableSummary(
     timetableSlots,
     Number(currentOpportunity.price),
+    currentOpportunity.min_minutes_or_hours,
   );
   const timetableDays = groupTimetableSlotsByDay(timetableSlots);
   const hasPublishedTimetable =

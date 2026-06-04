@@ -21,6 +21,7 @@ import {
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
+import { calculateEstimatedCost } from "@/lib/timetable";
 import type { InterestStatus } from "@/lib/types";
 
 type OpportunityDetailRow = HomeFeedRow & {
@@ -147,7 +148,11 @@ export default async function OpportunityDetailPage({
     (total, booking) => total + booking.minutes,
     0,
   );
-  const bookedEstimate = (opportunity.price / 60) * bookedMinutes;
+  const bookedEstimate = calculateEstimatedCost(
+    opportunity.price,
+    bookedMinutes,
+    opportunity.minMinutesOrHours,
+  );
   const sessionRange = formatSessionTimeRange(
     opportunity.sessionStart,
     opportunity.sessionEnd,

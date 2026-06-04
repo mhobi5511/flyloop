@@ -4,6 +4,10 @@ import { useMemo, useState, useTransition } from "react";
 import { Check, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { bookOpportunitySlots } from "@/app/app/opportunities/actions";
+import {
+  calculateEstimatedCost,
+  getPriceAppliesToMinutesNumber,
+} from "@/lib/timetable";
 
 type SlotOption = {
   id: string;
@@ -18,14 +22,16 @@ type SlotOption = {
 
 type SlotBookingSelectorProps = {
   opportunityId: string;
-  hourlyPrice: number;
+  price: number;
+  priceAppliesToMinutes?: string | null;
   currency: string;
   slots: SlotOption[];
 };
 
 export function SlotBookingSelector({
   opportunityId,
-  hourlyPrice,
+  price,
+  priceAppliesToMinutes,
   currency,
   slots,
 }: SlotBookingSelectorProps) {
@@ -47,7 +53,12 @@ export function SlotBookingSelector({
     (sum, slot) => sum + slot.durationMinutes,
     0,
   );
-  const estimatedTotal = (hourlyPrice / 60) * totalMinutes;
+  const priceBasisMinutes = getPriceAppliesToMinutesNumber(priceAppliesToMinutes);
+  const estimatedTotal = calculateEstimatedCost(
+    price,
+    totalMinutes,
+    priceBasisMinutes,
+  );
   const groupedSlots = useMemo(() => groupSlotsByDay(slots), [slots]);
 
   function toggleSlot(slot: SlotOption) {
@@ -159,6 +170,9 @@ export function SlotBookingSelector({
       )}
 
       <section className="sticky bottom-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+        <p className="mb-2 text-center text-xs font-bold text-slate-500">
+          {formatMoney(price, currency)} per {priceBasisMinutes} min
+        </p>
         <div className="grid grid-cols-3 gap-2 text-center">
           <SummaryValue label="Slots" value={String(selectedCount)} />
           <SummaryValue label="Minutes" value={String(totalMinutes)} />

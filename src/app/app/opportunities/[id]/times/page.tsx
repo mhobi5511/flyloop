@@ -121,7 +121,8 @@ export default async function SlotBookingPage({
         <div className="mt-4">
           <SlotBookingSelector
             opportunityId={opportunity.id}
-            hourlyPrice={opportunity.price}
+            price={opportunity.price}
+            priceAppliesToMinutes={opportunity.minMinutesOrHours}
             currency={opportunity.currency}
             slots={slots}
           />

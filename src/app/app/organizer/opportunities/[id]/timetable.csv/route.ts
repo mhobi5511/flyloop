@@ -1,4 +1,7 @@
-import { getTimetableOverviewRows } from "@/lib/timetable";
+import {
+  getPriceAppliesToMinutesNumber,
+  getTimetableOverviewRows,
+} from "@/lib/timetable";
 import {
   filenameFor,
   getOrganizerTimetableExport,
@@ -10,7 +13,14 @@ export async function GET(
 ) {
   const { id } = await params;
   const { opportunity, slots } = await getOrganizerTimetableExport(id);
-  const rows = getTimetableOverviewRows(slots, Number(opportunity.price));
+  const priceBasisMinutes = getPriceAppliesToMinutesNumber(
+    opportunity.priceAppliesToMinutes,
+  );
+  const rows = getTimetableOverviewRows(
+    slots,
+    Number(opportunity.price),
+    priceBasisMinutes,
+  );
   const csv = [
     [
       "Opportunity Name",
@@ -21,6 +31,7 @@ export async function GET(
       "Athlete Email if available",
       "Athlete Phone if available",
       "Status",
+      "Pricing Basis",
       "Estimated Price",
     ],
     ...rows.map((row) => [
@@ -32,6 +43,7 @@ export async function GET(
       row.athleteEmail,
       row.athletePhone,
       row.status,
+      `${formatCsvMoney(Number(opportunity.price))} ${opportunity.currency} per ${priceBasisMinutes} min`,
       row.status === "booked"
         ? `${formatCsvMoney(row.estimatedPrice)} ${opportunity.currency}`
         : "",

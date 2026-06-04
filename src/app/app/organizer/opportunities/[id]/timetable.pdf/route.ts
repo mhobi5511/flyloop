@@ -1,6 +1,8 @@
 import {
   formatTimetableDate,
+  formatTimetableMoney,
   formatTimetableTime,
+  getPriceAppliesToMinutesNumber,
   groupTimetableSlotsByDay,
   type TimetableSlot,
 } from "@/lib/timetable";
@@ -25,6 +27,9 @@ export async function GET(
   const pdf = buildTimetablePdf({
     opportunityTitle: opportunity.title,
     tunnelName: opportunity.tunnelName,
+    price: Number(opportunity.price),
+    currency: opportunity.currency,
+    priceAppliesToMinutes: opportunity.priceAppliesToMinutes,
     slots,
   });
 
@@ -39,13 +44,26 @@ export async function GET(
 function buildTimetablePdf({
   opportunityTitle,
   tunnelName,
+  price,
+  currency,
+  priceAppliesToMinutes,
   slots,
 }: {
   opportunityTitle: string;
   tunnelName: string;
+  price: number;
+  currency: string;
+  priceAppliesToMinutes?: string | number | null;
   slots: TimetableSlot[];
 }) {
-  const lines = getPdfLines({ opportunityTitle, tunnelName, slots });
+  const lines = getPdfLines({
+    opportunityTitle,
+    tunnelName,
+    price,
+    currency,
+    priceAppliesToMinutes,
+    slots,
+  });
   const pages: PdfLine[][] = [];
   let currentPage: PdfLine[] = [];
   let y = 792;
@@ -71,15 +89,29 @@ function buildTimetablePdf({
 function getPdfLines({
   opportunityTitle,
   tunnelName,
+  price,
+  currency,
+  priceAppliesToMinutes,
   slots,
 }: {
   opportunityTitle: string;
   tunnelName: string;
+  price: number;
+  currency: string;
+  priceAppliesToMinutes?: string | number | null;
   slots: TimetableSlot[];
 }): PdfLine[] {
   const lines: PdfLine[] = [
     { text: `Camp: ${opportunityTitle}`, size: 18, font: "bold", gap: 24 },
-    { text: `Tunnel: ${tunnelName}`, size: 12, font: "regular", gap: 26 },
+    { text: `Tunnel: ${tunnelName}`, size: 12, font: "regular", gap: 18 },
+    {
+      text: `Pricing: ${formatTimetableMoney(price, currency)} per ${getPriceAppliesToMinutesNumber(
+        priceAppliesToMinutes,
+      )} min`,
+      size: 12,
+      font: "regular",
+      gap: 26,
+    },
   ];
 
   for (const day of groupTimetableSlotsByDay(slots)) {

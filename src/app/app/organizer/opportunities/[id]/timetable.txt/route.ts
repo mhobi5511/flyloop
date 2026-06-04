@@ -13,6 +13,9 @@ export async function GET(
   const text = formatTimetablePlainText({
     opportunityTitle: opportunity.title,
     tunnelName: opportunity.tunnelName,
+    price: Number(opportunity.price),
+    currency: opportunity.currency,
+    priceAppliesToMinutes: opportunity.priceAppliesToMinutes,
     slots,
   });
 

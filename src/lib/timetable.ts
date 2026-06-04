@@ -37,7 +37,27 @@ export type TimetableSlotGroup = {
   openSpots: number;
 };
 
-export function getTimetableSummary(slots: TimetableSlot[], hourlyPrice: number) {
+export function getPriceAppliesToMinutesNumber(minutes?: string | number | null) {
+  const parsed =
+    typeof minutes === "number" ? minutes : Number(String(minutes ?? "").trim());
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+}
+
+export function calculateEstimatedCost(
+  price: number,
+  bookedMinutes: number,
+  priceAppliesToMinutes?: string | number | null,
+) {
+  const appliesToMinutes = getPriceAppliesToMinutesNumber(priceAppliesToMinutes);
+  return bookedMinutes * (price / appliesToMinutes);
+}
+
+export function getTimetableSummary(
+  slots: TimetableSlot[],
+  price: number,
+  priceAppliesToMinutes?: string | number | null,
+) {
   const totalSlots = slots.reduce((total, slot) => total + slot.capacity, 0);
   const bookedSlots = slots.reduce(
     (total, slot) => total + slot.bookings.length,
@@ -61,7 +81,11 @@ export function getTimetableSummary(slots: TimetableSlot[], hourlyPrice: number)
     totalTimetableMinutes,
     totalBookedMinutes,
     totalAvailableMinutes: Math.max(totalTimetableMinutes - totalBookedMinutes, 0),
-    estimatedRevenue: (hourlyPrice / 60) * totalBookedMinutes,
+    estimatedRevenue: calculateEstimatedCost(
+      price,
+      totalBookedMinutes,
+      priceAppliesToMinutes,
+    ),
   };
 }
 
@@ -78,7 +102,8 @@ export function getTimetableSlotGroups(slots: TimetableSlot[]) {
 
 export function getTimetableOverviewRows(
   slots: TimetableSlot[],
-  hourlyPrice: number,
+  price: number,
+  priceAppliesToMinutes?: string | number | null,
 ) {
   const rows: TimetableOverviewRow[] = [];
 
@@ -93,7 +118,11 @@ export function getTimetableOverviewRows(
         athleteEmail: "",
         athletePhone: booking.athletePhone,
         status: "booked",
-        estimatedPrice: (hourlyPrice / 60) * booking.minutes,
+        estimatedPrice: calculateEstimatedCost(
+          price,
+          booking.minutes,
+          priceAppliesToMinutes,
+        ),
       });
     }
 
@@ -177,13 +206,29 @@ export function formatTimetableMoney(value: number, currency: string) {
 export function formatTimetablePlainText({
   opportunityTitle,
   tunnelName,
+  price,
+  currency,
+  priceAppliesToMinutes,
   slots,
 }: {
   opportunityTitle: string;
   tunnelName: string;
+  price?: number;
+  currency?: string;
+  priceAppliesToMinutes?: string | number | null;
   slots: TimetableSlot[];
 }) {
-  const lines = [`Camp: ${opportunityTitle}`, `Tunnel: ${tunnelName}`, ""];
+  const lines = [`Camp: ${opportunityTitle}`, `Tunnel: ${tunnelName}`];
+
+  if (price !== undefined && currency) {
+    lines.push(
+      `Pricing: ${formatTimetableMoney(price, currency)} per ${getPriceAppliesToMinutesNumber(
+        priceAppliesToMinutes,
+      )} min`,
+    );
+  }
+
+  lines.push("");
 
   for (const day of groupTimetableSlotsByDay(slots)) {
     lines.push(formatTimetableDate(day.date), "");
