@@ -416,6 +416,28 @@ export async function bookOpportunitySlots(
     };
   }
 
+  const { data: opportunity, error: opportunityLookupError } = await supabase
+    .from("opportunities")
+    .select("created_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityLookupError) {
+    console.error("Time booking organizer push lookup failed", {
+      opportunityId,
+      userId: user.id,
+      code: opportunityLookupError.code,
+      message: opportunityLookupError.message,
+      details: opportunityLookupError.details,
+      hint: opportunityLookupError.hint,
+    });
+  } else if (opportunity?.created_by) {
+    await sendServerPush([opportunity.created_by], "new_time_booking", {
+      opportunityId,
+      types: ["new_time_booking"],
+    });
+  }
+
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
   revalidatePath("/app/applications");

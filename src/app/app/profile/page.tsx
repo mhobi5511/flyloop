@@ -17,7 +17,7 @@ export default async function ProfilePage() {
   const [{ data: profile }, { data: tunnels }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name,country,city,bio,disciplines,home_tunnel_id,website_url,youtube_url,mobile_country_code,phone,whatsapp_number,instagram_handle,profile_image_url,is_organizer,wants_to_create_opportunities,use_location_recommendations,latitude,longitude,preferred_radius_km,push_notifications_enabled,push_prompt_answered_at")
+      .select("created_at,full_name,country,city,bio,disciplines,home_tunnel_id,website_url,youtube_url,mobile_country_code,phone,whatsapp_number,instagram_handle,profile_image_url,is_organizer,wants_to_create_opportunities,use_location_recommendations,latitude,longitude,preferred_radius_km,push_notifications_enabled,push_prompt_answered_at")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
@@ -32,6 +32,7 @@ export default async function ProfilePage() {
         tunnels={(tunnels ?? []) as TunnelOption[]}
         profile={
           profile ?? {
+            created_at: null,
             full_name: "",
             country: "",
             city: "",

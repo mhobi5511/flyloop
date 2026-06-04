@@ -24,8 +24,14 @@ import {
 } from "@/lib/push-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const pushNotificationReleaseDate = new Date(
+  process.env.NEXT_PUBLIC_PUSH_NOTIFICATION_RELEASE_DATE ??
+    "2026-06-04T00:00:00.000Z",
+);
+
 type ProfileFormProps = {
   profile: {
+    created_at?: string | null;
     full_name: string;
     country: string | null;
     city: string | null;
@@ -109,6 +115,9 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   >("unknown");
   const [pushStatus, setPushStatus] = useState("");
   const [showIosPwaHint, setShowIosPwaHint] = useState(false);
+  const showPushTroubleshooting =
+    Boolean(profile.created_at) &&
+    new Date(profile.created_at as string) < pushNotificationReleaseDate;
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
@@ -781,6 +790,22 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
             <p className="rounded-xl bg-sky-50 p-3 text-sm font-semibold text-sky-700">
               On iPhone, push notifications work best when Flyloop is added to your Home Screen.
             </p>
+          ) : null}
+          {showPushTroubleshooting ? (
+            <div className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              <p className="font-black">Having trouble with push notifications?</p>
+              <p className="mt-2">
+                If push notifications do not appear on your phone:
+              </p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5">
+                <li>Delete Flyloop from your home screen.</li>
+                <li>Install Flyloop again.</li>
+                <li>Go to Profile &gt; Notifications.</li>
+                <li>Turn push notifications off.</li>
+                <li>Turn push notifications on again.</li>
+              </ol>
+              <p className="mt-2">This usually refreshes your device connection.</p>
+            </div>
           ) : null}
         </ProfileSection>
 

@@ -35,6 +35,7 @@ const relevantPushTypes = [
   "slot_bookings_released_by_organizer",
   "slot_booking_released_by_organizer",
   "new_opportunity",
+  "new_time_booking",
 ] as const;
 
 let vapidConfigured = false;
@@ -70,8 +71,10 @@ function configureVapid() {
 
 function notificationUrl(notification: NotificationRow) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
+  const isOrganizerNotification =
+    notification.type === "new_interest" || notification.type === "new_time_booking";
   const path =
-    notification.opportunity_id && notification.type === "new_interest"
+    notification.opportunity_id && isOrganizerNotification
       ? `/app/organizer/opportunities/${notification.opportunity_id}`
       : notification.opportunity_id
         ? `/app/opportunities/${notification.opportunity_id}`
