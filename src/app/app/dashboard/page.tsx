@@ -334,6 +334,8 @@ function getOpportunityHealth({
 }): Health {
   const capacity = Math.max(opportunity.total_capacity, 1);
   const bookedRatio = bookedSpots / capacity;
+  const capacityNoun =
+    opportunity.type === "huck_jam" ? "participants" : "spots";
   const oldestPendingAgeDays = getOldestPendingAgeDays(
     (opportunity.opportunity_interests ?? []).filter(
       (interest) => interest.interest_type !== "timetable_reminder",
@@ -359,7 +361,7 @@ function getOpportunityHealth({
     return {
       status: "urgent",
       label: "Urgent",
-      explanation: `${bookedSpots}/${opportunity.total_capacity} spots filled`,
+      explanation: `${bookedSpots}/${opportunity.total_capacity} ${capacityNoun} filled`,
       tone: "red",
       priority: 3,
     };
@@ -419,7 +421,7 @@ function getOpportunityHealth({
     return {
       status: "needs-attention",
       label: "Needs Attention",
-      explanation: `${bookedSpots}/${opportunity.total_capacity} spots filled`,
+      explanation: `${bookedSpots}/${opportunity.total_capacity} ${capacityNoun} filled`,
       tone: "yellow",
       priority: 2,
     };
@@ -430,10 +432,10 @@ function getOpportunityHealth({
     label: "Healthy",
     explanation:
       bookedRatio >= 0.75
-        ? `${bookedSpots}/${opportunity.total_capacity} spots filled`
+        ? `${bookedSpots}/${opportunity.total_capacity} ${capacityNoun} filled`
         : startsInDays > 30
           ? `Starts in ${formatDays(startsInDays)}`
-          : `${bookedSpots}/${opportunity.total_capacity} spots filled`,
+          : `${bookedSpots}/${opportunity.total_capacity} ${capacityNoun} filled`,
     tone: "green",
     priority: 1,
   };
@@ -480,13 +482,20 @@ function OpportunityCard({
             <p className="text-sm font-black text-slate-950">
               {opportunity.bookedSpots}/{opportunity.totalCapacity}
             </p>
-            <p className="text-[0.68rem] font-bold text-slate-500">booked</p>
+            <p className="text-[0.68rem] font-bold text-slate-500">
+              {opportunity.type === "huck_jam" ? "participants" : "booked"}
+            </p>
           </div>
         </div>
         <p className="mt-2 text-xs font-black text-slate-700">
           {opportunity.isFullyBooked
-            ? "Fully booked"
-            : `${opportunity.availableSpots} open ${pluralize("spot", opportunity.availableSpots)}`}
+            ? opportunity.type === "huck_jam"
+              ? "Session full"
+              : "Fully booked"
+            : `${opportunity.availableSpots} open ${pluralize(
+                opportunity.type === "huck_jam" ? "participant spot" : "spot",
+                opportunity.availableSpots,
+              )}`}
         </p>
       </Link>
 

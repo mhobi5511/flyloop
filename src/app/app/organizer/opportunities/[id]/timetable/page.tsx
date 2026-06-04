@@ -62,6 +62,9 @@ export default async function OrganizerTimetablePage({
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as TimetableOpportunity;
+  if (currentOpportunity.type === "huck_jam") {
+    notFound();
+  }
   const initialSlots = ((slotRows ?? []) as TimetableSlotRow[]).map((slot) => ({
     id: slot.id,
     slotDate: slot.slot_date,

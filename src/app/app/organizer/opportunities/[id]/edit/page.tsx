@@ -17,6 +17,8 @@ type OpportunityEditRow = {
   start_date: string;
   end_date: string;
   registration_deadline: string | null;
+  session_start: string | null;
+  session_end: string | null;
   price: number | string;
   currency: string;
   total_capacity: number;
@@ -51,7 +53,7 @@ export default async function EditOrganizerOpportunityPage({
         .order("name", { ascending: true }),
       supabase
         .from("opportunities")
-        .select("id,type,booking_mode,title,tunnel_id,start_date,end_date,registration_deadline,price,currency,total_capacity,min_minutes_or_hours,description,languages,disciplines,skill_level")
+        .select("id,type,booking_mode,title,tunnel_id,start_date,end_date,registration_deadline,session_start,session_end,price,currency,total_capacity,min_minutes_or_hours,description,languages,disciplines,skill_level")
         .eq("id", id)
         .eq("created_by", user?.id)
         .maybeSingle(),
@@ -92,14 +94,14 @@ export default async function EditOrganizerOpportunityPage({
             type: row.type,
             bookingMode:
               row.booking_mode ??
-              (row.type === "huck_jam"
-                ? "direct_time_booking"
-                : "approval_required"),
+              "approval_required",
             title: row.title,
             tunnelId: row.tunnel_id,
             startDate: row.start_date,
             endDate: row.end_date,
             registrationDeadline: row.registration_deadline ?? "",
+            sessionStart: row.session_start ?? "",
+            sessionEnd: row.session_end ?? "",
             price: Number(row.price),
             currency: row.currency,
             totalCapacity: row.total_capacity,

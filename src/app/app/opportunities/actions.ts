@@ -58,7 +58,7 @@ export async function sendOpportunityInterest(
 
   const { data: opportunity, error: opportunityError } = await supabase
     .from("opportunities")
-    .select("id,status,available_spots,created_by,booking_mode")
+    .select("id,title,type,status,available_spots,created_by,booking_mode")
     .eq("id", opportunityId)
     .maybeSingle();
 
@@ -78,7 +78,10 @@ export async function sendOpportunityInterest(
     };
   }
 
-  if (opportunity.booking_mode !== "approval_required") {
+  if (
+    opportunity.type !== "huck_jam" &&
+    opportunity.booking_mode !== "approval_required"
+  ) {
     return {
       ok: false,
       message: "This opportunity uses direct time booking.",
@@ -134,11 +137,14 @@ export async function sendOpportunityInterest(
 
   return {
     ok: true,
-    message: [
-      "Your interest was sent.",
-      "The organizer has been notified.",
-      "You will receive an update when your status changes.",
-    ].join("\n"),
+    message:
+      opportunity.type === "huck_jam"
+        ? "Application received.\nThe organizer will review it and send an update."
+        : [
+            "Your interest was sent.",
+            "The organizer has been notified.",
+            "You will receive an update when your status changes.",
+          ].join("\n"),
     status: "pending",
   };
 }
@@ -178,7 +184,10 @@ export async function setTimetableReminder(
     };
   }
 
-  if (opportunity.booking_mode !== "direct_time_booking") {
+  if (
+    opportunity.type === "huck_jam" ||
+    opportunity.booking_mode !== "direct_time_booking"
+  ) {
     return { ok: false, message: "This opportunity uses applications first." };
   }
 

@@ -70,13 +70,25 @@ export function formatDateRange(startDate: string, endDate: string) {
 }
 
 export function formatPrice(price: number, currency: string) {
+  const currencyLabel = currency === "EUR" ? "€" : currency;
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 0,
-  }).format(price)} ${currency}`;
+  }).format(price)} ${currencyLabel}`;
 }
 
 export function formatPriceLabel(type: Opportunity["type"]) {
-  return type === "huck_jam" ? "shared flying time" : "per hour incl. coaching";
+  return type === "huck_jam" ? "Participation Fee" : "per 60 min";
+}
+
+export function formatSessionTimeRange(
+  sessionStart?: string | null,
+  sessionEnd?: string | null,
+) {
+  if (!sessionStart || !sessionEnd) {
+    return "";
+  }
+
+  return `${formatSessionTime(sessionStart)} - ${formatSessionTime(sessionEnd)}`;
 }
 
 export function getCapacityLines(opportunity: Opportunity) {
@@ -84,6 +96,10 @@ export function getCapacityLines(opportunity: Opportunity) {
     opportunity.totalCapacity - opportunity.availableSpots,
     0,
   );
+
+  if (opportunity.type === "huck_jam") {
+    return [`${acceptedAthletes} / ${opportunity.totalCapacity} Participants`];
+  }
 
   if (!opportunity.hasPublishedTimetable) {
     return [`${opportunity.availableSpots} / ${opportunity.totalCapacity} Spots Available`];
@@ -125,4 +141,8 @@ export function getOpportunityShareText(opportunity: Opportunity, url: string) {
 function parseDate(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatSessionTime(value: string) {
+  return value.slice(0, 5);
 }

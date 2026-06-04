@@ -10,6 +10,7 @@ import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TimetableReminderButton } from "@/components/TimetableReminderButton";
 import {
   formatDateRange,
+  formatSessionTimeRange,
   getCapacityLines,
   formatPrice,
   formatOpportunityType,
@@ -63,6 +64,7 @@ export default async function OpportunityDetailPage({
   } = await supabase.auth.getUser();
   const opportunityRow = row as OpportunityDetailRow;
   const opportunity = mapOpportunity(opportunityRow);
+  const isHuckJam = opportunity.type === "huck_jam";
   const { data: viewerInterest } =
     user && user.id !== opportunity.createdBy
       ? await supabase
@@ -85,7 +87,7 @@ export default async function OpportunityDetailPage({
   }
 
   const [{ count: publishedSlotCount }, { data: bookingRows }] =
-    user
+    user && !isHuckJam
       ? await Promise.all([
           supabase
             .from("opportunity_time_slots")
@@ -108,13 +110,16 @@ export default async function OpportunityDetailPage({
   const isUnavailable =
     opportunity.status !== "published" || opportunity.availableSpots <= 0;
   const canDirectBook =
+    !isHuckJam &&
     opportunity.bookingMode === "direct_time_booking" &&
     !isBlockedFromBooking &&
     (!viewerApplicationStatus ||
       viewerApplicationStatus === "accepted" ||
       viewerHasTimetableReminder);
   const canSelectTimes =
-    hasPublishedTimetable && (isAccepted || (canDirectBook && !isUnavailable));
+    !isHuckJam &&
+    hasPublishedTimetable &&
+    (isAccepted || (canDirectBook && !isUnavailable));
   const bookedTimes = ((bookingRows ?? []) as BookingRow[])
     .map((booking) => {
       const slot = Array.isArray(booking.opportunity_time_slots)
@@ -142,6 +147,10 @@ export default async function OpportunityDetailPage({
     0,
   );
   const bookedEstimate = (opportunity.price / 60) * bookedMinutes;
+  const sessionRange = formatSessionTimeRange(
+    opportunity.sessionStart,
+    opportunity.sessionEnd,
+  );
 
   const isLastMinute =
     opportunity.isLastMinute ?? isLastMinuteOpportunity(opportunity);
@@ -159,6 +168,7 @@ export default async function OpportunityDetailPage({
     languages: opportunity.languages,
     minMinutesOrHours: opportunity.minMinutesOrHours,
     registrationDeadline: opportunity.registrationDeadline,
+    opportunityType: opportunity.type,
   });
   const capacityLines = getCapacityLines(opportunity);
 
@@ -195,6 +205,12 @@ export default async function OpportunityDetailPage({
                 {capacityLines[1]}
               </p>
             ) : null}
+            {sessionRange ? (
+              <p className="flex items-center gap-2">
+                <Clock3 size={16} className="text-sky-700" />
+                Session: {sessionRange}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -225,15 +241,13 @@ export default async function OpportunityDetailPage({
 
           <div className="mt-4 rounded-2xl bg-sky-50 px-4 py-4 text-sky-800">
             <p className="text-xs font-black uppercase tracking-wide text-sky-700">
-              Price
+              {isHuckJam ? "Participation Fee" : "Price"}
             </p>
             <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
               {formatPrice(opportunity.price, opportunity.currency)}
             </p>
             <p className="mt-0.5 text-sm font-bold text-sky-800">
-              {opportunity.type === "huck_jam"
-                ? "shared flying time"
-                : "per hour incl. coaching"}
+              {isHuckJam ? "Participation Fee" : "per 60 min"}
             </p>
           </div>
 
@@ -273,6 +287,8 @@ export default async function OpportunityDetailPage({
             <StatusMessage message="Your application was declined." />
           ) : isWaitlisted ? (
             <StatusMessage message="You are on the waitlist." />
+          ) : isHuckJam && isAccepted ? (
+            <StatusMessage message="You're in. Your spot is confirmed." />
           ) : isAccepted && !hasPublishedTimetable ? (
             <StatusMessage message="You are accepted. The timetable is not available yet." />
           ) : opportunity.bookingMode === "approval_required" ? (
@@ -424,6 +440,7 @@ function getDetailRows({
   languages,
   minMinutesOrHours,
   registrationDeadline,
+  opportunityType,
 }: {
   description: string;
   skillLevel: string | null;
@@ -431,11 +448,12 @@ function getDetailRows({
   languages: string[];
   minMinutesOrHours?: string;
   registrationDeadline: string | null;
+  opportunityType: "camp" | "huck_jam";
 }) {
   const rows: Array<{ label: string; value: string }> = [];
 
-  if (minMinutesOrHours?.trim()) {
-    rows.push({ label: "Minimum time", value: minMinutesOrHours });
+  if (opportunityType === "camp" && minMinutesOrHours?.trim()) {
+    rows.push({ label: "Price applies to", value: minMinutesOrHours });
   }
 
   if (skillLevel?.trim()) {

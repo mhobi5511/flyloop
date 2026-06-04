@@ -10,6 +10,8 @@ export type HomeFeedRow = {
   start_date: string;
   end_date: string;
   registration_deadline: string | null;
+  session_start?: string | null;
+  session_end?: string | null;
   price: number | string;
   currency: string;
   total_capacity: number;
@@ -47,7 +49,7 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
     type: row.type,
     bookingMode:
       row.booking_mode ??
-      (row.type === "huck_jam" ? "direct_time_booking" : "approval_required"),
+      "approval_required",
     title: row.title,
     coachId: row.coach_id ?? undefined,
     coachName: row.coach_name ?? undefined,
@@ -63,6 +65,8 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
     startDate: row.start_date,
     endDate: row.end_date,
     registrationDeadline: row.registration_deadline,
+    sessionStart: row.session_start ?? null,
+    sessionEnd: row.session_end ?? null,
     price:
       typeof row.price === "string" ? Number.parseFloat(row.price) : row.price,
     currency: row.currency,

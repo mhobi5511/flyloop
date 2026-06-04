@@ -80,7 +80,7 @@ export function InterestButton({
     ? statusButtonLabel(interestStatus)
     : isLoading
       ? "Sending..."
-      : "I'm interested";
+      : "Apply";
 
   if (compact && interestStatus) {
     return (
@@ -111,7 +111,7 @@ export function InterestButton({
         {message ||
           (interestStatus
             ? statusHint(interestStatus)
-            : "Share your contact details with the organizer.")}
+            : "Apply to join this session.")}
       </p>
       {error ? (
         <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
@@ -124,7 +124,7 @@ export function InterestButton({
 
 function statusButtonLabel(status: InterestStatus) {
   if (status === "accepted") {
-    return "Accepted";
+    return "You're In";
   }
 
   if (status === "declined") {
@@ -135,12 +135,12 @@ function statusButtonLabel(status: InterestStatus) {
     return "Waitlist";
   }
 
-  return "Pending";
+  return "Application Pending";
 }
 
 function statusHint(status: InterestStatus) {
   if (status === "accepted") {
-    return "You were accepted by the organizer.";
+    return "Your spot is confirmed.";
   }
 
   if (status === "declined") {

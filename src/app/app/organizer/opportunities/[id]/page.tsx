@@ -28,6 +28,7 @@ import {
   formatDateRange,
   formatOpportunityType,
   formatPrice,
+  formatSessionTimeRange,
   getOpportunityShareText,
   getPublicOpportunityUrl,
 } from "@/lib/opportunities";
@@ -56,6 +57,8 @@ type OrganizerOpportunity = {
   status: OpportunityStatus;
   start_date: string;
   end_date: string;
+  session_start: string | null;
+  session_end: string | null;
   total_capacity: number;
   available_spots: number;
   price: number | string;
@@ -150,7 +153,7 @@ export default async function OrganizerOpportunityPage({
       .maybeSingle(),
     supabase
       .from("opportunities")
-      .select("id,title,type,booking_mode,status,start_date,end_date,total_capacity,available_spots,price,currency,description,tunnel_profiles(name,city,country)")
+      .select("id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,total_capacity,available_spots,price,currency,description,tunnel_profiles(name,city,country)")
       .eq("id", id)
       .eq("created_by", user?.id)
       .maybeSingle(),
@@ -193,8 +196,11 @@ export default async function OrganizerOpportunityPage({
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
+  const isHuckJam = currentOpportunity.type === "huck_jam";
   const applicantRows = (applicants ?? []) as ApplicantRow[];
-  const timetableSlots = ((timetableRows ?? []) as TimetableSlotRow[]).map(
+  const timetableSlots = isHuckJam
+    ? []
+    : ((timetableRows ?? []) as TimetableSlotRow[]).map(
     (slot): TimetableSlot => ({
       id: slot.id,
       slotDate: slot.slot_date,
@@ -215,15 +221,15 @@ export default async function OrganizerOpportunityPage({
         };
       }),
     }),
-  );
+      );
   const timetableSummary = getTimetableSummary(
     timetableSlots,
     Number(currentOpportunity.price),
   );
   const timetableDays = groupTimetableSlotsByDay(timetableSlots);
-  const hasPublishedTimetable = ((timetableRows ?? []) as TimetableSlotRow[]).some(
-    (slot) => slot.is_published,
-  );
+  const hasPublishedTimetable =
+    !isHuckJam &&
+    ((timetableRows ?? []) as TimetableSlotRow[]).some((slot) => slot.is_published);
   const participantsWithBookings = new Set(
     timetableSlots.flatMap((slot) => slot.bookings.map((booking) => booking.userId)),
   );
@@ -256,6 +262,8 @@ export default async function OrganizerOpportunityPage({
       currency: currentOpportunity.currency,
       totalCapacity: currentOpportunity.total_capacity,
       availableSpots: currentOpportunity.available_spots,
+      sessionStart: currentOpportunity.session_start,
+      sessionEnd: currentOpportunity.session_end,
       description: currentOpportunity.description ?? "",
       languages: [],
       disciplines: [],
@@ -265,6 +273,10 @@ export default async function OrganizerOpportunityPage({
       createdBy: "",
     },
     publicUrl,
+  );
+  const sessionRange = formatSessionTimeRange(
+    currentOpportunity.session_start,
+    currentOpportunity.session_end,
   );
 
   return (
@@ -314,17 +326,27 @@ export default async function OrganizerOpportunityPage({
                   currentOpportunity.end_date,
                 )}
               </p>
+              {isHuckJam ? (
+                <p className="flex items-center gap-2">
+                  <Clock3 size={16} className="text-sky-700" />
+                  Session: {sessionRange || "Time to be confirmed"}
+                </p>
+              ) : null}
             </div>
             <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-sm font-semibold text-slate-700">
               <p className="flex items-center gap-2">
                 <Users size={16} className="shrink-0 text-sky-700" />
                 <span className="min-w-0">
-                  {hasPublishedTimetable
+                  {isHuckJam || hasPublishedTimetable
                     ? currentOpportunity.total_capacity -
                       currentOpportunity.available_spots
                     : currentOpportunity.available_spots}{" "}
                   / {currentOpportunity.total_capacity}{" "}
-                  {hasPublishedTimetable ? "athletes" : "Spots Available"}
+                  {isHuckJam
+                    ? "Participants"
+                    : hasPublishedTimetable
+                      ? "athletes"
+                      : "Spots Available"}
                 </span>
               </p>
               {hasPublishedTimetable ? (
@@ -341,7 +363,8 @@ export default async function OrganizerOpportunityPage({
                   {formatPrice(
                     Number(currentOpportunity.price),
                     currentOpportunity.currency,
-                  )}
+                  )}{" "}
+                  {isHuckJam ? "Participation Fee" : "per 60 min"}
                 </span>
               </p>
             </div>
@@ -353,12 +376,13 @@ export default async function OrganizerOpportunityPage({
               shareText={shareText}
               shareUrl={publicUrl}
               hasTimetable={(timetableSlotCount ?? 0) > 0}
+              showTimetable={!isHuckJam}
             />
           </div>
         </div>
       </section>
 
-      {timetableSlots.length > 0 ? (
+      {!isHuckJam && timetableSlots.length > 0 ? (
         <details className="group mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <summary className="cursor-pointer list-none">
             <div className="flex items-center justify-between gap-3">

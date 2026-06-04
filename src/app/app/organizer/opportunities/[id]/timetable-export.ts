@@ -4,6 +4,7 @@ import type { TimetableSlot } from "@/lib/timetable";
 
 export type TimetableExportOpportunity = {
   id: string;
+  type: string;
   title: string;
   price: number | string;
   currency: string;
@@ -12,6 +13,7 @@ export type TimetableExportOpportunity = {
 
 type ExportOpportunityRow = {
   id: string;
+  type: string;
   title: string;
   price: number | string;
   currency: string;
@@ -60,7 +62,7 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
 
   const { data: opportunity } = await supabase
     .from("opportunities")
-    .select("id,title,price,currency,tunnel_profiles(name)")
+    .select("id,type,title,price,currency,tunnel_profiles(name)")
     .eq("id", opportunityId)
     .eq("created_by", user.id)
     .maybeSingle();
@@ -77,12 +79,16 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
     .order("start_time", { ascending: true });
 
   const opportunityRow = opportunity as ExportOpportunityRow;
+  if (opportunityRow.type === "huck_jam") {
+    notFound();
+  }
   const tunnel = Array.isArray(opportunityRow.tunnel_profiles)
     ? opportunityRow.tunnel_profiles[0]
     : opportunityRow.tunnel_profiles;
 
   const currentOpportunity: TimetableExportOpportunity = {
     id: opportunityRow.id,
+    type: opportunityRow.type,
     title: opportunityRow.title,
     price: opportunityRow.price,
     currency: opportunityRow.currency,

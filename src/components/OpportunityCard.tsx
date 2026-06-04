@@ -4,9 +4,10 @@ import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { Badge } from "./Badge";
 import {
   formatDateRange,
-  getCapacityLines,
   formatPrice,
   formatPriceLabel,
+  formatSessionTimeRange,
+  getCapacityLines,
   opportunityViewModel,
 } from "@/lib/opportunities";
 import type { Opportunity } from "@/lib/types";
@@ -40,6 +41,10 @@ export function OpportunityCard({
     ? applicantBorderClass(opportunity.viewerInterestStatus)
     : "";
   const capacityLines = getCapacityLines(opportunity);
+  const sessionRange =
+    opportunity.type === "huck_jam"
+      ? formatSessionTimeRange(opportunity.sessionStart, opportunity.sessionEnd)
+      : "";
 
   return (
     <Link
@@ -108,11 +113,11 @@ export function OpportunityCard({
       {dense ? (
         <>
           <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-          <CalendarDays size={14} className="shrink-0 text-sky-600" />
-          <span className="line-clamp-1">
-            {formatDateRange(opportunity.startDate, opportunity.endDate)} •{" "}
-            {capacityLines[0]}
-          </span>
+            <CalendarDays size={14} className="shrink-0 text-sky-600" />
+            <span className="line-clamp-1">
+              {formatDateRange(opportunity.startDate, opportunity.endDate)}
+              {sessionRange ? ` - ${sessionRange}` : ""} - {capacityLines[0]}
+            </span>
           </div>
           {capacityLines[1] ? (
             <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -127,10 +132,17 @@ export function OpportunityCard({
             <CalendarDays size={15} className="text-sky-600" />
             <span>{formatDateRange(opportunity.startDate, opportunity.endDate)}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <MapPin size={15} className="text-sky-600" />
-            <span>{location}</span>
-          </div>
+          {sessionRange ? (
+            <div className="flex items-center gap-1.5">
+              <CalendarDays size={15} className="text-sky-600" />
+              <span>{sessionRange}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <MapPin size={15} className="text-sky-600" />
+              <span>{location}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <Users size={15} className="text-sky-600" />
             <span>{capacityLines[0]}</span>
@@ -181,7 +193,9 @@ function formatCompactPrice(opportunity: Opportunity) {
   const amount = new Intl.NumberFormat("en", {
     maximumFractionDigits: 0,
   }).format(opportunity.price);
-  const suffix = opportunity.type === "huck_jam" ? "" : "/h";
+  const currencyLabel = opportunity.currency === "EUR" ? "€" : opportunity.currency;
+  const suffix =
+    opportunity.type === "huck_jam" ? " Participation Fee" : " per 60 min";
 
-  return `${amount} ${opportunity.currency}${suffix}`;
+  return `${amount} ${currencyLabel}${suffix}`;
 }

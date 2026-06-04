@@ -9,6 +9,7 @@ import { Badge } from "@/components/Badge";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
 import {
   formatDateRange,
+  formatSessionTimeRange,
   formatOpportunityType,
   formatPrice,
   formatPriceLabel,
@@ -28,6 +29,8 @@ type ApplicationRow = {
         type: OpportunityType;
         start_date: string;
         end_date: string;
+        session_start: string | null;
+        session_end: string | null;
         price: number | string;
         currency: string;
         tunnel_profiles:
@@ -53,6 +56,8 @@ type ApplicationRow = {
         type: OpportunityType;
         start_date: string;
         end_date: string;
+        session_start: string | null;
+        session_end: string | null;
         price: number | string;
         currency: string;
         tunnel_profiles:
@@ -113,7 +118,7 @@ export default async function ApplicationsPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,price,currency,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
+      .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,session_start,session_end,price,currency,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
   ]);
@@ -122,7 +127,10 @@ export default async function ApplicationsPage({
     activeStatuses.includes(application.status),
   );
   const acceptedOpportunityIds = activeRows
-    .filter((application) => application.status === "accepted")
+    .filter((application) => {
+      const opportunity = getOpportunity(application);
+      return application.status === "accepted" && opportunity?.type === "camp";
+    })
     .map((application) => getOpportunity(application)?.id)
     .filter((opportunityId): opportunityId is string => Boolean(opportunityId));
   const [{ data: publishedSlotRows }, { data: bookingRows }] =
@@ -246,6 +254,15 @@ export default async function ApplicationsPage({
                       {formatDateRange(opportunity.start_date, opportunity.end_date)}
                       {tunnel ? ` · ${formatLocation(tunnel.city, tunnel.country)}` : ""}
                     </p>
+                    {opportunity.type === "huck_jam" ? (
+                      <p className="text-xs font-semibold text-slate-700">
+                        Session:{" "}
+                        {formatSessionTimeRange(
+                          opportunity.session_start,
+                          opportunity.session_end,
+                        ) || "Time to be confirmed"}
+                      </p>
+                    ) : null}
                     <p className="text-xs font-semibold text-slate-700">
                       {formatPrice(Number(opportunity.price), opportunity.currency)}{" "}
                       <span className="text-slate-500">
@@ -262,6 +279,7 @@ export default async function ApplicationsPage({
                     Details
                   </Link>
                   {application.status === "accepted" &&
+                  opportunity.type === "camp" &&
                   opportunitiesWithPublishedTimetable.has(opportunity.id) ? (
                     <Link
                       href={`/app/opportunities/${opportunity.id}/times`}
@@ -272,7 +290,8 @@ export default async function ApplicationsPage({
                   ) : null}
                 </div>
               </div>
-              {(bookingsByOpportunity.get(opportunity.id) ?? []).length > 0 ? (
+              {opportunity.type === "camp" &&
+              (bookingsByOpportunity.get(opportunity.id) ?? []).length > 0 ? (
                 <div className="mt-3">
                   <p className="text-xs font-black uppercase text-slate-500">
                     Booked times

@@ -171,7 +171,7 @@ export async function saveCampTimetable(
 
   const { data: opportunity, error: opportunityError } = await supabase
     .from("opportunities")
-    .select("id,created_by,title")
+    .select("id,created_by,title,type")
     .eq("id", opportunityId)
     .maybeSingle();
 
@@ -182,6 +182,10 @@ export async function saveCampTimetable(
 
   if (!opportunity || opportunity.created_by !== user.id) {
     return { ok: false, message: "Opportunity not found." };
+  }
+
+  if (opportunity.type === "huck_jam") {
+    return { ok: false, message: "Huck Jams do not use timetables." };
   }
 
   const { data: existingSlots, error: existingError } = await supabase

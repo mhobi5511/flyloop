@@ -69,6 +69,8 @@ export type Opportunity = {
   startDate: string;
   endDate: string;
   registrationDeadline: string | null;
+  sessionStart?: string | null;
+  sessionEnd?: string | null;
   price: number;
   currency: string;
   totalCapacity: number;

@@ -21,6 +21,8 @@ type PublishOpportunityInput = {
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  sessionStart: string;
+  sessionEnd: string;
   price: number;
   currency: string;
   totalCapacity: number;
@@ -63,6 +65,10 @@ function parseCsv(value: string) {
 
 function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function isValidTime(value: string) {
+  return /^\d{2}:\d{2}$/.test(value);
 }
 
 function isSupportedCurrency(value: string): value is Currency {
@@ -157,7 +163,10 @@ export async function publishOpportunity(
     return { ok: false, message: "Please choose an opportunity type." };
   }
 
-  if (!isBookingMode(input.bookingMode)) {
+  const bookingMode: BookingMode =
+    input.type === "huck_jam" ? "approval_required" : input.bookingMode;
+
+  if (!isBookingMode(bookingMode)) {
     return { ok: false, message: "Please choose a booking mode." };
   }
 
@@ -189,6 +198,16 @@ export async function publishOpportunity(
       ok: false,
       message: "Registration deadline must be on or before the start date.",
     };
+  }
+
+  if (input.type === "huck_jam") {
+    if (!isValidTime(input.sessionStart) || !isValidTime(input.sessionEnd)) {
+      return { ok: false, message: "Please enter valid session times." };
+    }
+
+    if (input.sessionEnd <= input.sessionStart) {
+      return { ok: false, message: "Session end must be after session start." };
+    }
   }
 
   if (!Number.isFinite(input.price) || input.price < 0) {
@@ -227,18 +246,21 @@ export async function publishOpportunity(
     .from("opportunities")
     .insert({
       type: input.type,
-      booking_mode: input.bookingMode,
+      booking_mode: bookingMode,
       title,
       coach_id: null,
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
       end_date: input.endDate,
       registration_deadline: input.registrationDeadline || null,
+      session_start: input.type === "huck_jam" ? input.sessionStart : null,
+      session_end: input.type === "huck_jam" ? input.sessionEnd : null,
       price: input.price,
       currency: input.currency,
       total_capacity: input.totalCapacity,
       available_spots: input.totalCapacity,
-      min_minutes_or_hours: cleanText(input.minMinutesOrHours),
+      min_minutes_or_hours:
+        input.type === "huck_jam" ? null : cleanText(input.minMinutesOrHours),
       description: cleanText(input.description),
       languages: parseCsv(input.languages),
       disciplines: parseCsv(input.disciplines),
@@ -297,7 +319,10 @@ export async function updateOpportunity(
     return { ok: false, message: "Please choose an opportunity type." };
   }
 
-  if (!isBookingMode(input.bookingMode)) {
+  const bookingMode: BookingMode =
+    input.type === "huck_jam" ? "approval_required" : input.bookingMode;
+
+  if (!isBookingMode(bookingMode)) {
     return { ok: false, message: "Please choose a booking mode." };
   }
 
@@ -325,6 +350,16 @@ export async function updateOpportunity(
       ok: false,
       message: "Registration deadline must be on or before the start date.",
     };
+  }
+
+  if (input.type === "huck_jam") {
+    if (!isValidTime(input.sessionStart) || !isValidTime(input.sessionEnd)) {
+      return { ok: false, message: "Please enter valid session times." };
+    }
+
+    if (input.sessionEnd <= input.sessionStart) {
+      return { ok: false, message: "Session end must be after session start." };
+    }
   }
 
   if (!Number.isFinite(input.price) || input.price < 0) {
@@ -392,17 +427,20 @@ export async function updateOpportunity(
     .from("opportunities")
     .update({
       type: input.type,
-      booking_mode: input.bookingMode,
+      booking_mode: bookingMode,
       title,
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
       end_date: input.endDate,
       registration_deadline: input.registrationDeadline || null,
+      session_start: input.type === "huck_jam" ? input.sessionStart : null,
+      session_end: input.type === "huck_jam" ? input.sessionEnd : null,
       price: input.price,
       currency: input.currency,
       total_capacity: input.totalCapacity,
       available_spots: Math.max(input.totalCapacity - acceptedCount, 0),
-      min_minutes_or_hours: cleanText(input.minMinutesOrHours),
+      min_minutes_or_hours:
+        input.type === "huck_jam" ? null : cleanText(input.minMinutesOrHours),
       description: cleanText(input.description),
       languages: parseCsv(input.languages),
       disciplines: parseCsv(input.disciplines),
@@ -413,6 +451,17 @@ export async function updateOpportunity(
 
   if (error) {
     return { ok: false, message: friendlyPublishError(error) };
+  }
+
+  if (input.type === "huck_jam") {
+    const { error: slotCleanupError } = await supabase
+      .from("opportunity_time_slots")
+      .delete()
+      .eq("opportunity_id", opportunityId);
+
+    if (slotCleanupError) {
+      return { ok: false, message: friendlyPublishError(slotCleanupError) };
+    }
   }
 
   const pushResult = await sendPendingPushNotificationsForOpportunity(opportunityId, [

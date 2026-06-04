@@ -72,6 +72,10 @@ function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 }
 
+function isValidTime(value: string) {
+  return /^\d{2}:\d{2}$/.test(value);
+}
+
 function splitCsv(value: string) {
   return value
     .split(",")
@@ -86,6 +90,8 @@ function validateOpportunity(values: {
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  sessionStart: string;
+  sessionEnd: string;
   price: string;
   currency: string;
   totalCapacity: string;
@@ -99,6 +105,10 @@ function validateOpportunity(values: {
     values.bookingMode !== "direct_time_booking"
   ) {
     return "Please choose a booking mode.";
+  }
+
+  if (values.type === "huck_jam" && values.bookingMode !== "approval_required") {
+    return "Huck Jams always use approval required.";
   }
 
   if (!uuidPattern.test(values.tunnelId)) {
@@ -123,6 +133,16 @@ function validateOpportunity(values: {
       new Date(values.registrationDeadline) > new Date(values.startDate))
   ) {
     return "Registration deadline must be on or before the start date.";
+  }
+
+  if (values.type === "huck_jam") {
+    if (!isValidTime(values.sessionStart) || !isValidTime(values.sessionEnd)) {
+      return "Please enter the Huck Jam session start and end times.";
+    }
+
+    if (values.sessionEnd <= values.sessionStart) {
+      return "Session end must be after session start.";
+    }
   }
 
   const price = Number(values.price);
@@ -153,10 +173,9 @@ export function CreateOpportunityForm({
     initialOpportunity?.type ?? "camp",
   );
   const [bookingMode, setBookingMode] = useState<BookingMode>(
-    initialOpportunity?.bookingMode ??
-      (initialOpportunity?.type === "huck_jam"
-        ? "direct_time_booking"
-        : "approval_required"),
+    initialOpportunity?.type === "huck_jam"
+      ? "approval_required"
+      : (initialOpportunity?.bookingMode ?? "approval_required"),
   );
   const [title, setTitle] = useState(initialOpportunity?.title ?? "");
   const [tunnelId, setTunnelId] = useState(initialOpportunity?.tunnelId ?? "");
@@ -171,13 +190,21 @@ export function CreateOpportunityForm({
   const [registrationDeadline, setRegistrationDeadline] = useState(
     initialOpportunity?.registrationDeadline ?? "",
   );
-  const [price, setPrice] = useState(String(initialOpportunity?.price ?? "420"));
+  const [sessionStart, setSessionStart] = useState(
+    initialOpportunity?.sessionStart?.slice(0, 5) ?? "18:00",
+  );
+  const [sessionEnd, setSessionEnd] = useState(
+    initialOpportunity?.sessionEnd?.slice(0, 5) ?? "20:00",
+  );
+  const [price, setPrice] = useState(
+    String(initialOpportunity?.price ?? (type === "huck_jam" ? "50" : "550")),
+  );
   const [currency, setCurrency] = useState(initialOpportunity?.currency ?? "EUR");
   const [totalCapacity, setTotalCapacity] = useState(
     String(initialOpportunity?.totalCapacity ?? "8"),
   );
   const [minMinutesOrHours, setMinMinutesOrHours] = useState(
-    initialOpportunity?.minMinutesOrHours ?? "",
+    initialOpportunity?.minMinutesOrHours ?? "60 min",
   );
   const [description, setDescription] = useState(
     initialOpportunity?.description ?? "",
@@ -227,10 +254,14 @@ export function CreateOpportunityForm({
 
   function updateType(nextType: OpportunityType) {
     setType(nextType);
-    if (!initialOpportunity) {
-      setBookingMode(
-        nextType === "huck_jam" ? "direct_time_booking" : "approval_required",
-      );
+    if (nextType === "huck_jam") {
+      setBookingMode("approval_required");
+      if (!initialOpportunity) {
+        setPrice("50");
+      }
+    } else if (!initialOpportunity) {
+      setPrice("550");
+      setMinMinutesOrHours("60 min");
     }
     if (!endDateTouched && startDate) {
       setEndDate(nextType === "camp" ? addDays(startDate, 5) : startDate);
@@ -250,11 +281,13 @@ export function CreateOpportunityForm({
 
     const validationError = validateOpportunity({
       type,
-      bookingMode,
+      bookingMode: type === "huck_jam" ? "approval_required" : bookingMode,
       tunnelId,
       startDate,
       endDate,
       registrationDeadline,
+      sessionStart,
+      sessionEnd,
       price,
       currency,
       totalCapacity,
@@ -268,12 +301,14 @@ export function CreateOpportunityForm({
     startTransition(async () => {
       const values = {
         type,
-        bookingMode,
+        bookingMode: type === "huck_jam" ? "approval_required" : bookingMode,
         title,
         tunnelId,
         startDate,
         endDate,
         registrationDeadline,
+        sessionStart,
+        sessionEnd,
         price: Number(price),
         currency,
         totalCapacity: Number(totalCapacity),
@@ -338,23 +373,27 @@ export function CreateOpportunityForm({
         </Field>
       </div>
 
-      <SectionTitle eyebrow="Booking mode" title="Choose how participants join" />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <BookingModeOption
-          value="approval_required"
-          selectedValue={bookingMode}
-          title="Approval Required"
-          description="Participants apply first. You decide who gets accepted. Accepted participants can then select times."
-          onChange={setBookingMode}
-        />
-        <BookingModeOption
-          value="direct_time_booking"
-          selectedValue={bookingMode}
-          title="Direct Time Booking"
-          description="Participants can immediately select available times. Booking a slot confirms participation."
-          onChange={setBookingMode}
-        />
-      </div>
+      {type === "camp" ? (
+        <>
+          <SectionTitle eyebrow="Booking mode" title="Choose how participants join" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <BookingModeOption
+              value="approval_required"
+              selectedValue={bookingMode}
+              title="Approval Required"
+              description="Participants apply first. You decide who gets accepted. Accepted participants can then select times."
+              onChange={setBookingMode}
+            />
+            <BookingModeOption
+              value="direct_time_booking"
+              selectedValue={bookingMode}
+              title="Direct Booking"
+              description="Participants can immediately select available times. Booking a slot confirms participation."
+              onChange={setBookingMode}
+            />
+          </div>
+        </>
+      ) : null}
 
       <SectionTitle eyebrow="Location" title="Choose the tunnel" />
       <TunnelCombobox
@@ -415,7 +454,7 @@ export function CreateOpportunityForm({
 
       <SectionTitle eyebrow="Price & capacity" title="Set availability" />
       <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
-        <Field label="Price" required>
+        <Field label={type === "huck_jam" ? "Participation Fee" : "Price"} required>
           <input
             type="number"
             min="0"
@@ -452,6 +491,30 @@ export function CreateOpportunityForm({
         </div>
       </div>
 
+      {type === "huck_jam" ? (
+        <>
+          <SectionTitle eyebrow="Session" title="Set the session time" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Session Start" required>
+              <input
+                type="time"
+                className={dateFieldClass}
+                value={sessionStart}
+                onChange={(event) => setSessionStart(event.target.value)}
+              />
+            </Field>
+            <Field label="Session End" required>
+              <input
+                type="time"
+                className={dateFieldClass}
+                value={sessionEnd}
+                onChange={(event) => setSessionEnd(event.target.value)}
+              />
+            </Field>
+          </div>
+        </>
+      ) : null}
+
       <details
         className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3"
         open={isDetailsOpen}
@@ -461,14 +524,16 @@ export function CreateOpportunityForm({
           Optional details
         </summary>
         <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
-          <Field label="Minimum time">
-            <input
-              className="field"
-              value={minMinutesOrHours}
-              onChange={(event) => setMinMinutesOrHours(event.target.value)}
-              placeholder="Enter minimum time"
-            />
-          </Field>
+          {type === "camp" ? (
+            <Field label="Price applies to">
+              <input
+                className="field"
+                value={minMinutesOrHours}
+                onChange={(event) => setMinMinutesOrHours(event.target.value)}
+                placeholder="60 min"
+              />
+            </Field>
+          ) : null}
           <Field label="Skill level">
             <input
               className="field"

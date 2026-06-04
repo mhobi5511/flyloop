@@ -52,6 +52,9 @@ export default async function SlotBookingPage({
   }
 
   const opportunity = mapOpportunity(row as HomeFeedRow);
+  if (opportunity.type === "huck_jam") {
+    notFound();
+  }
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
