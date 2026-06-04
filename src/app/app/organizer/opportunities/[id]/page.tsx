@@ -121,6 +121,10 @@ type TimetableSlotRow = {
     | null;
 };
 
+type ReminderNotificationRow = {
+  user_id: string;
+};
+
 export default async function OrganizerOpportunityPage({
   params,
   searchParams,
@@ -180,6 +184,11 @@ export default async function OrganizerOpportunityPage({
     .eq("opportunity_id", id)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
+  const { data: reminderNotifications } = await supabase
+    .from("notifications")
+    .select("user_id")
+    .eq("opportunity_id", id)
+    .eq("type", "timetable_booking_reminder");
   const canCreate =
     profile?.is_organizer === true ||
     profile?.wants_to_create_opportunities === true;
@@ -217,6 +226,11 @@ export default async function OrganizerOpportunityPage({
   );
   const participantsWithBookings = new Set(
     timetableSlots.flatMap((slot) => slot.bookings.map((booking) => booking.userId)),
+  );
+  const participantsWithReminders = new Set(
+    ((reminderNotifications ?? []) as ReminderNotificationRow[]).map(
+      (notification) => notification.user_id,
+    ),
   );
   const publicUrl = getPublicOpportunityUrl(currentOpportunity.id);
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
@@ -477,6 +491,9 @@ export default async function OrganizerOpportunityPage({
               hasPublishedTimetable &&
               Boolean(profile?.id) &&
               !participantsWithBookings.has(profile?.id ?? "");
+            const reminderAlreadySent = participantsWithReminders.has(
+              profile?.id ?? "",
+            );
 
             return (
               <article
@@ -535,9 +552,15 @@ export default async function OrganizerOpportunityPage({
                             >
                               <button
                                 type="submit"
-                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-200 px-2.5 text-xs font-black text-amber-800 transition hover:bg-amber-50"
+                                disabled={reminderAlreadySent}
+                                className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-black transition ${
+                                  reminderAlreadySent
+                                    ? "border-slate-200 bg-slate-100 text-slate-500"
+                                    : "border-amber-200 text-amber-800 hover:bg-amber-50"
+                                }`}
                               >
-                                <Bell size={14} /> Send Reminder
+                                <Bell size={14} />{" "}
+                                {reminderAlreadySent ? "Reminder sent" : "Send Reminder"}
                               </button>
                             </form>
                           </div>

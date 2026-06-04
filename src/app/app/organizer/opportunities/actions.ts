@@ -330,10 +330,13 @@ export async function sendTimetableBookingReminder(
     return { ok: false, message: "Please log in again." };
   }
 
-  const { error } = await supabase.rpc("notify_timetable_booking_reminder", {
-    target_opportunity_id: opportunityId,
-    target_user_id: participantId,
-  });
+  const { data: insertedCount, error } = await supabase.rpc(
+    "notify_timetable_booking_reminder",
+    {
+      target_opportunity_id: opportunityId,
+      target_user_id: participantId,
+    },
+  );
 
   if (error) {
     console.error("Timetable reminder failed", {
@@ -348,10 +351,12 @@ export async function sendTimetableBookingReminder(
     return { ok: false, message: "Could not send reminder." };
   }
 
-  await sendServerPush([participantId], "timetable_booking_reminder", {
-    opportunityId,
-    types: ["timetable_booking_reminder"],
-  });
+  if (Number(insertedCount) > 0) {
+    await sendServerPush([participantId], "timetable_booking_reminder", {
+      opportunityId,
+      types: ["timetable_booking_reminder"],
+    });
+  }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
 
