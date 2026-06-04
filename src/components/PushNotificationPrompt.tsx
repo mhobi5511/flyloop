@@ -7,6 +7,7 @@ import {
   enablePushNotifications,
   getPushSupportState,
 } from "@/lib/push-client";
+import { isPwaInstalled } from "@/lib/pwa-client";
 
 type PushNotificationPromptProps = {
   enabled: boolean;
@@ -22,6 +23,10 @@ export function PushNotificationPrompt({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!isPwaInstalled()) {
+      return;
+    }
+
     const support = getPushSupportState();
 
     if (!support.supported) {

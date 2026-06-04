@@ -12,6 +12,7 @@ import {
 import { NotificationBell } from "./NotificationBell";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { ProfileNavDot } from "./ProfileNavDot";
+import { PwaInstallGuidance } from "./PwaInstallGuidance";
 import { PushNotificationPrompt } from "./PushNotificationPrompt";
 import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -209,10 +210,13 @@ export async function AppShell({
         {children}
       </main>
       {shellState.isAuthenticated ? (
-        <PushNotificationPrompt
-          enabled={shellState.pushNotificationsEnabled}
-          answeredAt={shellState.pushPromptAnsweredAt}
-        />
+        <>
+          <PwaInstallGuidance active={active} />
+          <PushNotificationPrompt
+            enabled={shellState.pushNotificationsEnabled}
+            answeredAt={shellState.pushPromptAnsweredAt}
+          />
+        </>
       ) : null}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
         <div

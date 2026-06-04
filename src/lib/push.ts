@@ -37,6 +37,7 @@ const relevantPushTypes = [
   "new_opportunity",
   "new_time_booking",
   "timetable_reminder_interest",
+  "opportunity_deleted",
 ] as const;
 
 let vapidConfigured = false;

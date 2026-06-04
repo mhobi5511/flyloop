@@ -326,6 +326,63 @@ export async function deleteOpportunity(
     userId: user.id,
   });
 
+  const [
+    { data: opportunityBeforeDelete, error: opportunityLookupError },
+    { data: interestRecipients, error: interestRecipientError },
+    { data: bookingRecipients, error: bookingRecipientError },
+  ] = await Promise.all([
+    supabase
+      .from("opportunities")
+      .select("created_by")
+      .eq("id", opportunityId)
+      .maybeSingle(),
+    supabase
+      .from("opportunity_interests")
+      .select("athlete_id")
+      .eq("opportunity_id", opportunityId),
+    supabase
+      .from("opportunity_slot_bookings")
+      .select("user_id")
+      .eq("opportunity_id", opportunityId),
+  ]);
+
+  if (opportunityLookupError) {
+    console.error("Delete opportunity push opportunity lookup failed", {
+      opportunityId,
+      userId: user.id,
+      error: opportunityLookupError,
+    });
+  }
+
+  if (interestRecipientError) {
+    console.error("Delete opportunity interest recipient lookup failed", {
+      opportunityId,
+      userId: user.id,
+      error: interestRecipientError,
+    });
+  }
+
+  if (bookingRecipientError) {
+    console.error("Delete opportunity booking recipient lookup failed", {
+      opportunityId,
+      userId: user.id,
+      error: bookingRecipientError,
+    });
+  }
+
+  const affectedUserIds = [
+    ...new Set([
+      ...(interestRecipients ?? []).map((row) => row.athlete_id),
+      ...(bookingRecipients ?? []).map((row) => row.user_id),
+    ]),
+  ].filter((affectedUserId) =>
+    Boolean(
+      affectedUserId &&
+        affectedUserId !== user.id &&
+        affectedUserId !== opportunityBeforeDelete?.created_by,
+    ),
+  );
+
   const { data: deleted, error } = await supabase.rpc(
     "delete_opportunity_with_notification_cleanup",
     {
@@ -368,6 +425,12 @@ export async function deleteOpportunity(
 
   if (!deleted) {
     return { ok: false, message: "Opportunity not found." };
+  }
+
+  if (affectedUserIds.length > 0) {
+    await sendServerPush(affectedUserIds, "opportunity_deleted", {
+      types: ["opportunity_deleted"],
+    });
   }
 
   revalidatePath("/app");

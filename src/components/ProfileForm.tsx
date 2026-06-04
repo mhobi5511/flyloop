@@ -22,6 +22,7 @@ import {
   enablePushNotifications,
   getPushSupportState,
 } from "@/lib/push-client";
+import { getPwaInstallState, type PwaInstallState } from "@/lib/pwa-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const pushNotificationReleaseDate = new Date(
@@ -115,6 +116,7 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   >("unknown");
   const [pushStatus, setPushStatus] = useState("");
   const [showIosPwaHint, setShowIosPwaHint] = useState(false);
+  const [pwaState, setPwaState] = useState<PwaInstallState | null>(null);
   const showPushTroubleshooting =
     Boolean(profile.created_at) &&
     new Date(profile.created_at as string) < pushNotificationReleaseDate;
@@ -190,12 +192,10 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       const support = getPushSupportState();
+      const nextPwaState = getPwaInstallState();
       setPushPermission(support.permission);
-      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isStandalone =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-      setShowIosPwaHint(isIos && !isStandalone);
+      setPwaState(nextPwaState);
+      setShowIosPwaHint(nextPwaState.isIos && !nextPwaState.installed);
     }, 0);
 
     return () => window.clearTimeout(timeout);
@@ -299,6 +299,11 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
   async function togglePushNotifications(enabled: boolean) {
     setPushStatus("");
     setError("");
+
+    if (enabled && pwaState?.installed === false) {
+      setPushStatus("Install Flyloop to your Home Screen before enabling push notifications.");
+      return;
+    }
 
     try {
       if (enabled) {
@@ -778,9 +783,23 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
                   : "We only notify you about relevant Flyloop activity."
             }
             checked={pushNotificationsEnabled && pushPermission !== "denied"}
-            disabled={pushPermission === "denied" || pushPermission === "unsupported"}
+            disabled={
+              pushPermission === "denied" ||
+              pushPermission === "unsupported" ||
+              pwaState?.installed === false
+            }
             onChange={togglePushNotifications}
           />
+          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+            <p className="font-black text-slate-900">
+              {pwaState?.installed ? "🟢 Flyloop installed" : "🟡 Browser mode"}
+            </p>
+            {!pwaState?.installed ? (
+              <p className="mt-1">
+                Install Flyloop for the best experience and reliable push notifications.
+              </p>
+            ) : null}
+          </div>
           {pushStatus ? (
             <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
               {pushStatus}
