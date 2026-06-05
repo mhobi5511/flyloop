@@ -12,6 +12,7 @@ type OrganizerOpportunityActionsProps = {
   shareLabel: string;
   shareText: string;
   shareUrl: string;
+  tunnelDashboardUrl?: string;
   hasTimetable: boolean;
   showTimetable?: boolean;
 };
@@ -21,6 +22,7 @@ export function OrganizerOpportunityActions({
   shareLabel,
   shareText,
   shareUrl,
+  tunnelDashboardUrl,
   hasTimetable,
   showTimetable = true,
 }: OrganizerOpportunityActionsProps) {
@@ -70,6 +72,16 @@ export function OrganizerOpportunityActions({
         >
           {hasTimetable ? "Edit Timetable" : "Set Timetable"}
         </Link>
+      ) : null}
+      {tunnelDashboardUrl ? (
+        <ShareOpportunityButton
+          label="Copy Tunnel Dashboard Link"
+          shareText={tunnelDashboardUrl}
+          url={tunnelDashboardUrl}
+          compact
+          fill
+          variant="primary"
+        />
       ) : null}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
         <ShareOpportunityButton

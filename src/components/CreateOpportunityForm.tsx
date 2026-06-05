@@ -24,6 +24,7 @@ export type InheritedCoachProfile = {
 type CreateOpportunityFormProps = {
   tunnels: TunnelOption[];
   inheritedCoachProfile?: InheritedCoachProfile;
+  organizerName?: string;
   initialOpportunity?: OpportunityFormInput & { id: string };
   mode?: "create" | "edit";
 };
@@ -149,9 +150,16 @@ function formatCurrency(amount: string, currency: string) {
   }).format(number);
 }
 
+function fallbackOpportunityName(type: OpportunityType, organizerName?: string) {
+  return `${type === "camp" ? "Camp" : "Huck Jam"} with ${
+    organizerName?.trim() || "Flyloop organizer"
+  }`;
+}
+
 export function CreateOpportunityForm({
   tunnels,
   inheritedCoachProfile,
+  organizerName,
   initialOpportunity,
   mode = "create",
 }: CreateOpportunityFormProps) {
@@ -534,6 +542,7 @@ export function CreateOpportunityForm({
             price={price}
             currency={currency}
             minMinutesOrHours={minMinutesOrHours}
+            organizerName={organizerName}
             onEdit={(stepId) => {
               const nextIndex = steps.findIndex((step) => step.id === stepId);
               if (nextIndex >= 0) {
@@ -949,9 +958,8 @@ function PricingStep({
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_6.5rem]">
         <Field label="Price" required>
           <input
-            type="number"
-            min="0"
-            step="1"
+            type="text"
+            inputMode="decimal"
             className={fieldClass}
             value={price}
             onChange={(event) => onPriceChange(event.target.value)}
@@ -1034,9 +1042,8 @@ function ParticipationStep({
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_6.5rem]">
         <Field label="Participation Fee" required>
           <input
-            type="number"
-            min="0"
-            step="1"
+            type="text"
+            inputMode="decimal"
             className={fieldClass}
             value={price}
             onChange={(event) => onPriceChange(event.target.value)}
@@ -1072,6 +1079,7 @@ function ReviewStep({
   price,
   currency,
   minMinutesOrHours,
+  organizerName,
   onEdit,
 }: {
   type: OpportunityType;
@@ -1085,10 +1093,11 @@ function ReviewStep({
   price: string;
   currency: string;
   minMinutesOrHours: string;
+  organizerName?: string;
   onEdit: (stepId: StepId) => void;
 }) {
   const isHuckJam = type === "huck_jam";
-  const name = title.trim() || "Generated after publishing";
+  const name = title.trim() || fallbackOpportunityName(type, organizerName);
   const reviewGroups = isHuckJam
     ? [
         {
@@ -1201,22 +1210,15 @@ function ReviewStep({
       />
       <div className="grid gap-2 sm:grid-cols-2">
         {reviewGroups.map((group) => (
-          <div
+          <button
+            type="button"
             key={`${group.title}-${group.stepId}`}
-            className="grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5"
+            onClick={() => onEdit(group.stepId)}
+            className="grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5 text-left transition hover:border-sky-200 hover:bg-sky-50/60"
           >
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-black text-slate-950">
-                {group.title}
-              </h3>
-              <button
-                type="button"
-                onClick={() => onEdit(group.stepId)}
-                className="h-7 rounded-md border border-slate-200 px-2 text-xs font-black text-sky-700 hover:bg-sky-50"
-              >
-                Edit
-              </button>
-            </div>
+            <h3 className="text-sm font-black text-slate-950">
+              {group.title}
+            </h3>
             <dl className="grid gap-1">
               {group.items.map((item) => (
                 <div
@@ -1232,7 +1234,7 @@ function ReviewStep({
                 </div>
               ))}
             </dl>
-          </div>
+          </button>
         ))}
       </div>
     </div>

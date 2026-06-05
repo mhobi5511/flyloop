@@ -45,6 +45,7 @@ import {
   groupTimetableSlotsByDay,
   type TimetableSlot,
 } from "@/lib/timetable";
+import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import type {
   BookingMode,
   InterestStatus,
@@ -284,6 +285,9 @@ export default async function OrganizerOpportunityPage({
     currentOpportunity.session_start,
     currentOpportunity.session_end,
   );
+  const tunnelDashboardUrl = isHuckJam
+    ? ""
+    : await getOrCreateTunnelDashboardUrl(supabase, currentOpportunity.id);
 
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
@@ -386,6 +390,7 @@ export default async function OrganizerOpportunityPage({
               shareLabel={shareLabel}
               shareText={shareText}
               shareUrl={publicUrl}
+              tunnelDashboardUrl={tunnelDashboardUrl}
               hasTimetable={(timetableSlotCount ?? 0) > 0}
               showTimetable={!isHuckJam}
             />
@@ -656,6 +661,37 @@ export default async function OrganizerOpportunityPage({
 
 function formatLocation(city?: string | null, country?: string | null) {
   return [city, country].filter(Boolean).join(", ");
+}
+
+async function getOrCreateTunnelDashboardUrl(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+) {
+  const { data: existingLink } = await supabase
+    .from("opportunity_tunnel_dashboard_links")
+    .select("secret")
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
+  if (existingLink?.secret) {
+    return getTunnelDashboardUrl(existingLink.secret);
+  }
+
+  const { data: createdLink, error } = await supabase
+    .from("opportunity_tunnel_dashboard_links")
+    .insert({ opportunity_id: opportunityId })
+    .select("secret")
+    .single();
+
+  if (error || !createdLink?.secret) {
+    console.error("Tunnel dashboard link creation failed", {
+      opportunityId,
+      error,
+    });
+    return "";
+  }
+
+  return getTunnelDashboardUrl(createdLink.secret);
 }
 
 function TimetableStat({

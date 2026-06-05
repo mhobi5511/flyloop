@@ -280,9 +280,9 @@ export async function publishOpportunity(
 
   const title = input.title.trim()
     ? input.title.trim()
-    : input.type === "camp"
-      ? `Camp with ${profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"}`
-      : `Huck Jam at ${tunnel.name}`;
+    : `${input.type === "camp" ? "Camp" : "Huck Jam"} with ${
+        profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"
+      }`;
   const inheritedCoachProfile = await getInheritedCoachProfile(supabase, user.id);
 
   const { data, error } = await supabase
@@ -475,9 +475,9 @@ export async function updateOpportunity(
 
   const title = input.title.trim()
     ? input.title.trim()
-    : input.type === "camp"
-      ? `Camp with ${profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"}`
-      : `Huck Jam at ${tunnel.name}`;
+    : `${input.type === "camp" ? "Camp" : "Huck Jam"} with ${
+        profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"
+      }`;
   const inheritedCoachProfile = await getInheritedCoachProfile(supabase, user.id);
 
   const { error } = await supabase

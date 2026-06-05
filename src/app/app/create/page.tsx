@@ -16,7 +16,7 @@ export default async function CreateOpportunityPage() {
   const [{ data: profile }, { data: coachProfile }, { data: tunnelRows }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("is_organizer,wants_to_create_opportunities")
+      .select("full_name,is_organizer,wants_to_create_opportunities")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
@@ -51,6 +51,7 @@ export default async function CreateOpportunityPage() {
           <CreateOpportunityForm
             tunnels={tunnels}
             inheritedCoachProfile={inheritedCoachProfile}
+            organizerName={profile?.full_name ?? undefined}
           />
         ) : (
           <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
