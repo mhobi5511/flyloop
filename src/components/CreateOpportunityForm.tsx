@@ -42,11 +42,11 @@ const currencies = ["EUR", "CHF", "USD", "PLN", "GBP"];
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fieldClass =
-  "block h-10 w-full max-w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+  "block h-10 w-full max-w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 const dateFieldClass =
-  "block box-border h-10 w-full max-w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-white px-2.5 text-sm font-medium leading-none outline-none [color-scheme:light] focus:border-sky-400";
+  "block box-border h-10 w-full max-w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-white px-2.5 text-base font-medium leading-none outline-none [color-scheme:light] focus:border-sky-400";
 const areaClass =
-  "block min-h-20 w-full max-w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+  "block min-h-20 w-full max-w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 
 const campSteps: { id: StepId; label: string }[] = [
   { id: "type", label: "Type" },
@@ -894,9 +894,9 @@ function CapacityStep({
       />
       <Field label="Maximum Participants" required>
         <input
-          type="number"
-          min="1"
-          step="1"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           className={fieldClass}
           value={totalCapacity}
           onChange={(event) => onCapacityChange(event.target.value)}
@@ -1023,9 +1023,9 @@ function ParticipationStep({
       />
       <Field label="Maximum Participants" required>
         <input
-          type="number"
-          min="1"
-          step="1"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           className={fieldClass}
           value={totalCapacity}
           onChange={(event) => onCapacityChange(event.target.value)}
