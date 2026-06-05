@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Clock3 } from "lucide-react";
 import {
   ApplicationStatusBadge,
   applicantBorderClass,
 } from "@/components/ApplicationStatusBadge";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
+import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
 import {
   countUnreadByOpportunity,
@@ -159,24 +159,14 @@ export default async function ApplicationsPage({
     })
     .map((application) => getOpportunity(application)?.id)
     .filter((opportunityId): opportunityId is string => Boolean(opportunityId));
-  const [{ data: publishedSlotRows }, { data: bookingRows }] =
+  const { data: bookingRows } =
     acceptedOpportunityIds.length > 0 && user
-      ? await Promise.all([
-          supabase
-            .from("opportunity_time_slots")
-            .select("opportunity_id")
-            .in("opportunity_id", acceptedOpportunityIds)
-            .eq("is_published", true),
-          supabase
-            .from("opportunity_slot_bookings")
-            .select("id,opportunity_id,minutes,opportunity_time_slots(slot_date,start_time)")
-            .in("opportunity_id", acceptedOpportunityIds)
-            .eq("user_id", user.id),
-        ])
-      : [{ data: [] }, { data: [] }];
-  const opportunitiesWithPublishedTimetable = new Set(
-    (publishedSlotRows ?? []).map((slot) => slot.opportunity_id),
-  );
+      ? await supabase
+          .from("opportunity_slot_bookings")
+          .select("id,opportunity_id,minutes,opportunity_time_slots(slot_date,start_time)")
+          .in("opportunity_id", acceptedOpportunityIds)
+          .eq("user_id", user.id)
+      : { data: [] };
   const bookingsByOpportunity = groupBookingsByOpportunity(
     (bookingRows ?? []) as UserBookingRow[],
   );
@@ -260,12 +250,13 @@ export default async function ApplicationsPage({
           return (
             <article
               key={application.id}
-              className={`rounded-2xl border border-slate-200 bg-white p-3 shadow-sm ${applicantBorderClass(application.status)}`}
+              className={`relative rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${applicantBorderClass(application.status)}`}
             >
+              <NotificationCountBadge count={unreadCount} />
+              <Link href={`/app/opportunities/${opportunity.id}`} className="block p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    {unreadCount > 0 ? <UnreadBadge count={unreadCount} /> : null}
                     <ApplicationStatusBadge status={application.status} />
                     <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
                       {formatOpportunityType(opportunity.type)}
@@ -306,24 +297,6 @@ export default async function ApplicationsPage({
                     </p>
                   </div>
                 </div>
-                <div className="grid shrink-0 gap-1.5">
-                  <Link
-                    href={`/app/opportunities/${opportunity.id}`}
-                    className="rounded-full border border-slate-200 px-3 py-1.5 text-center text-xs font-bold text-slate-700"
-                  >
-                    Details
-                  </Link>
-                  {application.status === "accepted" &&
-                  opportunity.type === "camp" &&
-                  opportunitiesWithPublishedTimetable.has(opportunity.id) ? (
-                    <Link
-                      href={`/app/opportunities/${opportunity.id}/times`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-black text-white"
-                    >
-                      <Clock3 size={13} /> Select Times
-                    </Link>
-                  ) : null}
-                </div>
               </div>
               {opportunity.type === "camp" &&
               (bookingsByOpportunity.get(opportunity.id) ?? []).length > 0 ? (
@@ -359,8 +332,9 @@ export default async function ApplicationsPage({
                   </p>
                 </div>
               ) : null}
+              </Link>
               {application.status === "pending" || application.status === "waitlist" ? (
-                <div className="mt-3">
+                <div className="px-3 pb-3">
                   <WithdrawApplicationButton interestId={application.id} />
                 </div>
               ) : null}
@@ -500,15 +474,4 @@ function formatMoney(value: number, currency: string) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 2,
   }).format(value)} ${currency}`;
-}
-
-function UnreadBadge({ count }: { count: number }) {
-  return (
-    <span
-      aria-label={`${count} unread notification${count === 1 ? "" : "s"}`}
-      className="grid min-w-5 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black leading-4 text-white"
-    >
-      {count}
-    </span>
-  );
 }

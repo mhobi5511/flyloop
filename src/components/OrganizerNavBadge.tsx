@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { NotificationCountBadge } from "./NotificationCountBadge";
 
 type OrganizerNavBadgeProps = {
   initialCount: number;
@@ -11,7 +12,6 @@ type OrganizerNavBadgeProps = {
 
 export function OrganizerNavBadge({
   initialCount,
-  compact = false,
   notificationTypes = ["new_interest"],
 }: OrganizerNavBadgeProps) {
   const [count, setCount] = useState(initialCount);
@@ -95,17 +95,10 @@ export function OrganizerNavBadge({
     return null;
   }
 
-  if (compact) {
-    return (
-      <span className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-sky-600 px-1 text-[0.62rem] font-black leading-4 text-white shadow-sm ring-2 ring-white">
-        {count}
-      </span>
-    );
-  }
-
   return (
-    <span className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-sky-600 px-1 text-[0.62rem] font-black leading-4 text-white shadow-sm ring-2 ring-white">
-      {count}
-    </span>
+    <NotificationCountBadge
+      count={count}
+      className="min-w-4 px-1 text-[0.62rem] leading-4"
+    />
   );
 }

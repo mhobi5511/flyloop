@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarDays, MapPin, Users } from "lucide-react";
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { Badge } from "./Badge";
+import { NotificationCountBadge } from "./NotificationCountBadge";
 import {
   formatOpportunityDate,
   formatPrice,
@@ -56,12 +57,12 @@ export function OpportunityCard({
   return (
     <Link
       href={href}
-      className={`block rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dense ? "p-3" : "p-4"} ${statusBorder}`}
+      className={`relative block rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dense ? "p-3" : "p-4"} ${statusBorder}`}
     >
+      <NotificationCountBadge count={unreadCount} />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={`flex flex-wrap ${dense ? "mb-1.5 gap-1.5" : "mb-2 gap-2"}`}>
-            {unreadCount > 0 ? <UnreadBadge count={unreadCount} /> : null}
             {opportunity.viewerInterestStatus ? (
               <ApplicationStatusBadge status={opportunity.viewerInterestStatus} />
             ) : null}
@@ -208,15 +209,4 @@ function formatCompactPrice(opportunity: Opportunity) {
       : ` per ${formatPriceAppliesToMinutes(opportunity.minMinutesOrHours)} min`;
 
   return `${amount} ${currencyLabel}${suffix}`;
-}
-
-function UnreadBadge({ count }: { count: number }) {
-  return (
-    <span
-      aria-label={`${count} unread notification${count === 1 ? "" : "s"}`}
-      className="grid min-w-5 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black leading-4 text-white"
-    >
-      {count}
-    </span>
-  );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
+import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import { formatOpportunityDate, formatOpportunityType } from "@/lib/opportunities";
 import {
   countUnreadByOpportunity,
@@ -452,71 +453,63 @@ function getOpportunityHealth({
   };
 }
 
-function OpportunityCard({
-  opportunity,
-}: {
-  opportunity: OpportunityCardModel;
-}) {
+function OpportunityCard({ opportunity }: { opportunity: OpportunityCardModel }) {
   return (
-    <div
-      className={`rounded-2xl border border-slate-200 border-l-4 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${borderClass(
+    <Link
+      href={`/app/organizer/opportunities/${opportunity.id}`}
+      className={`relative block rounded-2xl border border-slate-200 border-l-4 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${borderClass(
         opportunity.health.tone,
       )}`}
     >
-      <Link href={`/app/organizer/opportunities/${opportunity.id}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
-                {formatOpportunityType(opportunity.type)}
-              </Badge>
-              <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${pillClass(opportunity.health.tone)}`}>
-                {opportunity.health.label}
-              </span>
-              {opportunity.unreadNotificationCount > 0 ? (
-                <UnreadBadge count={opportunity.unreadNotificationCount} />
-              ) : null}
-            </div>
-            <p className="mt-1 text-xs font-semibold text-slate-600">
-              {opportunity.health.explanation}
-            </p>
-            <h2 className="mt-2 line-clamp-1 text-base font-black tracking-tight text-slate-950">
-              {opportunity.title}
-            </h2>
-            <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-600">
-              {opportunity.tunnelName}
-              {opportunity.location ? `, ${opportunity.location}` : ""}
-            </p>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">
-              {formatOpportunityDate(
-                opportunity.type,
-                opportunity.startDate,
-                opportunity.endDate,
-              )}
-            </p>
+      <NotificationCountBadge count={opportunity.unreadNotificationCount} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
+              {formatOpportunityType(opportunity.type)}
+            </Badge>
+            <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${pillClass(opportunity.health.tone)}`}>
+              {opportunity.health.label}
+            </span>
           </div>
-          <div className="shrink-0 text-right">
-            <p className="text-sm font-black text-slate-950">
-              {opportunity.bookedSpots}/{opportunity.totalCapacity}
-            </p>
-            <p className="text-[0.68rem] font-bold text-slate-500">
-              {opportunity.type === "huck_jam" ? "participants" : "booked"}
-            </p>
-          </div>
+          <p className="mt-1 text-xs font-semibold text-slate-600">
+            {opportunity.health.explanation}
+          </p>
+          <h2 className="mt-2 line-clamp-1 text-base font-black tracking-tight text-slate-950">
+            {opportunity.title}
+          </h2>
+          <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-600">
+            {opportunity.tunnelName}
+            {opportunity.location ? `, ${opportunity.location}` : ""}
+          </p>
+          <p className="mt-0.5 text-xs font-semibold text-slate-500">
+            {formatOpportunityDate(
+              opportunity.type,
+              opportunity.startDate,
+              opportunity.endDate,
+            )}
+          </p>
         </div>
-        <p className="mt-2 text-xs font-black text-slate-700">
-          {opportunity.isFullyBooked
-            ? opportunity.type === "huck_jam"
-              ? "Session full"
-              : "Fully booked"
-            : `${opportunity.availableSpots} open ${pluralize(
-                opportunity.type === "huck_jam" ? "participant spot" : "spot",
-                opportunity.availableSpots,
-              )}`}
-        </p>
-      </Link>
-
-    </div>
+        <div className="shrink-0 pr-3 text-right">
+          <p className="text-sm font-black text-slate-950">
+            {opportunity.bookedSpots}/{opportunity.totalCapacity}
+          </p>
+          <p className="text-[0.68rem] font-bold text-slate-500">
+            {opportunity.type === "huck_jam" ? "participants" : "booked"}
+          </p>
+        </div>
+      </div>
+      <p className="mt-2 text-xs font-black text-slate-700">
+        {opportunity.isFullyBooked
+          ? opportunity.type === "huck_jam"
+            ? "Session full"
+            : "Fully booked"
+          : `${opportunity.availableSpots} open ${pluralize(
+              opportunity.type === "huck_jam" ? "participant spot" : "spot",
+              opportunity.availableSpots,
+            )}`}
+      </p>
+    </Link>
   );
 }
 
@@ -589,15 +582,4 @@ function formatDays(days: number) {
 
 function pluralize(word: string, count: number) {
   return count === 1 ? word : `${word}s`;
-}
-
-function UnreadBadge({ count }: { count: number }) {
-  return (
-    <span
-      aria-label={`${count} unread notification${count === 1 ? "" : "s"}`}
-      className="grid min-w-5 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black leading-4 text-white"
-    >
-      {count}
-    </span>
-  );
 }
