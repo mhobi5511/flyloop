@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { countBadgeNotifications } from "@/lib/notifications";
 import { NotificationCountBadge } from "./NotificationCountBadge";
 
 type OrganizerNavBadgeProps = {
@@ -29,7 +30,16 @@ export function OrganizerNavBadge({
       }
 
       try {
-        const { count: unreadCount, error: countError } = await supabase
+        const shouldFilterDeclined =
+          notificationTypesKey.split("|").includes("application_status");
+        const { count: unreadCount, data, error: countError } = shouldFilterDeclined
+          ? await supabase
+              .from("notifications")
+              .select("type,body")
+              .eq("user_id", currentUserId)
+              .eq("read", false)
+              .in("type", notificationTypesKey.split("|").filter(Boolean))
+          : await supabase
           .from("notifications")
           .select("*", { count: "exact", head: true })
           .eq("user_id", currentUserId)
@@ -42,7 +52,11 @@ export function OrganizerNavBadge({
         }
 
         if (!disposed) {
-          setCount(unreadCount ?? 0);
+          setCount(
+            shouldFilterDeclined
+              ? countBadgeNotifications(data ?? [])
+              : (unreadCount ?? 0),
+          );
         }
       } catch (countError) {
         console.error("Organizer nav badge count failed", countError);

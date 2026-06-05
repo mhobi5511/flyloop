@@ -17,13 +17,19 @@ export const organizerActivityNotificationTypes = [
   "participant_removal_requested",
 ] as const;
 
+type UnreadNotificationForBadge = {
+  opportunity_id: string | null;
+  type?: string | null;
+  body?: string | null;
+};
+
 export function countUnreadByOpportunity(
-  notifications: Array<{ opportunity_id: string | null }>,
+  notifications: UnreadNotificationForBadge[],
 ) {
   const counts = new Map<string, number>();
 
   for (const notification of notifications) {
-    if (!notification.opportunity_id) {
+    if (!notification.opportunity_id || isDeclinedApplicationNotification(notification)) {
       continue;
     }
 
@@ -34,4 +40,30 @@ export function countUnreadByOpportunity(
   }
 
   return counts;
+}
+
+export function countBadgeNotifications(
+  notifications: Array<Pick<UnreadNotificationForBadge, "type" | "body">>,
+) {
+  return notifications.filter(
+    (notification) => !isDeclinedApplicationNotification(notification),
+  ).length;
+}
+
+export function isDeclinedApplicationNotification({
+  type,
+  body,
+}: Pick<UnreadNotificationForBadge, "type" | "body">) {
+  if (type !== "application_status") {
+    return false;
+  }
+
+  const normalizedBody = body?.toLowerCase() ?? "";
+
+  return (
+    normalizedBody.includes("declined") ||
+    normalizedBody.includes("wasn''t a spot") ||
+    normalizedBody.includes("wasn't a spot") ||
+    normalizedBody.includes("leider")
+  );
 }

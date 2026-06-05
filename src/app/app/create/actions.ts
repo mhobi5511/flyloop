@@ -48,19 +48,36 @@ type AddTunnelInput = {
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; message: string };
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 function cleanText(value: string) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function parseCsv(value: string) {
-  const items = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+function normalizeTextArray(value: unknown) {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+}
 
-  return items;
+async function getInheritedCoachProfile(
+  supabase: SupabaseServerClient,
+  userId: string,
+) {
+  const { data } = await supabase
+    .from("coach_profiles")
+    .select("languages,disciplines")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return {
+    languages: normalizeTextArray(data?.languages),
+    disciplines: normalizeTextArray(data?.disciplines),
+  };
 }
 
 function isValidDate(value: string) {
@@ -266,6 +283,7 @@ export async function publishOpportunity(
     : input.type === "camp"
       ? `Camp with ${profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"}`
       : `Huck Jam at ${tunnel.name}`;
+  const inheritedCoachProfile = await getInheritedCoachProfile(supabase, user.id);
 
   const { data, error } = await supabase
     .from("opportunities")
@@ -287,8 +305,8 @@ export async function publishOpportunity(
       min_minutes_or_hours:
         input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
       description: cleanText(input.description),
-      languages: parseCsv(input.languages),
-      disciplines: parseCsv(input.disciplines),
+      languages: inheritedCoachProfile.languages,
+      disciplines: inheritedCoachProfile.disciplines,
       skill_level: cleanText(input.skillLevel),
       status: "published",
       contact_method: "whatsapp",
@@ -460,6 +478,7 @@ export async function updateOpportunity(
     : input.type === "camp"
       ? `Camp with ${profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"}`
       : `Huck Jam at ${tunnel.name}`;
+  const inheritedCoachProfile = await getInheritedCoachProfile(supabase, user.id);
 
   const { error } = await supabase
     .from("opportunities")
@@ -480,8 +499,8 @@ export async function updateOpportunity(
       min_minutes_or_hours:
         input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
       description: cleanText(input.description),
-      languages: parseCsv(input.languages),
-      disciplines: parseCsv(input.disciplines),
+      languages: inheritedCoachProfile.languages,
+      disciplines: inheritedCoachProfile.disciplines,
       skill_level: cleanText(input.skillLevel),
     })
     .eq("id", opportunityId)

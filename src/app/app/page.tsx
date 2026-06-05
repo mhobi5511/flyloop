@@ -93,7 +93,7 @@ export default async function AppHomePage({
       .eq("follower_id", user.id),
     supabase
       .from("notifications")
-      .select("opportunity_id")
+      .select("opportunity_id,type,body")
       .eq("user_id", user.id)
       .eq("read", false)
       .in("type", [...participantActivityNotificationTypes]),

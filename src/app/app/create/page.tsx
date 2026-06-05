@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import {
   CreateOpportunityForm,
+  type InheritedCoachProfile,
   type TunnelOption,
 } from "@/components/CreateOpportunityForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -12,11 +13,16 @@ export default async function CreateOpportunityPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: profile }, { data: tunnelRows }] = await Promise.all([
+  const [{ data: profile }, { data: coachProfile }, { data: tunnelRows }] = await Promise.all([
     supabase
       .from("profiles")
       .select("is_organizer,wants_to_create_opportunities")
       .eq("id", user?.id)
+      .maybeSingle(),
+    supabase
+      .from("coach_profiles")
+      .select("languages,disciplines")
+      .eq("user_id", user?.id)
       .maybeSingle(),
     supabase
       .from("tunnel_profiles")
@@ -32,13 +38,20 @@ export default async function CreateOpportunityPage() {
     city: tunnel.city,
     country: tunnel.country,
   }));
+  const inheritedCoachProfile: InheritedCoachProfile = {
+    languages: coachProfile?.languages ?? [],
+    disciplines: coachProfile?.disciplines ?? [],
+  };
 
   return (
     <AppShell active="create" canCreate={canCreate}>
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-3xl font-black tracking-tight">Post opportunity</h1>
+        <h1 className="text-3xl font-black tracking-tight">Create opportunity</h1>
         {canCreate ? (
-          <CreateOpportunityForm tunnels={tunnels} />
+          <CreateOpportunityForm
+            tunnels={tunnels}
+            inheritedCoachProfile={inheritedCoachProfile}
+          />
         ) : (
           <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-black tracking-tight">

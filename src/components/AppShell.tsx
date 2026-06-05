@@ -19,6 +19,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { unstable_rethrow } from "next/navigation";
 import { isAdmin } from "@/lib/admin";
 import {
+  countBadgeNotifications,
   organizerActivityNotificationTypes,
   participantActivityNotificationTypes,
 } from "@/lib/notifications";
@@ -100,7 +101,7 @@ async function getShellState() {
           .in("type", [...organizerActivityNotificationTypes]),
         supabase
           .from("notifications")
-          .select("*", { count: "exact", head: true })
+          .select("type,body")
           .eq("user_id", user.id)
           .eq("read", false)
           .in("type", [...participantActivityNotificationTypes]),
@@ -134,7 +135,11 @@ async function getShellState() {
       canJoin: true,
       isAdmin: isAdmin(user),
       organizerUnreadCount: organizerNotificationResult.count ?? 0,
-      participantUnreadCount: participantNotificationResult.count ?? 0,
+      participantUnreadCount: countBadgeNotifications(
+        participantNotificationResult.error
+          ? []
+          : (participantNotificationResult.data ?? []),
+      ),
       profileIncomplete,
       pushNotificationsEnabled: profile?.push_notifications_enabled === true,
       pushPromptAnsweredAt: profile?.push_prompt_answered_at ?? null,

@@ -16,33 +16,54 @@ export type TunnelOption = {
   country: string;
 };
 
+export type InheritedCoachProfile = {
+  languages: string[];
+  disciplines: string[];
+};
+
 type CreateOpportunityFormProps = {
   tunnels: TunnelOption[];
+  inheritedCoachProfile?: InheritedCoachProfile;
   initialOpportunity?: OpportunityFormInput & { id: string };
   mode?: "create" | "edit";
 };
 
+type StepId =
+  | "type"
+  | "basics"
+  | "location"
+  | "schedule"
+  | "capacity"
+  | "pricing"
+  | "participation"
+  | "review";
+
 const currencies = ["EUR", "CHF", "USD", "PLN", "GBP"];
-const languageOptions = [
-  "English",
-  "German",
-  "French",
-  "Spanish",
-  "Italian",
-  "Polish",
-  "Portuguese",
-  "Dutch",
-  "Swedish",
-  "Danish",
-  "Norwegian",
-  "Czech",
-];
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const premiumFieldClass =
-  "block h-[3.25rem] w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
-const dateFieldClass =
-  "block box-border h-14 w-full max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 text-base outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+const fieldClass =
+  "block h-12 w-full max-w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+const areaClass =
+  "block min-h-28 w-full max-w-full min-w-0 resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+
+const campSteps: { id: StepId; label: string }[] = [
+  { id: "type", label: "Type" },
+  { id: "basics", label: "Basics" },
+  { id: "location", label: "Location" },
+  { id: "schedule", label: "Schedule" },
+  { id: "capacity", label: "Capacity" },
+  { id: "pricing", label: "Pricing" },
+  { id: "review", label: "Review" },
+];
+
+const huckJamSteps: { id: StepId; label: string }[] = [
+  { id: "type", label: "Type" },
+  { id: "basics", label: "Basics" },
+  { id: "location", label: "Location" },
+  { id: "schedule", label: "Session" },
+  { id: "participation", label: "Participation" },
+  { id: "review", label: "Review" },
+];
 
 function isoDateFromNow(days: number) {
   const date = new Date();
@@ -72,10 +93,6 @@ function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 }
 
-function isValidTime(value: string) {
-  return /^\d{2}:\d{2}$/.test(value);
-}
-
 function splitCsv(value: string) {
   return value
     .split(",")
@@ -83,95 +100,8 @@ function splitCsv(value: string) {
     .filter(Boolean);
 }
 
-function validateOpportunity(values: {
-  type: OpportunityType;
-  bookingMode: BookingMode;
-  tunnelId: string;
-  startDate: string;
-  endDate: string;
-  registrationDeadline: string;
-  sessionStart: string;
-  sessionEnd: string;
-  price: string;
-  currency: string;
-  totalCapacity: string;
-  minMinutesOrHours: string;
-}) {
-  if (values.type !== "camp" && values.type !== "huck_jam") {
-    return "Please choose an opportunity type.";
-  }
-
-  if (
-    values.bookingMode !== "approval_required" &&
-    values.bookingMode !== "direct_time_booking"
-  ) {
-    return "Please choose a booking mode.";
-  }
-
-  if (values.type === "huck_jam" && values.bookingMode !== "approval_required") {
-    return "Huck Jams always use approval required.";
-  }
-
-  if (!uuidPattern.test(values.tunnelId)) {
-    return "Please select a tunnel before publishing.";
-  }
-
-  if (!isValidDate(values.startDate)) {
-    return "Please select a start date.";
-  }
-
-  if (values.type === "camp" && !isValidDate(values.endDate)) {
-    return "Please select an end date.";
-  }
-
-  if (
-    values.type === "camp" &&
-    new Date(values.endDate) < new Date(values.startDate)
-  ) {
-    return "End date must be the same as or after the start date.";
-  }
-
-  if (
-    values.registrationDeadline &&
-    (!isValidDate(values.registrationDeadline) ||
-      new Date(values.registrationDeadline) > new Date(values.startDate))
-  ) {
-    return "Registration deadline must be on or before the start date.";
-  }
-
-  if (values.type === "huck_jam") {
-    if (!isValidTime(values.sessionStart) || !isValidTime(values.sessionEnd)) {
-      return "Please enter the Huck Jam session start and end times.";
-    }
-
-    if (values.sessionEnd <= values.sessionStart) {
-      return "Session end must be after session start.";
-    }
-  }
-
-  const price = Number(values.price);
-  if (!Number.isFinite(price) || price < 0) {
-    return "Please enter a valid price.";
-  }
-
-  if (values.type === "camp" && getPriceAppliesToError(values.minMinutesOrHours)) {
-    return priceAppliesToErrorMessage;
-  }
-
-  if (!currencies.includes(values.currency)) {
-    return "Please choose a valid currency.";
-  }
-
-  const capacity = Number(values.totalCapacity);
-  if (!Number.isInteger(capacity) || capacity < 1) {
-    return "Please enter a valid capacity.";
-  }
-
-  return "";
-}
-
 const priceAppliesToErrorMessage =
-  "Please enter a valid number of minutes, for example 60.";
+  "Enter a number of minutes, for example 60. Price is normally per hour; use this field when another duration applies.";
 
 function getPriceAppliesToError(value: string) {
   const trimmed = value.trim();
@@ -191,13 +121,45 @@ function normalizeInitialPriceAppliesTo(value?: string) {
   return getPriceAppliesToError(trimmed) ? "60" : trimmed;
 }
 
+function formatDate(value: string) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatCurrency(amount: string, currency: string) {
+  const number = Number(amount);
+
+  if (!Number.isFinite(number)) {
+    return `${amount || "0"} ${currency}`;
+  }
+
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(number);
+}
+
 export function CreateOpportunityForm({
   tunnels,
+  inheritedCoachProfile,
   initialOpportunity,
   mode = "create",
 }: CreateOpportunityFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const inheritedLanguages =
+    inheritedCoachProfile?.languages ?? splitCsv(initialOpportunity?.languages ?? "");
+  const inheritedDisciplines =
+    inheritedCoachProfile?.disciplines ??
+    splitCsv(initialOpportunity?.disciplines ?? "");
   const [type, setType] = useState<OpportunityType>(
     initialOpportunity?.type ?? "camp",
   );
@@ -219,10 +181,10 @@ export function CreateOpportunityForm({
   const [registrationDeadline, setRegistrationDeadline] = useState(
     initialOpportunity?.registrationDeadline ?? "",
   );
-  const [sessionStart, setSessionStart] = useState(
+  const [sessionStart] = useState(
     initialOpportunity?.sessionStart?.slice(0, 5) ?? "18:00",
   );
-  const [sessionEnd, setSessionEnd] = useState(
+  const [sessionEnd] = useState(
     initialOpportunity?.sessionEnd?.slice(0, 5) ?? "20:00",
   );
   const [price, setPrice] = useState(
@@ -238,39 +200,36 @@ export function CreateOpportunityForm({
   const [description, setDescription] = useState(
     initialOpportunity?.description ?? "",
   );
-  const [languages, setLanguages] = useState<string[]>(() =>
-    splitCsv(initialOpportunity?.languages ?? ""),
-  );
-  const [disciplines, setDisciplines] = useState(
-    initialOpportunity?.disciplines ?? "",
-  );
-  const [skillLevel, setSkillLevel] = useState(initialOpportunity?.skillLevel ?? "");
-  const [availableTunnels] = useState(tunnels);
+  const [skillLevel] = useState(initialOpportunity?.skillLevel ?? "");
   const [tunnelSearch, setTunnelSearch] = useState("");
   const [isTunnelListOpen, setIsTunnelListOpen] = useState(false);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(mode === "edit");
-  const [message, setMessage] = useState("");
+  const [stepIndex, setStepIndex] = useState(0);
+  const [maxVisitedStepIndex, setMaxVisitedStepIndex] = useState(
+    mode === "edit" ? campSteps.length - 1 : 0,
+  );
   const [error, setError] = useState("");
 
+  const steps = type === "camp" ? campSteps : huckJamSteps;
+  const currentStep = steps[Math.min(stepIndex, steps.length - 1)];
   const selectedTunnel = useMemo(
-    () => availableTunnels.find((tunnel) => tunnel.id === tunnelId),
-    [availableTunnels, tunnelId],
+    () => tunnels.find((tunnel) => tunnel.id === tunnelId),
+    [tunnels, tunnelId],
   );
   const tunnelMatches = useMemo(() => {
     const query = tunnelSearch.trim().toLowerCase();
 
     if (!query) {
-      return availableTunnels.slice(0, 8);
+      return tunnels.slice(0, 8);
     }
 
-    return availableTunnels
+    return tunnels
       .filter((tunnel) =>
         `${tunnel.name} ${tunnel.city} ${tunnel.country}`
           .toLowerCase()
           .includes(query),
       )
       .slice(0, 8);
-  }, [availableTunnels, tunnelSearch]);
+  }, [tunnels, tunnelSearch]);
   const capacityNumber = Number(totalCapacity);
   const showLastMinuteNotice = useMemo(() => {
     if (!registrationDeadline || !Number.isFinite(capacityNumber) || capacityNumber < 1) {
@@ -282,9 +241,19 @@ export function CreateOpportunityForm({
   }, [registrationDeadline, capacityNumber]);
   const priceAppliesToError =
     type === "camp" ? getPriceAppliesToError(minMinutesOrHours) : "";
+  const flowName = type === "camp" ? "Camp" : "Huck Jam";
+
+  function goToStep(nextIndex: number) {
+    setError("");
+    setStepIndex(Math.min(nextIndex, steps.length - 1));
+  }
 
   function updateType(nextType: OpportunityType) {
     setType(nextType);
+    setStepIndex(0);
+    setMaxVisitedStepIndex(0);
+    setError("");
+
     if (nextType === "huck_jam") {
       setBookingMode("approval_required");
       setEndDate(startDate);
@@ -295,6 +264,7 @@ export function CreateOpportunityForm({
       setPrice("550");
       setMinMinutesOrHours("60");
     }
+
     if (!endDateTouched && startDate) {
       setEndDate(nextType === "camp" ? addDays(startDate, 5) : startDate);
     }
@@ -305,28 +275,103 @@ export function CreateOpportunityForm({
     if (type === "huck_jam") {
       setEndDate(value);
     } else if (!endDateTouched) {
-      setEndDate(type === "camp" ? addDays(value, 5) : value);
+      setEndDate(addDays(value, 5));
     }
   }
 
-  function submit() {
-    setError("");
-    setMessage("");
+  function validateStep(stepId: StepId) {
+    if (stepId === "type" && type !== "camp" && type !== "huck_jam") {
+      return "Choose Camp or Huck Jam to continue.";
+    }
 
-    const validationError = validateOpportunity({
-      type,
-      bookingMode: type === "huck_jam" ? "approval_required" : bookingMode,
-      tunnelId,
-      startDate,
-      endDate,
-      registrationDeadline,
-      sessionStart,
-      sessionEnd,
-      price,
-      currency,
-      totalCapacity,
-      minMinutesOrHours,
-    });
+    if (stepId === "location" && !uuidPattern.test(tunnelId)) {
+      return "Select the tunnel where this takes place.";
+    }
+
+    if (stepId === "schedule") {
+      if (!isValidDate(startDate)) {
+        return type === "huck_jam"
+          ? "Select the event date."
+          : "Select the start date.";
+      }
+
+      if (type === "camp" && !isValidDate(endDate)) {
+        return "Select the end date.";
+      }
+
+      if (type === "camp" && new Date(endDate) < new Date(startDate)) {
+        return "End date must be the same as or after the start date.";
+      }
+
+      if (
+        registrationDeadline &&
+        (!isValidDate(registrationDeadline) ||
+          new Date(registrationDeadline) > new Date(startDate))
+      ) {
+        return type === "huck_jam"
+          ? "Registration deadline must be on or before the event date."
+          : "Registration deadline must be on or before the start date.";
+      }
+    }
+
+    if (stepId === "capacity" || stepId === "participation") {
+      const capacity = Number(totalCapacity);
+      if (!Number.isInteger(capacity) || capacity < 1) {
+        return "Enter a maximum participant count of at least 1.";
+      }
+
+      const fee = Number(price);
+      if (!Number.isFinite(fee) || fee < 0) {
+        return type === "huck_jam"
+          ? "Enter a valid participation fee."
+          : "Enter a valid price.";
+      }
+    }
+
+    if (stepId === "pricing") {
+      const fee = Number(price);
+      if (!Number.isFinite(fee) || fee < 0) {
+        return "Enter a valid price.";
+      }
+
+      if (priceAppliesToError) {
+        return priceAppliesToError;
+      }
+
+      if (!currencies.includes(currency)) {
+        return "Choose a valid currency.";
+      }
+    }
+
+    return "";
+  }
+
+  function validateAll() {
+    for (const step of steps) {
+      const validationError = validateStep(step.id);
+      if (validationError) {
+        return validationError;
+      }
+    }
+
+    return "";
+  }
+
+  function continueToNextStep() {
+    const validationError = validateStep(currentStep.id);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const nextIndex = Math.min(stepIndex + 1, steps.length - 1);
+    setError("");
+    setStepIndex(nextIndex);
+    setMaxVisitedStepIndex((value) => Math.max(value, nextIndex));
+  }
+
+  function submit() {
+    const validationError = validateAll();
 
     if (validationError) {
       setError(validationError);
@@ -350,8 +395,8 @@ export function CreateOpportunityForm({
         totalCapacity: Number(totalCapacity),
         minMinutesOrHours: type === "camp" ? minMinutesOrHours.trim() : "",
         description,
-        languages: languages.join(", "),
-        disciplines,
+        languages: inheritedLanguages.join(", "),
+        disciplines: inheritedDisciplines.join(", "),
         skillLevel,
       };
       const result =
@@ -375,143 +420,543 @@ export function CreateOpportunityForm({
 
   return (
     <form
-      className="mt-3 box-border grid w-full max-w-full gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:mt-4 sm:p-4"
+      className="mt-4 grid w-full gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5"
       onSubmit={(event) => {
         event.preventDefault();
-        submit();
+        if (currentStep.id === "review") {
+          submit();
+        } else {
+          continueToNextStep();
+        }
       }}
     >
-      <SectionTitle eyebrow="Basic info" title="What are you publishing?" />
-      <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
-        <Field label="Type" required>
-          <select
-            className="field"
-            value={type}
-            onChange={(event) => updateType(event.target.value as OpportunityType)}
-          >
-            <option value="camp">Camp</option>
-            <option value="huck_jam">Huck Jam</option>
-          </select>
-        </Field>
-        <Field label="Title">
+      <ProgressNav
+        steps={steps}
+        currentIndex={stepIndex}
+        maxVisitedIndex={maxVisitedStepIndex}
+        onSelect={goToStep}
+      />
+
+      <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3 sm:p-5">
+        {currentStep.id === "type" ? (
+          <TypeStep type={type} onChange={updateType} />
+        ) : null}
+
+        {currentStep.id === "basics" ? (
+          <BasicsStep
+            type={type}
+            title={title}
+            description={description}
+            onTitleChange={setTitle}
+            onDescriptionChange={setDescription}
+          />
+        ) : null}
+
+        {currentStep.id === "location" ? (
+          <LocationStep
+            matches={tunnelMatches}
+            selectedTunnel={selectedTunnel}
+            tunnelSearch={tunnelSearch}
+            isOpen={isTunnelListOpen}
+            onSearch={(value) => {
+              setTunnelSearch(value);
+              setIsTunnelListOpen(true);
+            }}
+            onFocus={() => setIsTunnelListOpen(true)}
+            onSelect={(tunnel) => {
+              setTunnelId(tunnel.id);
+              setTunnelSearch("");
+              setIsTunnelListOpen(false);
+            }}
+          />
+        ) : null}
+
+        {currentStep.id === "schedule" ? (
+          <ScheduleStep
+            type={type}
+            startDate={startDate}
+            endDate={endDate}
+            registrationDeadline={registrationDeadline}
+            showLastMinuteNotice={showLastMinuteNotice}
+            onStartDateChange={updateStartDate}
+            onEndDateChange={(value) => {
+              setEndDateTouched(true);
+              setEndDate(value);
+            }}
+            onRegistrationDeadlineChange={setRegistrationDeadline}
+          />
+        ) : null}
+
+        {currentStep.id === "capacity" ? (
+          <CapacityStep
+            bookingMode={bookingMode}
+            totalCapacity={totalCapacity}
+            onBookingModeChange={setBookingMode}
+            onCapacityChange={setTotalCapacity}
+          />
+        ) : null}
+
+        {currentStep.id === "pricing" ? (
+          <PricingStep
+            price={price}
+            currency={currency}
+            minMinutesOrHours={minMinutesOrHours}
+            priceAppliesToError={priceAppliesToError}
+            onPriceChange={setPrice}
+            onCurrencyChange={setCurrency}
+            onMinMinutesOrHoursChange={setMinMinutesOrHours}
+          />
+        ) : null}
+
+        {currentStep.id === "participation" ? (
+          <ParticipationStep
+            price={price}
+            currency={currency}
+            totalCapacity={totalCapacity}
+            onPriceChange={setPrice}
+            onCurrencyChange={setCurrency}
+            onCapacityChange={setTotalCapacity}
+          />
+        ) : null}
+
+        {currentStep.id === "review" ? (
+          <ReviewStep
+            type={type}
+            title={title}
+            selectedTunnel={selectedTunnel}
+            startDate={startDate}
+            endDate={endDate}
+            registrationDeadline={registrationDeadline}
+            totalCapacity={totalCapacity}
+            bookingMode={bookingMode}
+            price={price}
+            currency={currency}
+            minMinutesOrHours={minMinutesOrHours}
+            onEdit={(stepId) => {
+              const nextIndex = steps.findIndex((step) => step.id === stepId);
+              if (nextIndex >= 0) {
+                goToStep(nextIndex);
+              }
+            }}
+          />
+        ) : null}
+      </div>
+
+      {error ? (
+        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold leading-5 text-rose-700">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <button
+          type="button"
+          disabled={stepIndex === 0 || isPending}
+          onClick={() => goToStep(Math.max(stepIndex - 1, 0))}
+          className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+        >
+          Back
+        </button>
+        <button
+          type="submit"
+          disabled={isPending || (currentStep.id === "pricing" && Boolean(priceAppliesToError))}
+          className="h-11 rounded-xl bg-sky-600 px-5 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+        >
+          {currentStep.id === "review"
+            ? isPending
+              ? mode === "edit"
+                ? "Saving..."
+                : `Creating ${flowName}...`
+              : mode === "edit"
+                ? "Save changes"
+                : `Create ${flowName}`
+            : "Continue"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ProgressNav({
+  steps,
+  currentIndex,
+  maxVisitedIndex,
+  onSelect,
+}: {
+  steps: { id: StepId; label: string }[];
+  currentIndex: number;
+  maxVisitedIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <nav aria-label="Create progress" className="overflow-x-auto pb-1">
+      <ol className="flex min-w-max items-center gap-2">
+        {steps.map((step, index) => {
+          const isCurrent = index === currentIndex;
+          const canSelect = index <= maxVisitedIndex;
+
+          return (
+            <li key={step.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!canSelect}
+                onClick={() => onSelect(index)}
+                className={`h-9 rounded-full border px-3 text-xs font-black transition ${
+                  isCurrent
+                    ? "border-sky-600 bg-sky-600 text-white"
+                    : canSelect
+                      ? "border-slate-200 bg-white text-slate-700 hover:bg-sky-50"
+                      : "border-slate-100 bg-slate-50 text-slate-300"
+                }`}
+              >
+                {step.label}
+              </button>
+              {index < steps.length - 1 ? (
+                <span className="h-px w-4 bg-slate-200" aria-hidden="true" />
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+function StepHeader({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-600">
+        {eyebrow}
+      </p>
+      <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+        {title}
+      </h2>
+      <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function TypeStep({
+  type,
+  onChange,
+}: {
+  type: OpportunityType;
+  onChange: (type: OpportunityType) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Type"
+        title="What would you like to create?"
+        description="Start with the format. You can still review everything before publishing."
+      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TypeCard
+          selected={type === "camp"}
+          title="Camp"
+          description="A multi-day coaching opportunity with capacity, booking mode and hourly pricing."
+          onClick={() => onChange("camp")}
+        />
+        <TypeCard
+          selected={type === "huck_jam"}
+          title="Huck Jam"
+          description="A single-day session with a participation fee and a simple sign-up flow."
+          onClick={() => onChange("huck_jam")}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TypeCard({
+  selected,
+  title,
+  description,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`grid min-h-36 gap-2 rounded-2xl border p-4 text-left transition ${
+        selected
+          ? "border-sky-400 bg-sky-50 shadow-sm"
+          : "border-slate-200 bg-white hover:border-sky-200 hover:bg-white"
+      }`}
+    >
+      <span className="flex items-center justify-between gap-3">
+        <span className="text-xl font-black tracking-tight text-slate-950">
+          {title}
+        </span>
+        <span
+          className={`grid size-6 place-items-center rounded-full border text-sm font-black ${
+            selected
+              ? "border-sky-600 bg-sky-600 text-white"
+              : "border-slate-200 text-transparent"
+          }`}
+        />
+      </span>
+      <span className="text-sm font-medium leading-6 text-slate-600">
+        {description}
+      </span>
+    </button>
+  );
+}
+
+function BasicsStep({
+  type,
+  title,
+  description,
+  onTitleChange,
+  onDescriptionChange,
+}: {
+  type: OpportunityType;
+  title: string;
+  description: string;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+}) {
+  const label = type === "camp" ? "Camp" : "Huck Jam";
+
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Basics"
+        title={`${label} details`}
+        description="Name and description are optional. Languages and disciplines come from your coach profile."
+      />
+      <div className="grid gap-3">
+        <Field label={`${label} Name`}>
           <input
-            className="field"
+            className={fieldClass}
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={
-              type === "camp"
-                ? "Enter optional camp title"
-                : selectedTunnel
-                  ? "Enter optional huck jam title"
-                  : "Enter optional title"
-            }
+            onChange={(event) => onTitleChange(event.target.value)}
+            placeholder={`Optional ${label.toLowerCase()} name`}
+          />
+        </Field>
+        <Field label="Description">
+          <textarea
+            className={areaClass}
+            value={description}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            placeholder="Optional notes for flyers"
           />
         </Field>
       </div>
+    </div>
+  );
+}
 
-      {type === "camp" ? (
-        <>
-          <SectionTitle eyebrow="Booking mode" title="Choose how participants join" />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <BookingModeOption
-              value="approval_required"
-              selectedValue={bookingMode}
-              title="Approval Required"
-              description="Participants apply first. You decide who gets accepted. Accepted participants can then select times."
-              onChange={setBookingMode}
-            />
-            <BookingModeOption
-              value="direct_time_booking"
-              selectedValue={bookingMode}
-              title="Direct Booking"
-              description="Participants can immediately select available times. Booking a slot confirms participation."
-              onChange={setBookingMode}
-            />
-          </div>
-        </>
-      ) : null}
-
-      <SectionTitle eyebrow="Location" title="Choose the tunnel" />
+function LocationStep({
+  matches,
+  selectedTunnel,
+  tunnelSearch,
+  isOpen,
+  onSearch,
+  onFocus,
+  onSelect,
+}: {
+  matches: TunnelOption[];
+  selectedTunnel?: TunnelOption;
+  tunnelSearch: string;
+  isOpen: boolean;
+  onSearch: (value: string) => void;
+  onFocus: () => void;
+  onSelect: (tunnel: TunnelOption) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Location"
+        title="Where will it happen?"
+        description="Choose the tunnel so flyers can discover the opportunity in the right place."
+      />
       <TunnelCombobox
-        matches={tunnelMatches}
+        matches={matches}
         selectedTunnel={selectedTunnel}
         tunnelSearch={tunnelSearch}
-        isOpen={isTunnelListOpen}
-        onSearch={(value) => {
-          setTunnelSearch(value);
-          setIsTunnelListOpen(true);
-        }}
-        onFocus={() => setIsTunnelListOpen(true)}
-        onSelect={(tunnel) => {
-          setTunnelId(tunnel.id);
-          setTunnelSearch("");
-          setIsTunnelListOpen(false);
-        }}
+        isOpen={isOpen}
+        onSearch={onSearch}
+        onFocus={onFocus}
+        onSelect={onSelect}
       />
+    </div>
+  );
+}
 
-      <SectionTitle eyebrow="Dates" title="Set the timing" />
+function ScheduleStep({
+  type,
+  startDate,
+  endDate,
+  registrationDeadline,
+  showLastMinuteNotice,
+  onStartDateChange,
+  onEndDateChange,
+  onRegistrationDeadlineChange,
+}: {
+  type: OpportunityType;
+  startDate: string;
+  endDate: string;
+  registrationDeadline: string;
+  showLastMinuteNotice: boolean;
+  onStartDateChange: (value: string) => void;
+  onEndDateChange: (value: string) => void;
+  onRegistrationDeadlineChange: (value: string) => void;
+}) {
+  const isHuckJam = type === "huck_jam";
+
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow={isHuckJam ? "Session" : "Schedule"}
+        title={isHuckJam ? "Set the event date" : "Set the camp dates"}
+        description={
+          isHuckJam
+            ? "Huck Jams happen on one day. Leave registration deadline empty to keep sign-up open until the event starts."
+            : "Leave registration deadline empty to keep registration open until the camp starts."
+        }
+      />
       {showLastMinuteNotice ? (
-        <p className="rounded-xl bg-amber-50 p-2.5 text-xs font-semibold leading-5 text-amber-800 sm:p-3 sm:text-sm">
+        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-800">
           This opportunity will appear as last-minute because the registration
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className="w-full max-w-full min-w-0 space-y-3">
-        <div className={type === "camp" ? "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3" : ""}>
-          <Field label={type === "huck_jam" ? "Date" : "Start date"} required>
-            <input
-              type="date"
-              className={dateFieldClass}
-              value={startDate}
-              onChange={(event) => updateStartDate(event.target.value)}
-            />
-          </Field>
-          {type === "camp" ? (
-            <Field label="End date" required>
-              <input
-                type="date"
-                className={dateFieldClass}
-                value={endDate}
-                onChange={(event) => {
-                  setEndDateTouched(true);
-                  setEndDate(event.target.value);
-                }}
-              />
-            </Field>
-          ) : null}
-        </div>
-        <Field label="Registration deadline">
+      <div className={isHuckJam ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
+        <Field label={isHuckJam ? "Event Date" : "Start Date"} required>
           <input
             type="date"
-            className={dateFieldClass}
-            value={registrationDeadline}
-            onChange={(event) => setRegistrationDeadline(event.target.value)}
+            className={fieldClass}
+            value={startDate}
+            onChange={(event) => onStartDateChange(event.target.value)}
           />
         </Field>
+        {!isHuckJam ? (
+          <Field label="End Date" required>
+            <input
+              type="date"
+              className={fieldClass}
+              value={endDate}
+              onChange={(event) => onEndDateChange(event.target.value)}
+            />
+          </Field>
+        ) : null}
       </div>
+      <Field label="Registration Deadline">
+        <input
+          type="date"
+          className={fieldClass}
+          value={registrationDeadline}
+          onChange={(event) => onRegistrationDeadlineChange(event.target.value)}
+        />
+      </Field>
+    </div>
+  );
+}
 
-      <SectionTitle eyebrow="Price & capacity" title="Set availability" />
+function CapacityStep({
+  bookingMode,
+  totalCapacity,
+  onBookingModeChange,
+  onCapacityChange,
+}: {
+  bookingMode: BookingMode;
+  totalCapacity: string;
+  onBookingModeChange: (value: BookingMode) => void;
+  onCapacityChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Capacity"
+        title="How should booking work?"
+        description="Keep the existing booking behavior, then set the maximum number of participants."
+      />
+      <Field label="Maximum Participants" required>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          className={fieldClass}
+          value={totalCapacity}
+          onChange={(event) => onCapacityChange(event.target.value)}
+        />
+      </Field>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <BookingModeOption
+          value="approval_required"
+          selectedValue={bookingMode}
+          title="Approval Required"
+          description="Participants apply first. You decide who gets accepted. Accepted participants can then select times."
+          onChange={onBookingModeChange}
+        />
+        <BookingModeOption
+          value="direct_time_booking"
+          selectedValue={bookingMode}
+          title="Direct Booking"
+          description="Participants can immediately select available times. Booking a slot confirms participation."
+          onChange={onBookingModeChange}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PricingStep({
+  price,
+  currency,
+  minMinutesOrHours,
+  priceAppliesToError,
+  onPriceChange,
+  onCurrencyChange,
+  onMinMinutesOrHoursChange,
+}: {
+  price: string;
+  currency: string;
+  minMinutesOrHours: string;
+  priceAppliesToError: string;
+  onPriceChange: (value: string) => void;
+  onCurrencyChange: (value: string) => void;
+  onMinMinutesOrHoursChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Pricing"
+        title="Set the price"
+        description="Price is normally per hour. The duration field must contain a valid number of minutes."
+      />
       <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
-        <Field label={type === "huck_jam" ? "Participation Fee" : "Price"} required>
+        <Field label="Price" required>
           <input
             type="number"
             min="0"
             step="1"
-            className={premiumFieldClass}
+            className={fieldClass}
             value={price}
-            onChange={(event) => setPrice(event.target.value)}
+            onChange={(event) => onPriceChange(event.target.value)}
           />
-          {type === "camp" ? (
-            <span className="text-xs font-semibold leading-5 text-slate-500">
-              Usually this is the price per hour including coaching.
-            </span>
-          ) : null}
         </Field>
         <Field label="Currency" required>
           <select
-            className={premiumFieldClass}
+            className={fieldClass}
             value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
+            onChange={(event) => onCurrencyChange(event.target.value)}
           >
             {currencies.map((item) => (
               <option key={item} value={item}>
@@ -520,152 +965,210 @@ export function CreateOpportunityForm({
             ))}
           </select>
         </Field>
-        <div className="col-span-2">
-          <Field label="Capacity" required>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              className={premiumFieldClass}
-              value={totalCapacity}
-              onChange={(event) => setTotalCapacity(event.target.value)}
-            />
-          </Field>
-        </div>
       </div>
-
-      {type === "huck_jam" ? (
-        <>
-          <SectionTitle eyebrow="Session" title="Set the session time" />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Session Start" required>
-              <input
-                type="time"
-                className={dateFieldClass}
-                value={sessionStart}
-                onChange={(event) => setSessionStart(event.target.value)}
-              />
-            </Field>
-            <Field label="Session End" required>
-              <input
-                type="time"
-                className={dateFieldClass}
-                value={sessionEnd}
-                onChange={(event) => setSessionEnd(event.target.value)}
-              />
-            </Field>
-          </div>
-        </>
-      ) : null}
-
-      <details
-        className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3"
-        open={isDetailsOpen}
-        onToggle={(event) => setIsDetailsOpen(event.currentTarget.open)}
-      >
-        <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
-          Optional details
-        </summary>
-        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
-          {type === "camp" ? (
-            <Field label="Price applies to" required>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                className="field"
-                value={minMinutesOrHours}
-                onBlur={() => {
-                  if (!minMinutesOrHours.trim()) {
-                    setMinMinutesOrHours("60");
-                  }
-                }}
-                onChange={(event) => setMinMinutesOrHours(event.target.value)}
-                placeholder="60"
-              />
-              <span className="text-xs font-semibold leading-5 text-slate-500">
-                Displayed as {price || "550"} {currency === "EUR" ? "€" : currency} per{" "}
-                {minMinutesOrHours || "60"} min
-              </span>
-              {priceAppliesToError ? (
-                <span className="text-xs font-bold leading-5 text-rose-600">
-                  {priceAppliesToError}
-                </span>
-              ) : null}
-            </Field>
-          ) : null}
-          <Field label="Skill level">
-            <input
-              className="field"
-              value={skillLevel}
-              onChange={(event) => setSkillLevel(event.target.value)}
-              placeholder="Enter skill level"
-            />
-          </Field>
-          <Field label="Languages">
-            <LanguageSelector
-              selectedLanguages={languages}
-              onChange={setLanguages}
-            />
-          </Field>
-          <Field label="Disciplines">
-            <input
-              className="field"
-              value={disciplines}
-              onChange={(event) => setDisciplines(event.target.value)}
-              placeholder="Enter disciplines"
-            />
-          </Field>
-        </div>
-        <div className="mt-2.5 sm:mt-3">
-          <Field label="Description">
-            <textarea
-              className="field min-h-24 py-3"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="What should flyers know before they send interest?"
-            />
-          </Field>
-        </div>
-      </details>
-
-      {message ? (
-        <p className="rounded-xl bg-sky-50 p-2.5 text-sm font-semibold text-sky-700 sm:p-3">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="rounded-xl bg-rose-50 p-2.5 text-sm font-semibold text-rose-700 sm:p-3">
-          {error}
-        </p>
-      ) : null}
-
-      <button
-        type="submit"
-        disabled={isPending || Boolean(priceAppliesToError)}
-        className="h-12 w-full rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
-      >
-        {isPending
-          ? mode === "edit"
-            ? "Saving..."
-            : "Publishing..."
-          : mode === "edit"
-            ? "Save changes"
-            : "Publish opportunity"}
-      </button>
-    </form>
+      <Field label="Price Applies To" required>
+        <input
+          inputMode="decimal"
+          className={fieldClass}
+          value={minMinutesOrHours}
+          onBlur={() => {
+            if (!minMinutesOrHours.trim()) {
+              onMinMinutesOrHoursChange("60");
+            }
+          }}
+          onChange={(event) => onMinMinutesOrHoursChange(event.target.value)}
+          placeholder="60"
+          aria-invalid={Boolean(priceAppliesToError)}
+        />
+        <span className="text-xs font-semibold leading-5 text-slate-500">
+          Displayed as {formatCurrency(price || "0", currency)} per{" "}
+          {minMinutesOrHours || "60"} minutes.
+        </span>
+        {priceAppliesToError ? (
+          <span className="text-xs font-bold leading-5 text-rose-600">
+            {priceAppliesToError}
+          </span>
+        ) : null}
+      </Field>
+    </div>
   );
 }
 
-function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
+function ParticipationStep({
+  price,
+  currency,
+  totalCapacity,
+  onPriceChange,
+  onCurrencyChange,
+  onCapacityChange,
+}: {
+  price: string;
+  currency: string;
+  totalCapacity: string;
+  onPriceChange: (value: string) => void;
+  onCurrencyChange: (value: string) => void;
+  onCapacityChange: (value: string) => void;
+}) {
   return (
-    <div className="border-t border-slate-100 pt-1.5 first:border-t-0 first:pt-0 sm:pt-2">
-      <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-sky-600 sm:text-xs sm:tracking-[0.16em]">
-        {eyebrow}
-      </p>
-      <h2 className="mt-0.5 text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-xl">
-        {title}
-      </h2>
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Participation"
+        title="Set capacity and fee"
+        description="Participation fee represents entry to this Huck Jam session."
+      />
+      <Field label="Maximum Participants" required>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          className={fieldClass}
+          value={totalCapacity}
+          onChange={(event) => onCapacityChange(event.target.value)}
+        />
+      </Field>
+      <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
+        <Field label="Participation Fee" required>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            className={fieldClass}
+            value={price}
+            onChange={(event) => onPriceChange(event.target.value)}
+          />
+        </Field>
+        <Field label="Currency" required>
+          <select
+            className={fieldClass}
+            value={currency}
+            onChange={(event) => onCurrencyChange(event.target.value)}
+          >
+            {currencies.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+function ReviewStep({
+  type,
+  title,
+  selectedTunnel,
+  startDate,
+  endDate,
+  registrationDeadline,
+  totalCapacity,
+  bookingMode,
+  price,
+  currency,
+  minMinutesOrHours,
+  onEdit,
+}: {
+  type: OpportunityType;
+  title: string;
+  selectedTunnel?: TunnelOption;
+  startDate: string;
+  endDate: string;
+  registrationDeadline: string;
+  totalCapacity: string;
+  bookingMode: BookingMode;
+  price: string;
+  currency: string;
+  minMinutesOrHours: string;
+  onEdit: (stepId: StepId) => void;
+}) {
+  const isHuckJam = type === "huck_jam";
+  const name = title.trim() || "Generated after publishing";
+  const rows = isHuckJam
+    ? [
+        { label: "Name", value: name, stepId: "basics" as StepId },
+        {
+          label: "Tunnel",
+          value: selectedTunnel
+            ? `${selectedTunnel.name}, ${selectedTunnel.city}`
+            : "Not set",
+          stepId: "location" as StepId,
+        },
+        { label: "Event Date", value: formatDate(startDate), stepId: "schedule" as StepId },
+        {
+          label: "Registration Deadline",
+          value: registrationDeadline ? formatDate(registrationDeadline) : "Open until event start",
+          stepId: "schedule" as StepId,
+        },
+        { label: "Capacity", value: totalCapacity, stepId: "participation" as StepId },
+        {
+          label: "Participation Fee",
+          value: formatCurrency(price, currency),
+          stepId: "participation" as StepId,
+        },
+      ]
+    : [
+        { label: "Camp Name", value: name, stepId: "basics" as StepId },
+        {
+          label: "Tunnel",
+          value: selectedTunnel
+            ? `${selectedTunnel.name}, ${selectedTunnel.city}`
+            : "Not set",
+          stepId: "location" as StepId,
+        },
+        { label: "Start Date", value: formatDate(startDate), stepId: "schedule" as StepId },
+        { label: "End Date", value: formatDate(endDate), stepId: "schedule" as StepId },
+        {
+          label: "Registration Deadline",
+          value: registrationDeadline ? formatDate(registrationDeadline) : "Open until camp start",
+          stepId: "schedule" as StepId,
+        },
+        { label: "Capacity", value: totalCapacity, stepId: "capacity" as StepId },
+        {
+          label: "Booking Mode",
+          value:
+            bookingMode === "direct_time_booking"
+              ? "Direct Booking"
+              : "Approval Required",
+          stepId: "capacity" as StepId,
+        },
+        { label: "Price", value: formatCurrency(price, currency), stepId: "pricing" as StepId },
+        {
+          label: "Price Applies To",
+          value: `${minMinutesOrHours || "60"} minutes`,
+          stepId: "pricing" as StepId,
+        },
+      ];
+
+  return (
+    <div className="grid gap-4">
+      <StepHeader
+        eyebrow="Review"
+        title={`Ready to create this ${isHuckJam ? "Huck Jam" : "camp"}?`}
+        description="Check the summary, jump back to any section, then publish when it looks right."
+      />
+      <div className="grid gap-2">
+        {rows.map((row) => (
+          <div
+            key={`${row.label}-${row.stepId}`}
+            className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center"
+          >
+            <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+              {row.label}
+            </span>
+            <span className="min-w-0 text-sm font-bold text-slate-900">
+              {row.value}
+            </span>
+            <button
+              type="button"
+              onClick={() => onEdit(row.stepId)}
+              className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-black text-sky-700 hover:bg-sky-50"
+            >
+              Edit
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -680,7 +1183,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="grid min-w-0 gap-0.5 text-xs font-bold text-slate-700 sm:gap-1 sm:text-sm">
+    <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
       <span>
         {label}
         {required ? <span className="text-rose-600"> *</span> : null}
@@ -708,13 +1211,13 @@ function TunnelCombobox({
   onSelect: (tunnel: TunnelOption) => void;
 }) {
   return (
-    <div className="grid min-w-0 gap-0.5 text-xs font-bold text-slate-700 sm:gap-1 sm:text-sm">
+    <div className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
       <span>
         Tunnel <span className="text-rose-600">*</span>
       </span>
       <div className="relative">
         <input
-          className="field"
+          className={fieldClass}
           value={tunnelSearch}
           onChange={(event) => onSearch(event.target.value)}
           onFocus={onFocus}
@@ -725,7 +1228,7 @@ function TunnelCombobox({
           autoComplete="off"
         />
         {selectedTunnel && !tunnelSearch ? (
-          <p className="mt-1 text-xs font-semibold text-sky-700">
+          <p className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-800">
             Selected: {selectedTunnel.name}, {selectedTunnel.city}
           </p>
         ) : null}
@@ -783,7 +1286,7 @@ function BookingModeOption({
 
   return (
     <label
-      className={`grid cursor-pointer gap-1 rounded-2xl border px-3 py-2.5 text-sm transition ${
+      className={`grid cursor-pointer gap-1 rounded-2xl border px-3 py-3 text-sm transition ${
         isSelected
           ? "border-sky-300 bg-sky-50"
           : "border-slate-200 bg-white hover:bg-slate-50"
@@ -804,69 +1307,5 @@ function BookingModeOption({
         {description}
       </span>
     </label>
-  );
-}
-
-function LanguageSelector({
-  selectedLanguages,
-  onChange,
-}: {
-  selectedLanguages: string[];
-  onChange: (languages: string[]) => void;
-}) {
-  const availableLanguages = languageOptions.filter(
-    (language) => !selectedLanguages.includes(language),
-  );
-
-  function addLanguage(value: string) {
-    if (!value || selectedLanguages.includes(value)) {
-      return;
-    }
-
-    onChange([...selectedLanguages, value]);
-  }
-
-  function removeLanguage(value: string) {
-    onChange(selectedLanguages.filter((language) => language !== value));
-  }
-
-  return (
-    <div className="grid gap-2">
-      <select
-        className="field text-slate-400"
-        value=""
-        onChange={(event) => addLanguage(event.target.value)}
-        aria-label="Select one or more languages"
-      >
-        <option value="">
-          {selectedLanguages.length === 0
-            ? "Select one or more languages"
-            : "Add another language"}
-        </option>
-        {availableLanguages.map((language) => (
-          <option key={language} value={language}>
-            {language}
-          </option>
-        ))}
-      </select>
-      {selectedLanguages.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedLanguages.map((language) => (
-            <button
-              key={language}
-              type="button"
-              onClick={() => removeLanguage(language)}
-              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-sky-50 px-2.5 text-xs font-black text-sky-700"
-              aria-label={`Remove ${language}`}
-            >
-              {language}
-              <span aria-hidden="true" className="text-sky-500">
-                x
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }

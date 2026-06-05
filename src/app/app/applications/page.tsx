@@ -134,7 +134,7 @@ export default async function ApplicationsPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("notifications")
-      .select("opportunity_id")
+      .select("opportunity_id,type,body")
       .eq("user_id", user?.id)
       .eq("read", false)
       .in("type", [...participantActivityNotificationTypes]),
