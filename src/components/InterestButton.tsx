@@ -46,7 +46,8 @@ export function InterestButton({
         .maybeSingle();
 
       setInterestStatus(
-        data?.interest_type === "timetable_reminder"
+        data?.interest_type === "timetable_reminder" ||
+          data?.status === "withdrawn"
           ? null
           : ((data?.status as InterestStatus | undefined) ?? null),
       );

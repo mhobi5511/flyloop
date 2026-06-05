@@ -203,19 +203,65 @@ async function resolveCampRemovalRequest(
     return { ok: false, message: "There is no active removal request." };
   }
 
-  const updatePayload =
-    decision === "approve"
-      ? { status: "withdrawn" as InterestStatus, removal_requested_at: null }
-      : { removal_requested_at: null };
+  let updatedInterest:
+    | { id: string; status: InterestStatus; opportunity_id: string }
+    | null = null;
+  let error:
+    | {
+        code?: string;
+        message?: string;
+        details?: string | null;
+        hint?: string | null;
+      }
+    | null = null;
 
-  const { data: updatedInterest, error } = await supabase
-    .from("opportunity_interests")
-    .update(updatePayload)
-    .eq("id", interest.id)
-    .eq("status", "accepted")
-    .not("removal_requested_at", "is", null)
-    .select("id,status,opportunity_id")
-    .maybeSingle();
+  if (decision === "approve") {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (!adminSupabase) {
+      console.error("Camp removal request failed: missing admin Supabase client");
+      return { ok: false, message: "Could not update removal request." };
+    }
+
+    const { error: bookingDeleteError } = await adminSupabase
+      .from("opportunity_slot_bookings")
+      .delete()
+      .eq("opportunity_id", interest.opportunity_id)
+      .eq("user_id", interest.athlete_id);
+
+    if (bookingDeleteError) {
+      console.error("Camp removal booking cleanup failed", {
+        interestId,
+        opportunityId: interest.opportunity_id,
+        error: bookingDeleteError,
+      });
+      return { ok: false, message: "Could not update removal request." };
+    }
+
+    const deleteResult = await adminSupabase
+      .from("opportunity_interests")
+      .delete()
+      .eq("id", interest.id)
+      .eq("status", "accepted")
+      .not("removal_requested_at", "is", null)
+      .select("id,status,opportunity_id")
+      .maybeSingle();
+
+    updatedInterest = deleteResult.data;
+    error = deleteResult.error;
+  } else {
+    const updateResult = await supabase
+      .from("opportunity_interests")
+      .update({ removal_requested_at: null })
+      .eq("id", interest.id)
+      .eq("status", "accepted")
+      .not("removal_requested_at", "is", null)
+      .select("id,status,opportunity_id")
+      .maybeSingle();
+
+    updatedInterest = updateResult.data;
+    error = updateResult.error;
+  }
 
   if (error) {
     console.error("Camp removal request resolution failed", {

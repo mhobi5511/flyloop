@@ -18,6 +18,10 @@ import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { unstable_rethrow } from "next/navigation";
 import { isAdmin } from "@/lib/admin";
+import {
+  organizerActivityNotificationTypes,
+  participantActivityNotificationTypes,
+} from "@/lib/notifications";
 
 type AppShellProps = {
   children: ReactNode;
@@ -69,6 +73,7 @@ async function getShellState() {
         canJoin: true,
         isAdmin: false,
         organizerUnreadCount: 0,
+        participantUnreadCount: 0,
         profileIncomplete: true,
         pushNotificationsEnabled: false,
         pushPromptAnsweredAt: null,
@@ -76,7 +81,11 @@ async function getShellState() {
       };
     }
 
-    const [{ data: profile, error: profileError }, notificationResult] =
+    const [
+      { data: profile, error: profileError },
+      organizerNotificationResult,
+      participantNotificationResult,
+    ] =
       await Promise.all([
         supabase
           .from("profiles")
@@ -88,15 +97,31 @@ async function getShellState() {
           .select("*", { count: "exact", head: true })
           .eq("user_id", user.id)
           .eq("read", false)
-          .eq("type", "new_interest"),
+          .in("type", [...organizerActivityNotificationTypes]),
+        supabase
+          .from("notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("read", false)
+          .in("type", [...participantActivityNotificationTypes]),
       ]);
 
     if (profileError) {
       console.error("App shell profile lookup failed", profileError);
     }
 
-    if (notificationResult.error) {
-      console.error("App shell notification count failed", notificationResult.error);
+    if (organizerNotificationResult.error) {
+      console.error(
+        "App shell organizer notification count failed",
+        organizerNotificationResult.error,
+      );
+    }
+
+    if (participantNotificationResult.error) {
+      console.error(
+        "App shell participant notification count failed",
+        participantNotificationResult.error,
+      );
     }
 
     const canCreate =
@@ -108,7 +133,8 @@ async function getShellState() {
       canCreate,
       canJoin: true,
       isAdmin: isAdmin(user),
-      organizerUnreadCount: notificationResult.count ?? 0,
+      organizerUnreadCount: organizerNotificationResult.count ?? 0,
+      participantUnreadCount: participantNotificationResult.count ?? 0,
       profileIncomplete,
       pushNotificationsEnabled: profile?.push_notifications_enabled === true,
       pushPromptAnsweredAt: profile?.push_prompt_answered_at ?? null,
@@ -122,6 +148,7 @@ async function getShellState() {
       canJoin: true,
       isAdmin: false,
       organizerUnreadCount: 0,
+      participantUnreadCount: 0,
       profileIncomplete: true,
       pushNotificationsEnabled: false,
       pushPromptAnsweredAt: null,
@@ -180,6 +207,13 @@ export async function AppShell({
                     {item.id === "dashboard" ? (
                       <OrganizerNavBadge
                         initialCount={shellState.organizerUnreadCount}
+                        notificationTypes={organizerActivityNotificationTypes}
+                      />
+                    ) : null}
+                    {item.id === "applications" ? (
+                      <OrganizerNavBadge
+                        initialCount={shellState.participantUnreadCount}
+                        notificationTypes={participantActivityNotificationTypes}
                       />
                     ) : null}
                   </span>
@@ -241,6 +275,14 @@ export async function AppShell({
                   {item.id === "dashboard" ? (
                     <OrganizerNavBadge
                       initialCount={shellState.organizerUnreadCount}
+                      notificationTypes={organizerActivityNotificationTypes}
+                      compact
+                    />
+                  ) : null}
+                  {item.id === "applications" ? (
+                    <OrganizerNavBadge
+                      initialCount={shellState.participantUnreadCount}
+                      notificationTypes={participantActivityNotificationTypes}
                       compact
                     />
                   ) : null}

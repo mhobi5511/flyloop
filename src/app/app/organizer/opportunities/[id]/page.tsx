@@ -25,6 +25,7 @@ import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
+import { organizerActivityNotificationTypes } from "@/lib/notifications";
 import {
   formatOpportunityDate,
   formatOpportunityType,
@@ -176,7 +177,7 @@ export default async function OrganizerOpportunityPage({
     .update({ read: true })
     .eq("user_id", user?.id)
     .eq("opportunity_id", id)
-    .in("type", ["new_interest", "participant_removal_requested"])
+    .in("type", [...organizerActivityNotificationTypes])
     .eq("read", false);
 
   const { data: applicants } = await supabase

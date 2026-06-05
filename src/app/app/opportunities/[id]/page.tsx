@@ -6,9 +6,11 @@ import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
 import { InterestButton } from "@/components/InterestButton";
+import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { RequestCampRemovalButton } from "@/components/RequestCampRemovalButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TimetableReminderButton } from "@/components/TimetableReminderButton";
+import { participantActivityNotificationTypes } from "@/lib/notifications";
 import {
   formatOpportunityDate,
   formatPriceAppliesToMinutes,
@@ -83,10 +85,22 @@ export default async function OpportunityDetailPage({
     viewerInterest?.interest_type === "timetable_reminder";
   const viewerApplicationStatus = viewerHasTimetableReminder
     ? undefined
-    : viewerInterestStatus;
+    : viewerInterestStatus === "withdrawn"
+      ? undefined
+      : viewerInterestStatus;
   const isOrganizer = user?.id === opportunity.createdBy;
   if (isOrganizer) {
     redirect(`/app/organizer/opportunities/${opportunity.id}`);
+  }
+
+  if (user) {
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", user.id)
+      .eq("opportunity_id", opportunity.id)
+      .in("type", [...participantActivityNotificationTypes])
+      .eq("read", false);
   }
 
   const [{ count: publishedSlotCount }, { data: bookingRows }] =
@@ -183,6 +197,7 @@ export default async function OpportunityDetailPage({
 
   return (
     <AppShell active="home">
+      <NotificationReadSignal />
       <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
         <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
           <div className="flex flex-wrap gap-1.5">

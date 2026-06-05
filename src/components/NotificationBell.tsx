@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -16,6 +16,8 @@ type Notification = {
 };
 
 export function NotificationBell() {
+  const router = useRouter();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([]);
 
@@ -94,8 +96,8 @@ export function NotificationBell() {
     };
   }, []);
 
-  async function markRead(visible: Notification[]) {
-    if (visible.length === 0) {
+  async function markRead(notificationId: string) {
+    if (!notificationId) {
       return;
     }
 
@@ -108,12 +110,11 @@ export function NotificationBell() {
       return;
     }
 
-    const visibleIds = visible.map((notification) => notification.id);
     const { error: updateError } = await supabase
       .from("notifications")
       .update({ read: true })
       .eq("user_id", user.id)
-      .in("id", visibleIds);
+      .eq("id", notificationId);
 
     if (updateError) {
       console.error("Notification mark-read failed", updateError);
@@ -121,9 +122,28 @@ export function NotificationBell() {
     }
 
     setNotifications((current) =>
-      current.filter((notification) => !visibleIds.includes(notification.id)),
+      current.filter((notification) => notification.id !== notificationId),
+    );
+    setVisibleNotifications((current) =>
+      current.filter((notification) => notification.id !== notificationId),
     );
     window.dispatchEvent(new Event("flyloop-notifications-read"));
+  }
+
+  async function openNotification(notification: Notification) {
+    const href = notificationHref(notification);
+
+    if (detailsRef.current) {
+      detailsRef.current.open = false;
+    }
+
+    setVisibleNotifications([]);
+    setNotifications((current) =>
+      current.filter((item) => item.id !== notification.id),
+    );
+    window.dispatchEvent(new Event("flyloop-notifications-read"));
+    await markRead(notification.id);
+    router.push(href);
   }
 
   function handleToggle(event: React.ToggleEvent<HTMLDetailsElement>) {
@@ -133,11 +153,10 @@ export function NotificationBell() {
     }
 
     setVisibleNotifications(notifications);
-    void markRead(notifications);
   }
 
   return (
-    <details className="relative" onToggle={handleToggle}>
+    <details ref={detailsRef} className="relative" onToggle={handleToggle}>
       <summary
         className="grid size-10 cursor-pointer list-none place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm"
         aria-label="Notifications"
@@ -163,19 +182,11 @@ export function NotificationBell() {
             </p>
           ) : (
             visibleNotifications.map((notification) => (
-              <Link
+              <button
                 key={notification.id}
-                href={
-                  notification.opportunity_id &&
-                  (notification.type === "new_interest" ||
-                    notification.type === "new_time_booking" ||
-                    notification.type === "timetable_reminder_interest")
-                    ? `/app/organizer/opportunities/${notification.opportunity_id}`
-                    : notification.opportunity_id
-                    ? `/app/opportunities/${notification.opportunity_id}`
-                    : "/app"
-                }
-                className="min-w-0 rounded-xl border border-slate-100 p-3 hover:bg-sky-50"
+                type="button"
+                onClick={() => void openNotification(notification)}
+                className="min-w-0 rounded-xl border border-slate-100 p-3 text-left hover:bg-sky-50"
               >
                 <p className="break-words text-sm font-bold text-slate-900">
                   {notification.title}
@@ -183,11 +194,27 @@ export function NotificationBell() {
                 <p className="mt-1 break-words text-xs leading-5 text-slate-600">
                   {notification.body}
                 </p>
-              </Link>
+              </button>
             ))
           )}
         </div>
       </div>
     </details>
   );
+}
+
+function notificationHref(notification: Notification) {
+  if (
+    notification.opportunity_id &&
+    (notification.type === "new_interest" ||
+      notification.type === "new_time_booking" ||
+      notification.type === "timetable_reminder_interest" ||
+      notification.type === "participant_removal_requested")
+  ) {
+    return `/app/organizer/opportunities/${notification.opportunity_id}`;
+  }
+
+  return notification.opportunity_id
+    ? `/app/opportunities/${notification.opportunity_id}`
+    : "/app";
 }

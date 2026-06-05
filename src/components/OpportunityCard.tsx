@@ -51,6 +51,7 @@ export function OpportunityCard({
     opportunity.startDate,
     opportunity.endDate,
   );
+  const unreadCount = opportunity.unreadNotificationCount ?? 0;
 
   return (
     <Link
@@ -60,6 +61,7 @@ export function OpportunityCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={`flex flex-wrap ${dense ? "mb-1.5 gap-1.5" : "mb-2 gap-2"}`}>
+            {unreadCount > 0 ? <UnreadBadge count={unreadCount} /> : null}
             {opportunity.viewerInterestStatus ? (
               <ApplicationStatusBadge status={opportunity.viewerInterestStatus} />
             ) : null}
@@ -206,4 +208,15 @@ function formatCompactPrice(opportunity: Opportunity) {
       : ` per ${formatPriceAppliesToMinutes(opportunity.minMinutesOrHours)} min`;
 
   return `${amount} ${currencyLabel}${suffix}`;
+}
+
+function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span
+      aria-label={`${count} unread notification${count === 1 ? "" : "s"}`}
+      className="grid min-w-5 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black leading-4 text-white"
+    >
+      {count}
+    </span>
+  );
 }

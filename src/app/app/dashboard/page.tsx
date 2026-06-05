@@ -3,6 +3,10 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { formatOpportunityDate, formatOpportunityType } from "@/lib/opportunities";
+import {
+  countUnreadByOpportunity,
+  organizerActivityNotificationTypes,
+} from "@/lib/notifications";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
@@ -60,7 +64,7 @@ type OpportunityCardModel = {
   tunnelName: string;
   location: string;
   counts: Record<InterestStatus, number>;
-  hasUnread: boolean;
+  unreadNotificationCount: number;
   startsInDays: number;
   urgencyScore: number;
   needsAction: boolean;
@@ -137,19 +141,15 @@ export default async function OrganizerDashboardPage({
       .from("notifications")
       .select("opportunity_id")
       .eq("user_id", user?.id)
-      .eq("type", "new_interest")
-      .eq("read", false),
+      .eq("read", false)
+      .in("type", [...organizerActivityNotificationTypes]),
   ]);
   const opportunityRows = (opportunities ?? []) as OrganizerOpportunityRow[];
-  const unreadOpportunityIds = new Set(
-    (unreadNotifications ?? [])
-      .map((notification) => notification.opportunity_id)
-      .filter((id): id is string => Boolean(id)),
-  );
+  const unreadCountsByOpportunity = countUnreadByOpportunity(unreadNotifications ?? []);
   const today = dateOnly(new Date());
   const now = new Date();
   const cards = opportunityRows.map((row) =>
-    toCardModel(row, unreadOpportunityIds.has(row.id), today, now),
+    toCardModel(row, unreadCountsByOpportunity.get(row.id) ?? 0, today, now),
   );
   const grouped = {
     camps: cards
@@ -172,6 +172,15 @@ export default async function OrganizerDashboardPage({
       .filter((card) => card.isPast)
       .sort((a, b) => b.sortDate - a.sortDate),
   } satisfies Record<DashboardTab, OpportunityCardModel[]>;
+  const groupedUnreadCounts = Object.fromEntries(
+    tabs.map((tab) => [
+      tab.key,
+      grouped[tab.key].reduce(
+        (total, card) => total + card.unreadNotificationCount,
+        0,
+      ),
+    ]),
+  ) as Record<DashboardTab, number>;
   const activeCards = grouped[activeTab];
   const activeEmpty = tabs.find((tab) => tab.key === activeTab)?.empty;
 
@@ -203,9 +212,11 @@ export default async function OrganizerDashboardPage({
                   : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <span className="truncate">{tab.label}</span>
-              <span className="ml-1 text-[0.68rem] opacity-70">
-                {grouped[tab.key].length}
+              <span className="truncate">
+                {tab.label}
+                {groupedUnreadCounts[tab.key] > 0
+                  ? ` (${groupedUnreadCounts[tab.key]})`
+                  : ""}
               </span>
             </Link>
           ))}
@@ -237,7 +248,7 @@ function normalizeTab(value: OrganizerSearchParams["tab"]): DashboardTab {
 
 function toCardModel(
   opportunity: OrganizerOpportunityRow,
-  hasUnread: boolean,
+  unreadNotificationCount: number,
   today: string,
   now: Date,
 ): OpportunityCardModel {
@@ -277,10 +288,10 @@ function toCardModel(
     activeForAttention &&
     (health.status === "urgent" ||
       health.status === "needs-attention" ||
-      hasUnread);
+      unreadNotificationCount > 0);
   const urgencyScore =
     health.priority * 500 +
-    (hasUnread ? 300 : 0) +
+    (unreadNotificationCount > 0 ? 300 + unreadNotificationCount * 10 : 0) +
     counts.pending * 90 +
     counts.waitlist * 70 +
     (startsInDays >= 0 && startsInDays <= 14
@@ -300,7 +311,7 @@ function toCardModel(
     tunnelName: tunnel?.name ?? "Tunnel",
     location: formatLocation(tunnel?.city, tunnel?.country),
     counts,
-    hasUnread,
+    unreadNotificationCount,
     startsInDays,
     urgencyScore,
     needsAction,
@@ -462,7 +473,9 @@ function OpportunityCard({
               <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${pillClass(opportunity.health.tone)}`}>
                 {opportunity.health.label}
               </span>
-              {opportunity.hasUnread ? <Badge tone="blue">New</Badge> : null}
+              {opportunity.unreadNotificationCount > 0 ? (
+                <UnreadBadge count={opportunity.unreadNotificationCount} />
+              ) : null}
             </div>
             <p className="mt-1 text-xs font-semibold text-slate-600">
               {opportunity.health.explanation}
@@ -576,4 +589,15 @@ function formatDays(days: number) {
 
 function pluralize(word: string, count: number) {
   return count === 1 ? word : `${word}s`;
+}
+
+function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span
+      aria-label={`${count} unread notification${count === 1 ? "" : "s"}`}
+      className="grid min-w-5 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black leading-4 text-white"
+    >
+      {count}
+    </span>
+  );
 }

@@ -84,6 +84,7 @@ export type Opportunity = {
   skillLevel: string | null;
   status: OpportunityStatus;
   viewerInterestStatus?: InterestStatus;
+  unreadNotificationCount?: number;
   contactMethod: ContactMethod;
   createdBy: string;
   createdAt?: string;

@@ -3,6 +3,10 @@ import { AppShell } from "@/components/AppShell";
 import { GlobalCampSearch } from "@/components/GlobalCampSearch";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { distanceKm, parseCoordinate } from "@/lib/location";
+import {
+  countUnreadByOpportunity,
+  participantActivityNotificationTypes,
+} from "@/lib/notifications";
 import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -51,7 +55,6 @@ const interactedStatuses = new Set<InterestStatus>([
   "accepted",
   "waitlist",
   "declined",
-  "withdrawn",
 ]);
 
 export default async function AppHomePage({
@@ -69,7 +72,12 @@ export default async function AppHomePage({
     redirect("/login?next=/app");
   }
 
-  const [profileResult, opportunitiesResult, followsResult] = await Promise.all([
+  const [
+    profileResult,
+    opportunitiesResult,
+    followsResult,
+    unreadNotificationsResult,
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("full_name,country,city,disciplines,home_tunnel_id,instagram_handle,profile_image_url,latitude,longitude,use_location_recommendations,preferred_radius_km")
@@ -83,6 +91,12 @@ export default async function AppHomePage({
       .from("follows")
       .select("target_id,target_type")
       .eq("follower_id", user.id),
+    supabase
+      .from("notifications")
+      .select("opportunity_id")
+      .eq("user_id", user.id)
+      .eq("read", false)
+      .in("type", [...participantActivityNotificationTypes]),
   ]);
 
   if (profileResult.error) {
@@ -102,6 +116,16 @@ export default async function AppHomePage({
     : ((opportunitiesResult.data ?? []) as HomeFeedRow[]);
   const opportunityIds = allRows.map((row) => row.id);
   const followRows = followsResult.error ? [] : followsResult.data ?? [];
+  if (unreadNotificationsResult.error) {
+    console.error(
+      "Home unread notification lookup failed",
+      unreadNotificationsResult.error,
+    );
+  }
+
+  const unreadCountsByOpportunity = countUnreadByOpportunity(
+    unreadNotificationsResult.error ? [] : (unreadNotificationsResult.data ?? []),
+  );
   const followedTunnelIds = new Set(
     followRows
       .filter((follow) => follow.target_type === "tunnel")
@@ -122,7 +146,10 @@ export default async function AppHomePage({
   const interestByOpportunityId = new Map(
     ((interestRows ?? []) as InterestRow[]).map((interest) => [
       interest.opportunity_id,
-      interest.interest_type === "timetable_reminder" ? undefined : interest.status,
+      interest.interest_type === "timetable_reminder" ||
+      interest.status === "withdrawn"
+        ? undefined
+        : interest.status,
     ]),
   );
   const userLat = parseCoordinate(homeProfile?.latitude);
@@ -138,6 +165,7 @@ export default async function AppHomePage({
       tunnelDistanceKm: location.distanceKm ?? undefined,
       locationLabel: location.label,
       viewerInterestStatus: interestByOpportunityId.get(row.id),
+      unreadNotificationCount: unreadCountsByOpportunity.get(row.id) ?? 0,
     };
 
     return {

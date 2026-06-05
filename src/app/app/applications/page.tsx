@@ -8,6 +8,10 @@ import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
 import {
+  countUnreadByOpportunity,
+  participantActivityNotificationTypes,
+} from "@/lib/notifications";
+import {
   formatOpportunityDate,
   formatSessionTimeRange,
   formatOpportunityType,
@@ -113,7 +117,11 @@ export default async function ApplicationsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [{ data: profile }, { data: applications }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: applications },
+    unreadNotificationsResult,
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("is_organizer,wants_to_create_opportunities")
@@ -124,7 +132,22 @@ export default async function ApplicationsPage({
       .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,session_start,session_end,price,currency,min_minutes_or_hours,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
       .eq("athlete_id", user?.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("notifications")
+      .select("opportunity_id")
+      .eq("user_id", user?.id)
+      .eq("read", false)
+      .in("type", [...participantActivityNotificationTypes]),
   ]);
+  if (unreadNotificationsResult.error) {
+    console.error(
+      "Applications unread notification lookup failed",
+      unreadNotificationsResult.error,
+    );
+  }
+  const unreadCountsByOpportunity = countUnreadByOpportunity(
+    unreadNotificationsResult.error ? [] : (unreadNotificationsResult.data ?? []),
+  );
   const activeRows = ((applications ?? []) as ApplicationRow[]).filter((application) =>
     application.interest_type !== "timetable_reminder" &&
     activeStatuses.includes(application.status),
@@ -232,6 +255,7 @@ export default async function ApplicationsPage({
           }
 
           const tunnel = getTunnel(opportunity);
+          const unreadCount = unreadCountsByOpportunity.get(opportunity.id) ?? 0;
 
           return (
             <article
@@ -241,6 +265,7 @@ export default async function ApplicationsPage({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
+                    {unreadCount > 0 ? <UnreadBadge count={unreadCount} /> : null}
                     <ApplicationStatusBadge status={application.status} />
                     <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
                       {formatOpportunityType(opportunity.type)}
@@ -475,4 +500,15 @@ function formatMoney(value: number, currency: string) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 2,
   }).format(value)} ${currency}`;
+}
+
+function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span
+      aria-label={`${count} unread notification${count === 1 ? "" : "s"}`}
+      className="grid min-w-5 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black leading-4 text-white"
+    >
+      {count}
+    </span>
+  );
 }

@@ -22,7 +22,7 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
 
   const { data: interest, error: lookupError } = await supabase
     .from("opportunity_interests")
-    .select("id,status,athlete_id")
+    .select("id,status,athlete_id,opportunity_id")
     .eq("id", interestId)
     .maybeSingle();
 
@@ -35,23 +35,44 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
     return { ok: false, message: "Application not found." };
   }
 
-  if (interest.status === "accepted") {
-    return {
-      ok: false,
-      message:
-        "You have already been accepted. If you can no longer join, please contact the organizer directly via WhatsApp or Instagram.",
-    };
-  }
-
   if (interest.status === "declined") {
     return { ok: false, message: "This application was already declined." };
   }
 
-  if (interest.status !== "pending" && interest.status !== "waitlist") {
+  if (
+    interest.status !== "pending" &&
+    interest.status !== "accepted" &&
+    interest.status !== "waitlist" &&
+    interest.status !== "withdrawn"
+  ) {
     return { ok: false, message: "This application cannot be withdrawn." };
   }
 
-  const { error } = await supabase
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (!adminSupabase) {
+    console.error("Application withdrawal failed: missing admin Supabase client");
+    return { ok: false, message: "Could not withdraw application. Please try again." };
+  }
+
+  if (interest.status === "accepted") {
+    const { error: bookingDeleteError } = await adminSupabase
+      .from("opportunity_slot_bookings")
+      .delete()
+      .eq("opportunity_id", interest.opportunity_id)
+      .eq("user_id", user.id);
+
+    if (bookingDeleteError) {
+      console.error("Application withdrawal booking cleanup failed", {
+        interestId,
+        opportunityId: interest.opportunity_id,
+        error: bookingDeleteError,
+      });
+      return { ok: false, message: "Could not withdraw application. Please try again." };
+    }
+  }
+
+  const { error } = await adminSupabase
     .from("opportunity_interests")
     .delete()
     .eq("id", interestId)
@@ -64,6 +85,7 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
 
   revalidatePath("/app/applications");
   revalidatePath("/app/dashboard");
+  revalidatePath(`/app/opportunities/${interest.opportunity_id}`);
 
   return { ok: true, message: "Application withdrawn." };
 }

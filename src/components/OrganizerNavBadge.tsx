@@ -6,13 +6,16 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 type OrganizerNavBadgeProps = {
   initialCount: number;
   compact?: boolean;
+  notificationTypes?: readonly string[];
 };
 
 export function OrganizerNavBadge({
   initialCount,
   compact = false,
+  notificationTypes = ["new_interest"],
 }: OrganizerNavBadgeProps) {
   const [count, setCount] = useState(initialCount);
+  const notificationTypesKey = notificationTypes.join("|");
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -31,7 +34,7 @@ export function OrganizerNavBadge({
           .select("*", { count: "exact", head: true })
           .eq("user_id", currentUserId)
           .eq("read", false)
-          .eq("type", "new_interest");
+          .in("type", notificationTypesKey.split("|").filter(Boolean));
 
         if (countError) {
           console.error("Organizer nav badge count failed", countError);
@@ -86,7 +89,7 @@ export function OrganizerNavBadge({
         void supabase.removeChannel(channel);
       }
     };
-  }, []);
+  }, [notificationTypesKey]);
 
   if (count === 0) {
     return null;

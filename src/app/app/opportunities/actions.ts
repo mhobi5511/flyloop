@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
 import type { InterestStatus } from "@/lib/types";
@@ -94,7 +95,7 @@ export async function sendOpportunityInterest(
 
   const { data: existingInterest, error: existingError } = await supabase
     .from("opportunity_interests")
-    .select("status")
+    .select("id,status")
     .eq("opportunity_id", opportunityId)
     .eq("athlete_id", user.id)
     .maybeSingle();
@@ -104,7 +105,25 @@ export async function sendOpportunityInterest(
     return { ok: false, message: "Could not send interest. Please try again." };
   }
 
-  if (existingInterest) {
+  if (existingInterest?.status === "withdrawn") {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (!adminSupabase) {
+      console.error("Withdrawn interest reset failed: missing admin Supabase client");
+      return { ok: false, message: "Could not send interest. Please try again." };
+    }
+
+    const { error: resetError } = await adminSupabase
+      .from("opportunity_interests")
+      .delete()
+      .eq("id", existingInterest.id)
+      .eq("athlete_id", user.id);
+
+    if (resetError) {
+      console.error("Withdrawn interest reset failed", resetError);
+      return { ok: false, message: "Could not send interest. Please try again." };
+    }
+  } else if (existingInterest) {
     return {
       ok: true,
       message: `You already applied. Current status: ${formatInterestStatus(existingInterest.status)}.`,
@@ -193,7 +212,7 @@ export async function setTimetableReminder(
 
   const { data: existingInterest, error: existingError } = await supabase
     .from("opportunity_interests")
-    .select("status,interest_type")
+    .select("id,status,interest_type")
     .eq("opportunity_id", opportunityId)
     .eq("athlete_id", user.id)
     .maybeSingle();
@@ -211,7 +230,25 @@ export async function setTimetableReminder(
     return { ok: false, message: reminderErrorMessage(existingError) };
   }
 
-  if (existingInterest) {
+  if (existingInterest?.status === "withdrawn") {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (!adminSupabase) {
+      console.error("Withdrawn reminder reset failed: missing admin Supabase client");
+      return { ok: false, message: "Could not set reminder. Please try again." };
+    }
+
+    const { error: resetError } = await adminSupabase
+      .from("opportunity_interests")
+      .delete()
+      .eq("id", existingInterest.id)
+      .eq("athlete_id", user.id);
+
+    if (resetError) {
+      console.error("Withdrawn reminder reset failed", resetError);
+      return { ok: false, message: reminderErrorMessage(resetError) };
+    }
+  } else if (existingInterest) {
     if (existingInterest.interest_type === "timetable_reminder") {
       return {
         ok: true,

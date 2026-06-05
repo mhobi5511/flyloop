@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { SlotBookingSelector } from "@/components/SlotBookingSelector";
+import { participantActivityNotificationTypes } from "@/lib/notifications";
 import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
@@ -59,16 +61,28 @@ export default async function SlotBookingPage({
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
     viewerInterest?.interest_type === "timetable_reminder";
+  const viewerApplicationStatus =
+    viewerHasTimetableReminder || viewerInterestStatus === "withdrawn"
+      ? undefined
+      : viewerInterestStatus;
   const canBook =
-    viewerInterestStatus === "accepted" ||
+    viewerApplicationStatus === "accepted" ||
     (opportunity.bookingMode === "direct_time_booking" &&
-      (!viewerInterestStatus || viewerHasTimetableReminder) &&
+      (!viewerApplicationStatus || viewerHasTimetableReminder) &&
       opportunity.status === "published" &&
       opportunity.availableSpots > 0);
 
   if (!canBook) {
     notFound();
   }
+
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", user.id)
+    .eq("opportunity_id", opportunity.id)
+    .in("type", [...participantActivityNotificationTypes])
+    .eq("read", false);
 
   const { data: slotRows, error: slotError } = await supabase.rpc(
     "get_published_opportunity_slots",
@@ -93,6 +107,7 @@ export default async function SlotBookingPage({
 
   return (
     <AppShell active="home">
+      <NotificationReadSignal />
       <div className="mx-auto max-w-2xl">
         <Link
           href={`/app/opportunities/${opportunity.id}`}
