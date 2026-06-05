@@ -1,5 +1,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getAppUrl } from "@/lib/site-url";
+
+const tunnelDashboardOrigin =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://flyloop.one";
 
 export type TunnelDashboardSlotBooking = {
   id: string;
@@ -190,7 +192,7 @@ export async function getTunnelDashboardLatestEventAt(secret: string) {
 }
 
 export function getTunnelDashboardUrl(secret: string) {
-  return getAppUrl(`/tunnel-dashboard/${secret}`);
+  return `${tunnelDashboardOrigin}/tunnel-dashboard/${secret}`;
 }
 
 async function loadDashboardForLink(link: DashboardLinkRow) {
