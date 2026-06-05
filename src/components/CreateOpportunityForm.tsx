@@ -42,9 +42,11 @@ const currencies = ["EUR", "CHF", "USD", "PLN", "GBP"];
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fieldClass =
-  "block h-12 w-full max-w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+  "block h-10 w-full max-w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+const dateFieldClass =
+  "block box-border h-10 w-full max-w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-white px-2.5 text-sm font-medium leading-none outline-none [color-scheme:light] focus:border-sky-400";
 const areaClass =
-  "block min-h-28 w-full max-w-full min-w-0 resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
+  "block min-h-20 w-full max-w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 
 const campSteps: { id: StepId; label: string }[] = [
   { id: "type", label: "Type" },
@@ -420,7 +422,7 @@ export function CreateOpportunityForm({
 
   return (
     <form
-      className="mt-4 grid w-full gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5"
+      className="mt-3 grid w-full gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (currentStep.id === "review") {
@@ -437,7 +439,7 @@ export function CreateOpportunityForm({
         onSelect={goToStep}
       />
 
-      <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3 sm:p-5">
+      <div className="rounded-xl bg-slate-50/70 p-3 sm:p-4">
         {currentStep.id === "type" ? (
           <TypeStep type={type} onChange={updateType} />
         ) : null}
@@ -543,24 +545,24 @@ export function CreateOpportunityForm({
       </div>
 
       {error ? (
-        <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold leading-5 text-rose-700">
+        <p className="rounded-lg bg-rose-50 p-2.5 text-sm font-semibold leading-5 text-rose-700">
           {error}
         </p>
       ) : null}
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-row items-center justify-between gap-2">
         <button
           type="button"
           disabled={stepIndex === 0 || isPending}
           onClick={() => goToStep(Math.max(stepIndex - 1, 0))}
-          className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 sm:px-4"
         >
           Back
         </button>
         <button
           type="submit"
           disabled={isPending || (currentStep.id === "pricing" && Boolean(priceAppliesToError))}
-          className="h-11 rounded-xl bg-sky-600 px-5 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+          className="h-10 rounded-lg bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300 sm:px-5"
         >
           {currentStep.id === "review"
             ? isPending
@@ -589,19 +591,19 @@ function ProgressNav({
   onSelect: (index: number) => void;
 }) {
   return (
-    <nav aria-label="Create progress" className="overflow-x-auto pb-1">
-      <ol className="flex min-w-max items-center gap-2">
+    <nav aria-label="Create progress">
+      <ol className="grid grid-cols-3 gap-1.5 sm:grid-cols-6 lg:grid-cols-7">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           const canSelect = index <= maxVisitedIndex;
 
           return (
-            <li key={step.id} className="flex items-center gap-2">
+            <li key={step.id} className="min-w-0">
               <button
                 type="button"
                 disabled={!canSelect}
                 onClick={() => onSelect(index)}
-                className={`h-9 rounded-full border px-3 text-xs font-black transition ${
+                className={`h-8 w-full truncate rounded-lg border px-2 text-[0.68rem] font-black transition sm:text-xs ${
                   isCurrent
                     ? "border-sky-600 bg-sky-600 text-white"
                     : canSelect
@@ -611,9 +613,6 @@ function ProgressNav({
               >
                 {step.label}
               </button>
-              {index < steps.length - 1 ? (
-                <span className="h-px w-4 bg-slate-200" aria-hidden="true" />
-              ) : null}
             </li>
           );
         })}
@@ -633,13 +632,13 @@ function StepHeader({
 }) {
   return (
     <div>
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-600">
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-sky-600">
         {eyebrow}
       </p>
-      <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+      <h2 className="mt-0.5 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
         {title}
       </h2>
-      <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+      <p className="mt-1 hidden max-w-2xl text-sm font-medium leading-5 text-slate-600 sm:block">
         {description}
       </p>
     </div>
@@ -654,13 +653,13 @@ function TypeStep({
   onChange: (type: OpportunityType) => void;
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Type"
         title="What would you like to create?"
         description="Start with the format. You can still review everything before publishing."
       />
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         <TypeCard
           selected={type === "camp"}
           title="Camp"
@@ -693,25 +692,25 @@ function TypeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`grid min-h-36 gap-2 rounded-2xl border p-4 text-left transition ${
+      className={`grid min-h-24 gap-1.5 rounded-xl border p-3 text-left transition ${
         selected
           ? "border-sky-400 bg-sky-50 shadow-sm"
           : "border-slate-200 bg-white hover:border-sky-200 hover:bg-white"
       }`}
     >
       <span className="flex items-center justify-between gap-3">
-        <span className="text-xl font-black tracking-tight text-slate-950">
+        <span className="text-lg font-black tracking-tight text-slate-950">
           {title}
         </span>
         <span
-          className={`grid size-6 place-items-center rounded-full border text-sm font-black ${
+          className={`grid size-5 place-items-center rounded-full border text-sm font-black ${
             selected
               ? "border-sky-600 bg-sky-600 text-white"
               : "border-slate-200 text-transparent"
           }`}
         />
       </span>
-      <span className="text-sm font-medium leading-6 text-slate-600">
+      <span className="hidden text-sm font-medium leading-5 text-slate-600 sm:block">
         {description}
       </span>
     </button>
@@ -734,13 +733,13 @@ function BasicsStep({
   const label = type === "camp" ? "Camp" : "Huck Jam";
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Basics"
         title={`${label} details`}
         description="Name and description are optional. Languages and disciplines come from your coach profile."
       />
-      <div className="grid gap-3">
+      <div className="grid gap-2.5">
         <Field label={`${label} Name`}>
           <input
             className={fieldClass}
@@ -780,7 +779,7 @@ function LocationStep({
   onSelect: (tunnel: TunnelOption) => void;
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Location"
         title="Where will it happen?"
@@ -821,7 +820,7 @@ function ScheduleStep({
   const isHuckJam = type === "huck_jam";
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow={isHuckJam ? "Session" : "Schedule"}
         title={isHuckJam ? "Set the event date" : "Set the camp dates"}
@@ -832,16 +831,22 @@ function ScheduleStep({
         }
       />
       {showLastMinuteNotice ? (
-        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-800">
+        <p className="rounded-lg bg-amber-50 p-2.5 text-sm font-semibold leading-5 text-amber-800">
           This opportunity will appear as last-minute because the registration
           deadline is within 3 days and spots are still available.
         </p>
       ) : null}
-      <div className={isHuckJam ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
+      <div
+        className={
+          isHuckJam
+            ? "grid gap-2.5"
+            : "grid min-w-0 gap-2.5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+        }
+      >
         <Field label={isHuckJam ? "Event Date" : "Start Date"} required>
           <input
             type="date"
-            className={fieldClass}
+            className={dateFieldClass}
             value={startDate}
             onChange={(event) => onStartDateChange(event.target.value)}
           />
@@ -850,7 +855,7 @@ function ScheduleStep({
           <Field label="End Date" required>
             <input
               type="date"
-              className={fieldClass}
+              className={dateFieldClass}
               value={endDate}
               onChange={(event) => onEndDateChange(event.target.value)}
             />
@@ -860,7 +865,7 @@ function ScheduleStep({
       <Field label="Registration Deadline">
         <input
           type="date"
-          className={fieldClass}
+          className={dateFieldClass}
           value={registrationDeadline}
           onChange={(event) => onRegistrationDeadlineChange(event.target.value)}
         />
@@ -881,7 +886,7 @@ function CapacityStep({
   onCapacityChange: (value: string) => void;
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Capacity"
         title="How should booking work?"
@@ -897,7 +902,7 @@ function CapacityStep({
           onChange={(event) => onCapacityChange(event.target.value)}
         />
       </Field>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 md:grid-cols-2">
         <BookingModeOption
           value="approval_required"
           selectedValue={bookingMode}
@@ -935,13 +940,13 @@ function PricingStep({
   onMinMinutesOrHoursChange: (value: string) => void;
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Pricing"
         title="Set the price"
         description="Price is normally per hour. The duration field must contain a valid number of minutes."
       />
-      <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_6.5rem]">
         <Field label="Price" required>
           <input
             type="number"
@@ -980,10 +985,10 @@ function PricingStep({
           placeholder="60"
           aria-invalid={Boolean(priceAppliesToError)}
         />
-        <span className="text-xs font-semibold leading-5 text-slate-500">
-          Displayed as {formatCurrency(price || "0", currency)} per{" "}
-          {minMinutesOrHours || "60"} minutes.
-        </span>
+      <span className="text-xs font-semibold leading-4 text-slate-500">
+        Displayed as {formatCurrency(price || "0", currency)} per{" "}
+        {minMinutesOrHours || "60"} minutes.
+      </span>
         {priceAppliesToError ? (
           <span className="text-xs font-bold leading-5 text-rose-600">
             {priceAppliesToError}
@@ -1010,7 +1015,7 @@ function ParticipationStep({
   onCapacityChange: (value: string) => void;
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Participation"
         title="Set capacity and fee"
@@ -1026,7 +1031,7 @@ function ParticipationStep({
           onChange={(event) => onCapacityChange(event.target.value)}
         />
       </Field>
-      <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_6.5rem]">
         <Field label="Participation Fee" required>
           <input
             type="number"
@@ -1084,88 +1089,149 @@ function ReviewStep({
 }) {
   const isHuckJam = type === "huck_jam";
   const name = title.trim() || "Generated after publishing";
-  const rows = isHuckJam
+  const reviewGroups = isHuckJam
     ? [
-        { label: "Name", value: name, stepId: "basics" as StepId },
         {
-          label: "Tunnel",
-          value: selectedTunnel
-            ? `${selectedTunnel.name}, ${selectedTunnel.city}`
-            : "Not set",
+          title: "Basics",
+          stepId: "basics" as StepId,
+          items: [{ label: "Name", value: name }],
+        },
+        {
+          title: "Location",
           stepId: "location" as StepId,
+          items: [
+            {
+              label: "Tunnel",
+              value: selectedTunnel
+                ? `${selectedTunnel.name}, ${selectedTunnel.city}`
+                : "Not set",
+            },
+          ],
         },
-        { label: "Event Date", value: formatDate(startDate), stepId: "schedule" as StepId },
         {
-          label: "Registration Deadline",
-          value: registrationDeadline ? formatDate(registrationDeadline) : "Open until event start",
+          title: "Session",
           stepId: "schedule" as StepId,
+          items: [
+            { label: "Event Date", value: formatDate(startDate) },
+            {
+              label: "Registration Deadline",
+              value: registrationDeadline
+                ? formatDate(registrationDeadline)
+                : "Open until event start",
+            },
+          ],
         },
-        { label: "Capacity", value: totalCapacity, stepId: "participation" as StepId },
         {
-          label: "Participation Fee",
-          value: formatCurrency(price, currency),
+          title: "Participation",
           stepId: "participation" as StepId,
+          items: [
+            { label: "Capacity", value: totalCapacity },
+            {
+              label: "Fee",
+              value: formatCurrency(price, currency),
+            },
+          ],
         },
       ]
     : [
-        { label: "Camp Name", value: name, stepId: "basics" as StepId },
         {
-          label: "Tunnel",
-          value: selectedTunnel
-            ? `${selectedTunnel.name}, ${selectedTunnel.city}`
-            : "Not set",
+          title: "Basics",
+          stepId: "basics" as StepId,
+          items: [{ label: "Camp Name", value: name }],
+        },
+        {
+          title: "Location",
           stepId: "location" as StepId,
+          items: [
+            {
+              label: "Tunnel",
+              value: selectedTunnel
+                ? `${selectedTunnel.name}, ${selectedTunnel.city}`
+                : "Not set",
+            },
+          ],
         },
-        { label: "Start Date", value: formatDate(startDate), stepId: "schedule" as StepId },
-        { label: "End Date", value: formatDate(endDate), stepId: "schedule" as StepId },
         {
-          label: "Registration Deadline",
-          value: registrationDeadline ? formatDate(registrationDeadline) : "Open until camp start",
+          title: "Schedule",
           stepId: "schedule" as StepId,
+          items: [
+            { label: "Start Date", value: formatDate(startDate) },
+            { label: "End Date", value: formatDate(endDate) },
+            {
+              label: "Registration Deadline",
+              value: registrationDeadline
+                ? formatDate(registrationDeadline)
+                : "Open until camp start",
+            },
+          ],
         },
-        { label: "Capacity", value: totalCapacity, stepId: "capacity" as StepId },
         {
-          label: "Booking Mode",
-          value:
-            bookingMode === "direct_time_booking"
-              ? "Direct Booking"
-              : "Approval Required",
+          title: "Capacity",
           stepId: "capacity" as StepId,
+          items: [
+            { label: "Maximum Participants", value: totalCapacity },
+            {
+              label: "Booking Mode",
+              value:
+                bookingMode === "direct_time_booking"
+                  ? "Direct Booking"
+                  : "Approval Required",
+            },
+          ],
         },
-        { label: "Price", value: formatCurrency(price, currency), stepId: "pricing" as StepId },
         {
-          label: "Price Applies To",
-          value: `${minMinutesOrHours || "60"} minutes`,
+          title: "Pricing",
           stepId: "pricing" as StepId,
+          items: [
+            { label: "Price", value: formatCurrency(price, currency) },
+            {
+              label: "Applies To",
+              value: `${minMinutesOrHours || "60"} minutes`,
+            },
+          ],
         },
       ];
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <StepHeader
         eyebrow="Review"
         title={`Ready to create this ${isHuckJam ? "Huck Jam" : "camp"}?`}
-        description="Check the summary, jump back to any section, then publish when it looks right."
+        description="Check each section, make grouped edits, then publish when it looks right."
       />
-      <div className="grid gap-2">
-        {rows.map((row) => (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {reviewGroups.map((group) => (
           <div
-            key={`${row.label}-${row.stepId}`}
-            className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center"
+            key={`${group.title}-${group.stepId}`}
+            className="grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5"
           >
-            <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-              {row.label}
-            </span>
-            <span className="min-w-0 text-sm font-bold text-slate-900">
-              {row.value}
-            </span>
-            <button
-              type="button"
-              onClick={() => onEdit(row.stepId)}
-              className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-black text-sky-700 hover:bg-sky-50"
-            >
-              Edit
-            </button>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-black text-slate-950">
+                {group.title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => onEdit(group.stepId)}
+                className="h-7 rounded-md border border-slate-200 px-2 text-xs font-black text-sky-700 hover:bg-sky-50"
+              >
+                Edit
+              </button>
+            </div>
+            <dl className="grid gap-1">
+              {group.items.map((item) => (
+                <div
+                  key={`${group.title}-${item.label}`}
+                  className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2"
+                >
+                  <dt className="truncate text-xs font-bold text-slate-400">
+                    {item.label}
+                  </dt>
+                  <dd className="min-w-0 truncate text-xs font-black text-slate-900">
+                    {item.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
         ))}
       </div>
@@ -1183,7 +1249,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
+    <label className="grid min-w-0 gap-1 text-xs font-bold text-slate-700 sm:text-sm">
       <span>
         {label}
         {required ? <span className="text-rose-600"> *</span> : null}
@@ -1228,7 +1294,7 @@ function TunnelCombobox({
           autoComplete="off"
         />
         {selectedTunnel && !tunnelSearch ? (
-          <p className="mt-2 rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-800">
+          <p className="mt-1.5 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800">
             Selected: {selectedTunnel.name}, {selectedTunnel.city}
           </p>
         ) : null}
@@ -1286,7 +1352,7 @@ function BookingModeOption({
 
   return (
     <label
-      className={`grid cursor-pointer gap-1 rounded-2xl border px-3 py-3 text-sm transition ${
+      className={`grid cursor-pointer gap-1 rounded-xl border px-3 py-2.5 text-sm transition ${
         isSelected
           ? "border-sky-300 bg-sky-50"
           : "border-slate-200 bg-white hover:bg-slate-50"
@@ -1303,7 +1369,7 @@ function BookingModeOption({
         />
         {title}
       </span>
-      <span className="pl-6 text-xs font-semibold leading-5 text-slate-600">
+      <span className="pl-6 text-xs font-semibold leading-4 text-slate-600">
         {description}
       </span>
     </label>
