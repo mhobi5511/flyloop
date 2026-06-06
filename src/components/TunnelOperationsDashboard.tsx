@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CalendarDays,
@@ -88,7 +89,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
         ? data.events.filter(
             (event) => new Date(event.createdAt).getTime() > new Date(lastViewedAt).getTime(),
           )
-        : data.events,
+        : [],
     [data.events, lastViewedAt],
   );
   const changeGroups = useMemo(
@@ -151,9 +152,23 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
         <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
-                Tunnel Operations Dashboard
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Image
+                  src="/flyloop-icon-192.png"
+                  alt="Flyloop"
+                  width={32}
+                  height={32}
+                  className="size-8 rounded-lg"
+                />
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
+                    Tunnel Operations Dashboard
+                  </p>
+                  <p className="text-xs font-bold text-slate-500">
+                    Powered by Flyloop
+                  </p>
+                </div>
+              </div>
               <h1 className="mt-1 text-3xl font-black tracking-tight">
                 {data.opportunity.title}
               </h1>
@@ -228,9 +243,6 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-sm font-black">
                               {formatTime(slot.startTime)}
-                            </p>
-                            <p className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-black text-slate-500">
-                              {slot.durationMinutes} min
                             </p>
                           </div>
                           <div className="grid gap-1">
@@ -447,6 +459,10 @@ function ChangeLog({
   lastViewedAt: string | null;
   groups: ReturnType<typeof groupChangeEntries>;
 }) {
+  if (!lastViewedAt) {
+    return null;
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -460,7 +476,7 @@ function ChangeLog({
           {lastViewedAt ? formatVisitTimestamp(lastViewedAt) : "First visit on this device"}
         </p>
       </div>
-      <div className="mt-4 grid gap-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
         {groups.map((day) => (
           <section key={day.date} className="grid gap-2">
             <h3 className="text-base font-black text-slate-950">

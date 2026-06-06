@@ -34,6 +34,7 @@ const relevantPushTypes = [
   "slot_bookings_released",
   "slot_bookings_released_by_organizer",
   "slot_booking_released_by_organizer",
+  "slot_booking_assigned_by_organizer",
   "new_opportunity",
   "new_time_booking",
   "timetable_reminder_interest",

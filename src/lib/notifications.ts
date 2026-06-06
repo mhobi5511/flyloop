@@ -6,6 +6,7 @@ export const participantActivityNotificationTypes = [
   "slot_bookings_released",
   "slot_bookings_released_by_organizer",
   "slot_booking_released_by_organizer",
+  "slot_booking_assigned_by_organizer",
   "participant_removed_from_camp",
   "participant_removal_kept",
 ] as const;

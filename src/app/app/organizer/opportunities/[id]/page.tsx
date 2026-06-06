@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { sendTimetableBookingReminderForm } from "@/app/app/organizer/opportunities/actions";
 import { AppShell } from "@/components/AppShell";
+import {
+  AssignSlotButton,
+  type AssignSlotParticipant,
+} from "@/components/AssignSlotButton";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
 import { CampRemovalRequestActions } from "@/components/CampRemovalRequestActions";
 import {
@@ -245,6 +249,40 @@ export default async function OrganizerOpportunityPage({
       (notification) => notification.user_id,
     ),
   );
+  const bookedMinutesByParticipant = new Map<string, number>();
+
+  for (const slot of timetableSlots) {
+    for (const booking of slot.bookings) {
+      bookedMinutesByParticipant.set(
+        booking.userId,
+        (bookedMinutesByParticipant.get(booking.userId) ?? 0) + booking.minutes,
+      );
+    }
+  }
+
+  const assignableParticipants: AssignSlotParticipant[] = applicantRows
+    .flatMap((applicant) => {
+      const profile = Array.isArray(applicant.profiles)
+        ? applicant.profiles[0]
+        : applicant.profiles;
+
+      if (
+        !profile?.id ||
+        profile.id === user?.id ||
+        applicant.status !== "accepted"
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          id: profile.id,
+          name: profile.full_name ?? "Participant",
+          bookedMinutes: bookedMinutesByParticipant.get(profile.id) ?? 0,
+        },
+      ];
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
   const publicUrl = getPublicOpportunityUrl(currentOpportunity.id);
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
   const typeLabel = formatOpportunityType(currentOpportunity.type);
@@ -501,9 +539,19 @@ export default async function OrganizerOpportunityPage({
                           {Array.from({ length: slot.openSpots }).map((_, index) => (
                             <div
                               key={`${slot.id}-open-${index}`}
-                              className="rounded-lg border border-dashed border-slate-300 bg-white/70 px-2.5 py-2 text-sm font-bold text-slate-400"
+                              className="grid gap-2 rounded-lg border border-dashed border-slate-300 bg-white/70 px-2.5 py-2 text-sm font-bold text-slate-400 sm:grid-cols-[1fr_auto] sm:items-center"
                             >
-                              Open Spot
+                              <span>Open Spot</span>
+                              <AssignSlotButton
+                                opportunityId={currentOpportunity.id}
+                                slotId={slot.id}
+                                participants={assignableParticipants.filter(
+                                  (participant) =>
+                                    !slot.bookings.some(
+                                      (booking) => booking.userId === participant.id,
+                                    ),
+                                )}
+                              />
                             </div>
                           ))}
                         </div>

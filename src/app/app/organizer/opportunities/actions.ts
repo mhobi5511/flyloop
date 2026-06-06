@@ -695,6 +695,63 @@ export async function releaseParticipantSlotBooking(
   };
 }
 
+export async function assignParticipantSlotBooking(
+  opportunityId: string,
+  slotId: string,
+  participantId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  if (!slotId || !participantId) {
+    return { ok: false, message: "Choose a participant and slot." };
+  }
+
+  const { error } = await supabase.rpc("assign_opportunity_slot_booking", {
+    target_opportunity_id: opportunityId,
+    target_slot_id: slotId,
+    target_user_id: participantId,
+  });
+
+  if (error) {
+    console.error("Coach slot assignment failed", {
+      opportunityId,
+      slotId,
+      participantId,
+      organizerId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Could not assign slot.",
+    };
+  }
+
+  await sendServerPush([participantId], "slot_booking_assigned_by_organizer", {
+    opportunityId,
+    types: ["slot_booking_assigned_by_organizer"],
+  });
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/applications");
+
+  return { ok: true, message: "Slot assigned." };
+}
+
 function getAffectedTimetableParticipantIds(
   existingSlots: ExistingTimetableSlotWithBookings[],
   normalizedSlots: ReturnType<typeof normalizeTimetableSlots>,
