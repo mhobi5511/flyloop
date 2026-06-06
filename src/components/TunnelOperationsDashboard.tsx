@@ -389,6 +389,14 @@ function ParticipantList({
               <span className="pl-5 text-xs font-bold text-slate-500">
                 {participant.totalBookedMinutes} min booked
               </span>
+              <span className="pl-5 text-xs font-bold text-slate-600">
+                Tunnel time: {formatTunnelTimeStatus(participant.tunnelTimeStatus)}
+              </span>
+              {participant.tunnelAccountEmail ? (
+                <span className="truncate pl-5 text-xs font-semibold text-sky-700">
+                  {participant.tunnelAccountEmail}
+                </span>
+              ) : null}
             </button>
           );
         })}

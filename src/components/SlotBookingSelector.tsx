@@ -296,7 +296,7 @@ export function SlotBookingSelector({
                   type="email"
                   value={tunnelAccountEmail}
                   onChange={(event) => setTunnelAccountEmail(event.target.value)}
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 font-semibold outline-none focus:border-sky-400"
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-base font-semibold outline-none focus:border-sky-400"
                   placeholder="name@example.com"
                 />
                 <span className="text-xs font-semibold text-slate-500">
