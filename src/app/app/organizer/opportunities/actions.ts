@@ -721,53 +721,11 @@ export async function setParticipantSlotRotation(
     return { ok: false, message: "Choose a rotation above 0 minutes." };
   }
 
-  const adminSupabase = createSupabaseAdminClient();
-
-  if (!adminSupabase) {
-    console.error("Slot rotation update failed: missing admin Supabase client");
-    return { ok: false, message: "Could not set rotation." };
-  }
-
-  const { data: opportunity } = await supabase
-    .from("opportunities")
-    .select("id,created_by,type")
-    .eq("id", opportunityId)
-    .maybeSingle();
-
-  if (
-    !opportunity ||
-    opportunity.created_by !== user.id ||
-    opportunity.type !== "camp"
-  ) {
-    return { ok: false, message: "Opportunity not found." };
-  }
-
-  const { data: booking, error: lookupError } = await adminSupabase
-    .from("opportunity_slot_bookings")
-    .select("id,opportunity_id")
-    .eq("id", bookingId)
-    .eq("opportunity_id", opportunityId)
-    .maybeSingle();
-
-  if (lookupError) {
-    console.error("Slot rotation booking lookup failed", {
-      opportunityId,
-      bookingId,
-      organizerId: user.id,
-      error: lookupError,
-    });
-    return { ok: false, message: "Could not set rotation." };
-  }
-
-  if (!booking) {
-    return { ok: false, message: "Booking not found." };
-  }
-
-  const { error } = await adminSupabase
-    .from("opportunity_slot_bookings")
-    .update({ rotation_minutes: normalizedRotation })
-    .eq("id", bookingId)
-    .eq("opportunity_id", opportunityId);
+  const { error } = await supabase.rpc("set_opportunity_slot_booking_rotation", {
+    target_opportunity_id: opportunityId,
+    target_booking_id: bookingId,
+    target_rotation_minutes: normalizedRotation,
+  });
 
   if (error) {
     console.error("Slot rotation update failed", {

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CalendarDays,
   Clock3,
+  Info,
   Mail,
   Phone,
   RefreshCw,
@@ -476,21 +477,31 @@ function ChangeLog({
   lastViewedAt: string | null;
   groups: ReturnType<typeof groupChangeEntries>;
 }) {
-  if (!lastViewedAt) {
-    return null;
-  }
-
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-black tracking-tight">Change Log</h2>
           <p className="mt-1 text-sm font-bold text-slate-500">
-            Changes since your last visit on this device
+            Changes since this device last viewed the dashboard
           </p>
         </div>
         <p className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
           {lastViewedAt ? formatVisitTimestamp(lastViewedAt) : "First visit on this device"}
+        </p>
+      </div>
+      <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+        <p className="flex gap-2">
+          <Info size={16} className="mt-0.5 shrink-0 text-sky-700" />
+          <span>
+            The Change Log displays changes since this device last viewed the
+            dashboard. On the first visit, there are naturally no changes to
+            display.
+          </span>
+        </p>
+        <p className="pl-6 text-xs font-bold text-slate-500">
+          If browser cache or local storage is cleared, previous visit information
+          cannot be restored.
         </p>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">

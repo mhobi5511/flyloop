@@ -17,23 +17,32 @@ const rotationOptions = [
 
 type SetRotationButtonProps = {
   opportunityId: string;
-  bookingId: string;
-  currentRotationMinutes: number | null;
+  bookings: Array<{
+    id: string;
+    athleteName: string;
+    rotationMinutes: number | null;
+  }>;
 };
 
 export function SetRotationButton({
   opportunityId,
-  bookingId,
-  currentRotationMinutes,
+  bookings,
 }: SetRotationButtonProps) {
   const router = useRouter();
   const titleId = useId();
+  const [selectedBookingId, setSelectedBookingId] = useState(bookings[0]?.id ?? "");
+  const selectedBooking =
+    bookings.find((booking) => booking.id === selectedBookingId) ?? bookings[0];
   const [isOpen, setIsOpen] = useState(false);
   const [selectedValue, setSelectedValue] = useState(
-    currentRotationMinutes === null ? "none" : String(currentRotationMinutes),
+    selectedBooking?.rotationMinutes === null || !selectedBooking
+      ? "none"
+      : String(selectedBooking.rotationMinutes),
   );
   const [customValue, setCustomValue] = useState(
-    currentRotationMinutes === null ? "" : String(currentRotationMinutes),
+    selectedBooking?.rotationMinutes === null || !selectedBooking
+      ? ""
+      : String(selectedBooking.rotationMinutes),
   );
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -57,13 +66,18 @@ export function SetRotationButton({
       return;
     }
 
+    if (!selectedBooking) {
+      setError("Choose a booked participant.");
+      return;
+    }
+
     startTransition(async () => {
       let result: Awaited<ReturnType<typeof setParticipantSlotRotation>>;
 
       try {
         result = await setParticipantSlotRotation(
           opportunityId,
-          bookingId,
+          selectedBooking.id,
           rotationMinutes,
         );
       } catch (rotationError) {
@@ -88,8 +102,23 @@ export function SetRotationButton({
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
-        className="inline-flex h-8 items-center gap-1 rounded-lg border border-sky-200 px-2 text-xs font-black text-sky-700 transition hover:bg-sky-50"
+        disabled={bookings.length === 0}
+        onClick={() => {
+          const firstBooking = bookings[0];
+          setSelectedBookingId(firstBooking?.id ?? "");
+          setSelectedValue(
+            firstBooking?.rotationMinutes === null || !firstBooking
+              ? "none"
+              : String(firstBooking.rotationMinutes),
+          );
+          setCustomValue(
+            firstBooking?.rotationMinutes === null || !firstBooking
+              ? ""
+              : String(firstBooking.rotationMinutes),
+          );
+          setIsOpen(true);
+        }}
+        className="inline-flex h-7 items-center gap-1 rounded-lg bg-white/10 px-2 text-xs font-black text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:text-white/40"
       >
         <RotateCw size={14} /> Set Rotation
       </button>
@@ -120,6 +149,43 @@ export function SetRotationButton({
               </button>
             </div>
 
+            {bookings.length > 1 ? (
+              <label className="mt-4 grid gap-1 text-sm font-bold text-slate-700">
+                Participant
+                <select
+                  value={selectedBooking?.id ?? ""}
+                  onChange={(event) => {
+                    const nextBooking = bookings.find(
+                      (booking) => booking.id === event.target.value,
+                    );
+
+                    setSelectedBookingId(event.target.value);
+                    setSelectedValue(
+                      nextBooking?.rotationMinutes === null || !nextBooking
+                        ? "none"
+                        : String(nextBooking.rotationMinutes),
+                    );
+                    setCustomValue(
+                      nextBooking?.rotationMinutes === null || !nextBooking
+                        ? ""
+                        : String(nextBooking.rotationMinutes),
+                    );
+                  }}
+                  className="h-10 rounded-xl border border-slate-200 px-3 font-semibold outline-none focus:border-sky-400"
+                >
+                  {bookings.map((booking) => (
+                    <option key={booking.id} value={booking.id}>
+                      {booking.athleteName || "Participant"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+                {selectedBooking?.athleteName || "Participant"}
+              </p>
+            )}
+
             <div className="mt-4 grid grid-cols-2 gap-2">
               {rotationOptions.map((option) => (
                 <label
@@ -132,7 +198,7 @@ export function SetRotationButton({
                 >
                   <input
                     type="radio"
-                    name={`rotation-${bookingId}`}
+                    name={`rotation-${selectedBooking?.id ?? "slot"}`}
                     value={option.value}
                     checked={selectedValue === option.value}
                     onChange={() => setSelectedValue(option.value)}

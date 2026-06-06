@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { deleteOpportunity } from "@/app/app/opportunities/actions";
 import { ShareOpportunityButton } from "./ShareOpportunityButton";
+import { TunnelDashboardShareButton } from "./TunnelDashboardShareButton";
 
 type OrganizerOpportunityActionsProps = {
   opportunityId: string;
@@ -13,6 +14,8 @@ type OrganizerOpportunityActionsProps = {
   shareText: string;
   shareUrl: string;
   tunnelDashboardUrl?: string;
+  tunnelDashboardShareText?: string;
+  tunnelDashboardShareSubject?: string;
   hasTimetable: boolean;
   showTimetable?: boolean;
 };
@@ -23,6 +26,8 @@ export function OrganizerOpportunityActions({
   shareText,
   shareUrl,
   tunnelDashboardUrl,
+  tunnelDashboardShareText,
+  tunnelDashboardShareSubject,
   hasTimetable,
   showTimetable = true,
 }: OrganizerOpportunityActionsProps) {
@@ -74,13 +79,9 @@ export function OrganizerOpportunityActions({
         </Link>
       ) : null}
       {tunnelDashboardUrl ? (
-        <ShareOpportunityButton
-          label="Copy Tunnel Dashboard Link"
-          shareText={tunnelDashboardUrl}
-          url={tunnelDashboardUrl}
-          compact
-          fill
-          variant="primary"
+        <TunnelDashboardShareButton
+          message={tunnelDashboardShareText ?? tunnelDashboardUrl}
+          subject={tunnelDashboardShareSubject ?? "Flyloop Operations Dashboard"}
         />
       ) : null}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">

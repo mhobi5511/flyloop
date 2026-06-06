@@ -161,7 +161,7 @@ export default async function OrganizerOpportunityPage({
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("is_organizer,wants_to_create_opportunities")
+      .select("is_organizer,wants_to_create_opportunities,full_name")
       .eq("id", user?.id)
       .maybeSingle(),
     supabase
@@ -333,6 +333,30 @@ export default async function OrganizerOpportunityPage({
   const tunnelDashboardUrl = isHuckJam
     ? ""
     : await getOrCreateTunnelDashboardUrl(supabase, currentOpportunity.id);
+  const coachName = profile?.full_name?.trim() || "Coach";
+  const tunnelDashboardShareSubject = `Flyloop Operations Dashboard - ${currentOpportunity.title}`;
+  const tunnelDashboardShareText = tunnelDashboardUrl
+    ? [
+        "Hello,",
+        "",
+        `Here is the Flyloop Operations Dashboard for ${currentOpportunity.title}.`,
+        "",
+        "This dashboard reflects the current camp planning and updates whenever changes are made.",
+        "",
+        "You can use it to view:",
+        "- participant schedule",
+        "- timetable",
+        "- participant contact information",
+        "- rotation settings",
+        "- latest changes",
+        "",
+        "Dashboard:",
+        tunnelDashboardUrl,
+        "",
+        "Kind regards,",
+        coachName,
+      ].join("\n")
+    : "";
 
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
@@ -436,6 +460,8 @@ export default async function OrganizerOpportunityPage({
               shareText={shareText}
               shareUrl={publicUrl}
               tunnelDashboardUrl={tunnelDashboardUrl}
+              tunnelDashboardShareText={tunnelDashboardShareText}
+              tunnelDashboardShareSubject={tunnelDashboardShareSubject}
               hasTimetable={(timetableSlotCount ?? 0) > 0}
               showTimetable={!isHuckJam}
             />
@@ -512,14 +538,26 @@ export default async function OrganizerOpportunityPage({
                       <article
                         key={slot.id}
                         className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
-                      >
-                        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-900 px-3 py-2 text-white">
+                        >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-900 px-3 py-2 text-white">
                           <p className="text-base font-black">
                             {formatTimetableTime(slot.startTime)}
                           </p>
-                          <p className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-black">
-                            {slot.bookings.length} / {slot.capacity} booked
-                          </p>
+                          <div className="flex items-center gap-2">
+                            {slot.bookings.length > 0 ? (
+                              <SetRotationButton
+                                opportunityId={currentOpportunity.id}
+                                bookings={slot.bookings.map((booking) => ({
+                                  id: booking.id,
+                                  athleteName: booking.athleteName,
+                                  rotationMinutes: booking.rotationMinutes,
+                                }))}
+                              />
+                            ) : null}
+                            <p className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-black">
+                              {slot.bookings.length} / {slot.capacity} booked
+                            </p>
+                          </div>
                         </div>
                         <div className="grid gap-1.5 p-2">
                           {slot.bookings.map((booking) => (
@@ -538,12 +576,7 @@ export default async function OrganizerOpportunityPage({
                                   {formatRotation(booking.rotationMinutes)}
                                 </p>
                               </div>
-                              <div className="flex flex-wrap justify-end gap-1">
-                                <SetRotationButton
-                                  opportunityId={currentOpportunity.id}
-                                  bookingId={booking.id}
-                                  currentRotationMinutes={booking.rotationMinutes}
-                                />
+                              <div className="grid justify-items-end">
                                 <ReleaseSlotBookingButton
                                   opportunityId={currentOpportunity.id}
                                   bookingId={booking.id}
