@@ -16,6 +16,7 @@ import type {
   TunnelDashboardEvent,
   TunnelDashboardParticipant,
 } from "@/lib/tunnel-dashboard";
+import { formatRotation } from "@/lib/timetable";
 
 type TunnelOperationsDashboardProps = {
   data: TunnelDashboardData;
@@ -45,6 +46,16 @@ type ChangeEntry =
   | {
       id: string;
       type: "moved";
+      participantId: string;
+      participantName: string;
+      day: string;
+      sortTime: string;
+      text: string;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: "rotation_changed";
       participantId: string;
       participantName: string;
       day: string;
@@ -264,6 +275,9 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                                     <span className="text-xs font-bold text-white/80">
                                       {booking.minutes} min
                                     </span>
+                                    <span className="text-xs font-semibold text-white/75">
+                                      {formatRotation(booking.rotationMinutes)}
+                                    </span>
                                   </button>
                                 );
                               })
@@ -442,6 +456,9 @@ function ParticipantPanel({
                   className="rounded-lg bg-slate-50 px-2.5 py-2 text-sm font-bold text-slate-700"
                 >
                   {formatTime(slot.startTime)} - {slot.minutes} min
+                  <span className="block text-xs font-semibold text-slate-500">
+                    {formatRotation(slot.rotationMinutes)}
+                  </span>
                 </p>
               ))}
             </div>
@@ -575,6 +592,24 @@ function detectMoves(events: TunnelDashboardEvent[]) {
       continue;
     }
 
+    if (event.eventType === "rotation_changed") {
+      entries.push({
+        id: event.id,
+        type: "rotation_changed",
+        participantId: event.participantId,
+        participantName: event.participantName,
+        day: event.slotDate,
+        sortTime: event.startTime,
+        text: `Rotation changed from ${formatRotationValue(
+          event.previousRotationMinutes,
+        )} to ${formatRotationValue(event.newRotationMinutes)} at ${formatTime(
+          event.startTime,
+        )}`,
+        createdAt: event.createdAt,
+      });
+      continue;
+    }
+
     const movedFromIndex = removedPool.findIndex(
       (removedEvent) =>
         removedEvent.participantId === event.participantId &&
@@ -583,6 +618,14 @@ function detectMoves(events: TunnelDashboardEvent[]) {
 
     if (movedFromIndex >= 0) {
       const removedEvent = removedPool.splice(movedFromIndex, 1)[0];
+
+      if (
+        removedEvent.slotDate === event.slotDate &&
+        formatTime(removedEvent.startTime) === formatTime(event.startTime)
+      ) {
+        continue;
+      }
+
       entries.push({
         id: `${removedEvent.id}-${event.id}`,
         type: "moved",
@@ -683,6 +726,16 @@ function formatLongDay(value: string) {
 
 function formatTime(value: string) {
   return value.slice(0, 5);
+}
+
+function formatRotationValue(value: number | null) {
+  if (value === null) {
+    return "No rotation";
+  }
+
+  return `${new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(value)} min`;
 }
 
 function formatTimeFromIso(value: string) {

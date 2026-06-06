@@ -1,6 +1,7 @@
 export type TimetableBooking = {
   id: string;
   minutes: number;
+  rotationMinutes: number | null;
   userId: string;
   athleteName: string;
   athletePhone: string;
@@ -195,6 +196,16 @@ export function formatTimetableDate(value: string) {
 
 export function formatTimetableTime(value: string) {
   return value.slice(0, 5);
+}
+
+export function formatRotation(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return "No rotation";
+  }
+
+  return `Rotation: ${new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(value)} min`;
 }
 
 export function formatTimetableMoney(value: number, currency: string) {

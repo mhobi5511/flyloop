@@ -10,6 +10,7 @@ export type TunnelDashboardSlotBooking = {
   participantEmail: string;
   participantPhone: string;
   minutes: number;
+  rotationMinutes: number | null;
 };
 
 export type TunnelDashboardSlot = {
@@ -31,17 +32,20 @@ export type TunnelDashboardParticipant = {
     slotDate: string;
     startTime: string;
     minutes: number;
+    rotationMinutes: number | null;
   }[];
 };
 
 export type TunnelDashboardEvent = {
   id: string;
-  eventType: "booked" | "removed";
+  eventType: "booked" | "removed" | "rotation_changed";
   participantId: string;
   participantName: string;
   slotDate: string;
   startTime: string;
   minutes: number;
+  previousRotationMinutes: number | null;
+  newRotationMinutes: number | null;
   createdAt: string;
 };
 
@@ -107,6 +111,7 @@ type SlotRow = {
         id: string;
         user_id: string;
         minutes: number;
+        rotation_minutes: number | string | null;
         profiles:
           | {
               full_name: string | null;
@@ -125,11 +130,13 @@ type SlotRow = {
 
 type EventRow = {
   id: string;
-  event_type: "booked" | "removed";
+  event_type: "booked" | "removed" | "rotation_changed";
   user_id: string;
   slot_date: string;
   start_time: string;
   minutes: number;
+  previous_rotation_minutes: number | string | null;
+  new_rotation_minutes: number | string | null;
   created_at: string;
   profiles:
     | { full_name: string | null }
@@ -217,14 +224,14 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .maybeSingle(),
     supabase
       .from("opportunity_time_slots")
-      .select("id,slot_date,start_time,duration_minutes,opportunity_slot_bookings(id,user_id,minutes,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+      .select("id,slot_date,start_time,duration_minutes,opportunity_slot_bookings(id,user_id,minutes,rotation_minutes,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
       .eq("opportunity_id", link.opportunity_id)
       .eq("is_published", true)
       .order("slot_date", { ascending: true })
       .order("start_time", { ascending: true }),
     supabase
       .from("opportunity_slot_booking_events")
-      .select("id,event_type,user_id,slot_date,start_time,minutes,created_at,profiles!opportunity_slot_booking_events_user_id_fkey(full_name)")
+      .select("id,event_type,user_id,slot_date,start_time,minutes,previous_rotation_minutes,new_rotation_minutes,created_at,profiles!opportunity_slot_booking_events_user_id_fkey(full_name)")
       .eq("opportunity_id", link.opportunity_id)
       .order("created_at", { ascending: true }),
     supabase
@@ -310,6 +317,10 @@ function normalizeSlots(rows: SlotRow[], participantEmails: Map<string, string>)
           participantEmail: participantEmails.get(booking.user_id) ?? "",
           participantPhone: profile?.whatsapp_number ?? profile?.phone ?? "",
           minutes: booking.minutes,
+          rotationMinutes:
+            booking.rotation_minutes === null
+              ? null
+              : Number(booking.rotation_minutes),
         };
       }),
     };
@@ -338,6 +349,7 @@ function getParticipants(slots: TunnelDashboardSlot[]) {
         slotDate: slot.slotDate,
         startTime: slot.startTime,
         minutes: booking.minutes,
+        rotationMinutes: booking.rotationMinutes,
       });
       participantMap.set(booking.userId, participant);
     }
@@ -365,6 +377,14 @@ function normalizeEvents(rows: EventRow[]) {
       slotDate: event.slot_date,
       startTime: event.start_time,
       minutes: event.minutes,
+      previousRotationMinutes:
+        event.previous_rotation_minutes === null
+          ? null
+          : Number(event.previous_rotation_minutes),
+      newRotationMinutes:
+        event.new_rotation_minutes === null
+          ? null
+          : Number(event.new_rotation_minutes),
       createdAt: event.created_at,
     };
   });

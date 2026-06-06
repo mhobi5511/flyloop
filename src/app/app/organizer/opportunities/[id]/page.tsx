@@ -29,6 +29,7 @@ import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
+import { SetRotationButton } from "@/components/SetRotationButton";
 import { organizerActivityNotificationTypes } from "@/lib/notifications";
 import {
   formatOpportunityDate,
@@ -45,6 +46,7 @@ import {
   formatTimetableDate,
   formatTimetableMoney,
   formatTimetableTime,
+  formatRotation,
   getTimetableSummary,
   groupTimetableSlotsByDay,
   type TimetableSlot,
@@ -117,6 +119,7 @@ type TimetableSlotRow = {
     | Array<{
         id: string;
         minutes: number;
+        rotation_minutes: number | string | null;
         user_id: string;
         profiles:
           | {
@@ -193,7 +196,7 @@ export default async function OrganizerOpportunityPage({
     .order("created_at", { ascending: false });
   const { data: timetableRows } = await supabase
     .from("opportunity_time_slots")
-    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
     .eq("opportunity_id", id)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
@@ -225,6 +228,10 @@ export default async function OrganizerOpportunityPage({
         return {
           id: booking.id,
           minutes: booking.minutes,
+          rotationMinutes:
+            booking.rotation_minutes === null
+              ? null
+              : Number(booking.rotation_minutes),
           userId: booking.user_id,
           athleteName: profile?.full_name ?? "Participant",
           athletePhone: profile?.whatsapp_number ?? profile?.phone ?? "",
@@ -527,8 +534,16 @@ export default async function OrganizerOpportunityPage({
                                 <p className="text-xs font-bold text-slate-500">
                                   {booking.minutes} min
                                 </p>
+                                <p className="text-xs font-semibold text-slate-400">
+                                  {formatRotation(booking.rotationMinutes)}
+                                </p>
                               </div>
-                              <div className="grid justify-items-end">
+                              <div className="flex flex-wrap justify-end gap-1">
+                                <SetRotationButton
+                                  opportunityId={currentOpportunity.id}
+                                  bookingId={booking.id}
+                                  currentRotationMinutes={booking.rotationMinutes}
+                                />
                                 <ReleaseSlotBookingButton
                                   opportunityId={currentOpportunity.id}
                                   bookingId={booking.id}

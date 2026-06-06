@@ -35,6 +35,7 @@ type ExportSlotRow = {
     | Array<{
         id: string;
         minutes: number;
+        rotation_minutes: number | string | null;
         user_id: string;
         profiles:
           | {
@@ -75,7 +76,7 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
 
   const { data: slotRows } = await supabase
     .from("opportunity_time_slots")
-    .select("id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+    .select("id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
     .eq("opportunity_id", opportunityId)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
@@ -113,6 +114,10 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
         return {
           id: booking.id,
           minutes: booking.minutes,
+          rotationMinutes:
+            booking.rotation_minutes === null
+              ? null
+              : Number(booking.rotation_minutes),
           userId: booking.user_id,
           athleteName: profile?.full_name ?? "",
           athletePhone: profile?.whatsapp_number ?? profile?.phone ?? "",
