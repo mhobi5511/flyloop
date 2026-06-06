@@ -186,6 +186,12 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
               </h1>
               <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
                 <InfoPill icon={<UserRound size={15} />} label={data.coach.name} />
+                {data.coach.email ? (
+                  <InfoPill icon={<Mail size={15} />} label={data.coach.email} />
+                ) : null}
+                {data.coach.phone ? (
+                  <InfoPill icon={<Phone size={15} />} label={data.coach.phone} />
+                ) : null}
                 <InfoPill
                   icon={<CalendarDays size={15} />}
                   label={`${formatDay(data.opportunity.startDate)} - ${formatDay(

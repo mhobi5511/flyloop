@@ -62,6 +62,8 @@ export type TunnelDashboardData = {
   };
   coach: {
     name: string;
+    email: string;
+    phone: string;
   };
   tunnel: {
     name: string;
@@ -92,8 +94,16 @@ type OpportunityRow = {
   total_capacity: number;
   created_by: string;
   profiles:
-    | { full_name: string | null }
-    | Array<{ full_name: string | null }>
+    | {
+        full_name: string | null;
+        phone: string | null;
+        whatsapp_number: string | null;
+      }
+    | Array<{
+        full_name: string | null;
+        phone: string | null;
+        whatsapp_number: string | null;
+      }>
     | null;
   tunnel_profiles:
     | { name: string | null; city: string | null; country: string | null }
@@ -218,7 +228,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
   ] = await Promise.all([
     supabase
       .from("opportunities")
-      .select("id,title,type,start_date,end_date,total_capacity,created_by,profiles!opportunities_created_by_fkey(full_name),tunnel_profiles(name,city,country)")
+      .select("id,title,type,start_date,end_date,total_capacity,created_by,profiles!opportunities_created_by_fkey(full_name,phone,whatsapp_number),tunnel_profiles(name,city,country)")
       .eq("id", link.opportunity_id)
       .eq("type", "camp")
       .maybeSingle(),
@@ -253,10 +263,11 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     return null;
   }
 
-  const participantEmails = await getParticipantEmails(
-    collectParticipantIds((slots ?? []) as SlotRow[]),
-  );
-  const normalizedSlots = normalizeSlots((slots ?? []) as SlotRow[], participantEmails);
+  const userEmails = await getUserEmails([
+    opportunity.created_by,
+    ...collectParticipantIds((slots ?? []) as SlotRow[]),
+  ]);
+  const normalizedSlots = normalizeSlots((slots ?? []) as SlotRow[], userEmails);
   const participants = getParticipants(normalizedSlots);
   const totalBookedMinutes = participants.reduce(
     (total, participant) => total + participant.totalBookedMinutes,
@@ -279,6 +290,8 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     },
     coach: {
       name: coach?.full_name ?? "Coach",
+      email: userEmails.get(opportunity.created_by) ?? "",
+      phone: coach?.whatsapp_number ?? coach?.phone ?? "",
     },
     tunnel: {
       name: tunnel?.name ?? "Tunnel",
@@ -400,7 +413,7 @@ function collectParticipantIds(rows: SlotRow[]) {
   ];
 }
 
-async function getParticipantEmails(userIds: string[]) {
+async function getUserEmails(userIds: string[]) {
   const supabase = createSupabaseAdminClient();
   const emails = new Map<string, string>();
 
@@ -409,7 +422,7 @@ async function getParticipantEmails(userIds: string[]) {
   }
 
   await Promise.all(
-    userIds.map(async (userId) => {
+    [...new Set(userIds)].map(async (userId) => {
       const { data } = await supabase.auth.admin.getUserById(userId);
 
       if (data.user?.email) {
