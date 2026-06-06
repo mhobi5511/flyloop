@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Bell, MapPin, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { uploadOptimizedImage } from "@/lib/image-upload";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type AdminTunnel = {
@@ -241,28 +242,34 @@ export function AdminDashboard({
     setMessage("");
     setError("");
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      setError("Please upload a JPG, PNG or WebP image.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Tunnel header image must be smaller than 5 MB.");
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
       return;
     }
 
     setUploadingTunnelId(tunnel.id);
     const supabase = createSupabaseBrowserClient();
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${tunnel.id}/header.${extension}`;
-    const { error: uploadError } = await supabase.storage
-      .from("tunnel-images")
-      .upload(path, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: true,
+    let uploadResult: Awaited<ReturnType<typeof uploadOptimizedImage>>;
+
+    try {
+      uploadResult = await uploadOptimizedImage(supabase, file, {
+        bucket: "tunnel-images",
+        pathWithoutExtension: `${tunnel.id}/header`,
+        maxDimension: 1920,
+        quality: 0.82,
       });
+    } catch (optimizeError) {
+      console.error("Tunnel image optimization failed", optimizeError);
+      setUploadingTunnelId(null);
+      setError(
+        optimizeError instanceof Error
+          ? optimizeError.message
+          : "Could not process tunnel image.",
+      );
+      return;
+    }
+
+    const { error: uploadError, path } = uploadResult;
 
     if (uploadError) {
       console.error("Tunnel image upload failed", uploadError);
@@ -771,7 +778,7 @@ function ImageUploader({
       {uploading ? "Uploading..." : tunnel.header_image_url ? "Replace" : "Upload"}
       <input
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/*"
         className="sr-only"
         disabled={uploading}
         onChange={(event) => onUpload(tunnel, event.target.files?.[0])}

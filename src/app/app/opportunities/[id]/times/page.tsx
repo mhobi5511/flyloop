@@ -4,7 +4,11 @@ import { AppShell } from "@/components/AppShell";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { SlotBookingSelector } from "@/components/SlotBookingSelector";
 import { participantActivityNotificationTypes } from "@/lib/notifications";
-import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
+import {
+  formatDateRange,
+  formatOpportunityType,
+  isOpportunityFull,
+} from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import type { InterestStatus } from "@/lib/types";
@@ -57,6 +61,7 @@ export default async function SlotBookingPage({
   if (opportunity.type === "huck_jam") {
     notFound();
   }
+  const isFull = isOpportunityFull(opportunity);
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
@@ -70,7 +75,7 @@ export default async function SlotBookingPage({
     (opportunity.bookingMode === "direct_time_booking" &&
       (!viewerApplicationStatus || viewerHasTimetableReminder) &&
       opportunity.status === "published" &&
-      opportunity.availableSpots > 0);
+      !isFull);
 
   if (!canBook) {
     notFound();
@@ -104,6 +109,10 @@ export default async function SlotBookingPage({
     remainingCapacity: slot.remaining_capacity,
     userHasBooking: slot.user_has_booking,
   }));
+  const changesClosed = areBookingChangesClosed(
+    opportunity.registrationDeadline,
+    opportunity.startDate,
+  );
 
   return (
     <AppShell active="home">
@@ -140,9 +149,23 @@ export default async function SlotBookingPage({
             priceAppliesToMinutes={opportunity.minMinutesOrHours}
             currency={opportunity.currency}
             slots={slots}
+            changesClosed={changesClosed}
           />
         </div>
       </div>
     </AppShell>
   );
+}
+
+function areBookingChangesClosed(
+  registrationDeadline: string | null,
+  startDate: string,
+) {
+  const closesOn = registrationDeadline || startDate;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const closeDate = new Date(`${closesOn}T00:00:00`);
+  closeDate.setHours(0, 0, 0, 0);
+
+  return today.getTime() > closeDate.getTime();
 }

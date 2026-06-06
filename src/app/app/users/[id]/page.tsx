@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AtSign, CalendarDays, Globe2, MapPin, PlayCircle } from "lucide-react";
+import { AtSign, CalendarDays, Clock3, Globe2, MapPin, PlayCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
+import {
+  getFlyloopProfileHistory,
+  type FlyloopProfileHistory,
+} from "@/lib/flyloop-history";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type PublicUserProfile = {
@@ -23,11 +27,6 @@ type PublicUserProfile = {
   youtube_url: string | null;
   wants_to_create_opportunities: boolean | null;
   created_at: string;
-  camps_attended: number | null;
-  camps_organized: number | null;
-  active_camps: number | null;
-  total_applicants: number | null;
-  total_opportunities_organized: number | null;
 };
 
 export default async function PublicUserProfilePage({
@@ -48,19 +47,12 @@ export default async function PublicUserProfilePage({
   }
 
   const profile = data as PublicUserProfile;
+  const flyloopHistory = await getFlyloopProfileHistory(supabase, profile.id);
   const location = formatLocation(profile.city, profile.country);
   const homeTunnelLocation = formatLocation(
     profile.home_tunnel_city,
     profile.home_tunnel_country,
   );
-  const organizerStats = profile.wants_to_create_opportunities
-    ? {
-        activeCamps: profile.active_camps ?? 0,
-        totalApplicants: profile.total_applicants ?? 0,
-        totalOpportunities:
-          profile.total_opportunities_organized ?? profile.camps_organized ?? 0,
-      }
-    : null;
 
   return (
     <AppShell active="home">
@@ -95,7 +87,7 @@ export default async function PublicUserProfilePage({
           </div>
         </div>
 
-        <div className="grid gap-4 p-4 sm:p-6">
+        <div className="grid gap-5 p-4 sm:p-6">
           <section>
             <h2 className="text-sm font-black uppercase text-slate-500">About</h2>
             <p className="mt-2 text-sm leading-6 text-slate-700">
@@ -120,25 +112,12 @@ export default async function PublicUserProfilePage({
             )}
           </section>
 
-          <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {organizerStats ? (
-              <>
-                <Stat label="Active Camps" value={organizerStats.activeCamps} />
-                <Stat
-                  label="Total Applicants"
-                  value={organizerStats.totalApplicants}
-                />
-                <Stat
-                  label="Total Organized"
-                  value={organizerStats.totalOpportunities}
-                />
-              </>
-            ) : null}
-            <Stat
-              label="Member Since"
-              value={formatShortMonthYear(profile.created_at)}
-            />
-          </section>
+          <ProfileStats
+            history={flyloopHistory}
+            showCoachStats={profile.wants_to_create_opportunities === true}
+          />
+
+          <HistoryTimeline history={flyloopHistory} />
 
           {profile.disciplines && profile.disciplines.length > 0 ? (
             <section>
@@ -187,7 +166,112 @@ export default async function PublicUserProfilePage({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
+function ProfileStats({
+  history,
+  showCoachStats,
+}: {
+  history: FlyloopProfileHistory;
+  showCoachStats: boolean;
+}) {
+  const { stats } = history;
+
+  return (
+    <section>
+      <h2 className="text-sm font-black uppercase text-slate-500">Stats</h2>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="Flyloop Minutes" value={stats.flyloopMinutes} />
+        <Stat label="Flyloop Hours" value={stats.flyloopHours} />
+        <Stat label="Camps Attended" value={stats.campsAttended} />
+        <Stat label="Huck Jams Attended" value={stats.huckJamsAttended} />
+        <Stat label="Visited Tunnels" value={stats.visitedTunnels} />
+        <Stat label="Visited Countries" value={stats.visitedCountries} />
+        <Stat label="Favorite Coach" value={stats.favoriteCoach ?? "Not yet"} />
+        <Stat label="Favorite Tunnel" value={stats.favoriteTunnel ?? "Not yet"} />
+        {showCoachStats ? (
+          <>
+            <Stat label="Camps Organized" value={stats.campsOrganized} />
+            <Stat label="Huck Jams Organized" value={stats.huckJamsOrganized} />
+            <Stat
+              label="Athlete Minutes Coached"
+              value={stats.athleteMinutesCoached}
+            />
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function HistoryTimeline({ history }: { history: FlyloopProfileHistory }) {
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-black uppercase text-slate-500">History</h2>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500">
+          Flyloop activity only
+        </span>
+      </div>
+      {history.historyByYear.length > 0 ? (
+        <div className="mt-3 grid gap-5">
+          {history.historyByYear.map((group) => (
+            <section key={group.year} className="grid gap-2">
+              <h3 className="text-lg font-black text-slate-950">{group.year}</h3>
+              <div className="grid gap-2 border-l-2 border-slate-200 pl-3">
+                {group.entries.map((entry) => (
+                  <article
+                    key={entry.opportunityId}
+                    className="relative rounded-2xl border border-slate-200 bg-white p-3"
+                  >
+                    <span className="absolute -left-[1.22rem] top-4 size-2.5 rounded-full bg-sky-600 ring-4 ring-white" />
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-black text-slate-950">
+                          {entry.title}
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-slate-600">
+                          {entry.tunnelName}
+                        </p>
+                        <p className="text-sm font-semibold text-slate-500">
+                          Coach {entry.coachName}
+                        </p>
+                      </div>
+                      <div className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-right">
+                        {entry.flyloopMinutes > 0 ? (
+                          <>
+                            <p className="text-lg font-black text-slate-950">
+                              {entry.flyloopMinutes}
+                            </p>
+                            <p className="text-xs font-black uppercase text-sky-700">
+                              Flyloop Minutes
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-xs font-black uppercase text-slate-600">
+                            Completed
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                      <Clock3 size={14} className="text-sky-700" />
+                      Completed {formatShortDate(entry.completedDate)}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+          No completed Flyloop activity yet.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function Stat({ label, value }: { label: number | string; value: number | string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <p className="text-xl font-black text-slate-950">{value}</p>
@@ -207,11 +291,12 @@ function formatMonthYear(value: string) {
   }).format(new Date(value));
 }
 
-function formatShortMonthYear(value: string) {
+function formatShortDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     month: "short",
+    day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(new Date(`${value}T00:00:00`));
 }
 
 function cleanInstagram(value: string) {

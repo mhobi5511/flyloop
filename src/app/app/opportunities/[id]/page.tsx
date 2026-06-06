@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { FollowButton } from "@/components/FollowButton";
+import { FollowGuidance } from "@/components/FollowGuidance";
 import { InterestButton } from "@/components/InterestButton";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { RequestCampRemovalButton } from "@/components/RequestCampRemovalButton";
@@ -20,6 +21,7 @@ import {
   formatOpportunityType,
   getOpportunityShareText,
   getPublicOpportunityUrl,
+  isOpportunityFull,
   isLastMinuteOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -119,6 +121,35 @@ export default async function OpportunityDetailPage({
             .order("created_at", { ascending: true }),
         ])
       : [{ count: 0 }, { data: [] }];
+  const followTargets = [
+    { target_type: "tunnel", target_id: opportunity.tunnelId },
+    opportunity.coachFollowId
+      ? { target_type: "coach", target_id: opportunity.coachFollowId }
+      : null,
+  ].filter(
+    (target): target is { target_type: "tunnel" | "coach"; target_id: string } =>
+      Boolean(target),
+  );
+  const { data: followRows } =
+    user && followTargets.length > 0
+      ? await supabase
+          .from("follows")
+          .select("target_type,target_id")
+          .eq("follower_id", user.id)
+          .in(
+            "target_id",
+            followTargets.map((target) => target.target_id),
+          )
+      : { data: [] };
+  const followedKeys = new Set(
+    (followRows ?? []).map(
+      (follow) => `${follow.target_type}:${follow.target_id}`,
+    ),
+  );
+  const followsTunnel = followedKeys.has(`tunnel:${opportunity.tunnelId}`);
+  const followsCoach = opportunity.coachFollowId
+    ? followedKeys.has(`coach:${opportunity.coachFollowId}`)
+    : false;
   const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
   const isAccepted = viewerApplicationStatus === "accepted";
   const canRequestCampRemoval =
@@ -126,8 +157,8 @@ export default async function OpportunityDetailPage({
   const isDeclined = viewerApplicationStatus === "declined";
   const isWaitlisted = viewerApplicationStatus === "waitlist";
   const isBlockedFromBooking = isDeclined || isWaitlisted;
-  const isUnavailable =
-    opportunity.status !== "published" || opportunity.availableSpots <= 0;
+  const isFull = isOpportunityFull(opportunity);
+  const isUnavailable = opportunity.status !== "published" || isFull;
   const canDirectBook =
     !isHuckJam &&
     opportunity.bookingMode === "direct_time_booking" &&
@@ -205,6 +236,7 @@ export default async function OpportunityDetailPage({
               {formatOpportunityType(opportunity.type)}
             </Badge>
             {isLastMinute ? <Badge tone="amber">Last-minute opportunity</Badge> : null}
+            {isFull ? <Badge tone="slate">Full</Badge> : null}
             <Badge tone={isUnavailable ? "red" : "slate"}>
               {opportunity.status}
             </Badge>
@@ -340,6 +372,15 @@ export default async function OpportunityDetailPage({
               />
             </div>
           ) : null}
+
+          <FollowGuidance
+            opportunityId={opportunity.id}
+            show={Boolean(
+              user &&
+                !isOrganizer &&
+                (!followsTunnel || (opportunity.coachFollowId && !followsCoach)),
+            )}
+          />
 
           {canRequestCampRemoval && viewerInterest?.id ? (
             <RequestCampRemovalButton

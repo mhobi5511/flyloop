@@ -25,6 +25,19 @@ export function isLastMinuteOpportunity(
   );
 }
 
+export function isOpportunityFull(opportunity: Opportunity) {
+  if (opportunity.type !== "camp") {
+    return opportunity.availableSpots <= 0 || opportunity.status === "full";
+  }
+
+  return (
+    opportunity.status === "full" ||
+    opportunity.availableSpots <= 0 ||
+    (opportunity.hasPublishedTimetable === true &&
+      (opportunity.remainingTimetableMinutes ?? 0) <= 0)
+  );
+}
+
 export function formatOpportunityType(type: Opportunity["type"]) {
   return type === "huck_jam" ? "Huck Jam" : "Camp";
 }

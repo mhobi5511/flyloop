@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { uploadOptimizedImage } from "@/lib/image-upload";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AdminTunnelHeaderImageFormProps = {
@@ -31,28 +32,34 @@ export function AdminTunnelHeaderImageForm({
     setMessage("");
     setError("");
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      setError("Please upload a JPG, PNG or WebP image.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Tunnel header image must be smaller than 5 MB.");
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
       return;
     }
 
     setIsUploading(true);
     const supabase = createSupabaseBrowserClient();
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${tunnel.id}/header.${extension}`;
-    const { error: uploadError } = await supabase.storage
-      .from("tunnel-images")
-      .upload(path, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: true,
+    let uploadResult: Awaited<ReturnType<typeof uploadOptimizedImage>>;
+
+    try {
+      uploadResult = await uploadOptimizedImage(supabase, file, {
+        bucket: "tunnel-images",
+        pathWithoutExtension: `${tunnel.id}/header`,
+        maxDimension: 1920,
+        quality: 0.82,
       });
+    } catch (optimizeError) {
+      console.error("Tunnel image optimization failed", optimizeError);
+      setIsUploading(false);
+      setError(
+        optimizeError instanceof Error
+          ? optimizeError.message
+          : "Could not process tunnel image.",
+      );
+      return;
+    }
+
+    const { error: uploadError, path } = uploadResult;
 
     if (uploadError) {
       console.error("Tunnel image upload failed", uploadError);
@@ -107,7 +114,7 @@ export function AdminTunnelHeaderImageForm({
             {isUploading ? "Uploading..." : imageUrl ? "Replace image" : "Upload image"}
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               disabled={isUploading}
               className="sr-only"
               onChange={(event) => void uploadHeader(event.target.files?.[0])}

@@ -3,7 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { Check, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { bookOpportunitySlots } from "@/app/app/opportunities/actions";
+import {
+  bookOpportunitySlots,
+  releaseOwnOpportunitySlot,
+} from "@/app/app/opportunities/actions";
 import {
   calculateEstimatedCost,
   getPriceAppliesToMinutesNumber,
@@ -26,6 +29,7 @@ type SlotBookingSelectorProps = {
   priceAppliesToMinutes?: string | null;
   currency: string;
   slots: SlotOption[];
+  changesClosed?: boolean;
 };
 
 export function SlotBookingSelector({
@@ -34,6 +38,7 @@ export function SlotBookingSelector({
   priceAppliesToMinutes,
   currency,
   slots,
+  changesClosed = false,
 }: SlotBookingSelectorProps) {
   const router = useRouter();
   const bookedSlotIds = useMemo(
@@ -48,6 +53,11 @@ export function SlotBookingSelector({
   const newSelectedSlotIds = selectedSlotIds.filter(
     (slotId) => !bookedSlotIds.includes(slotId),
   );
+  const removedBookedSlotIds = bookedSlotIds.filter(
+    (slotId) => !selectedSlotIds.includes(slotId),
+  );
+  const hasPendingChanges =
+    newSelectedSlotIds.length > 0 || removedBookedSlotIds.length > 0;
   const selectedCount = selectedSlotIds.length;
   const totalMinutes = selectedSlots.reduce(
     (sum, slot) => sum + slot.durationMinutes,
@@ -62,7 +72,11 @@ export function SlotBookingSelector({
   const groupedSlots = useMemo(() => groupSlotsByDay(slots), [slots]);
 
   function toggleSlot(slot: SlotOption) {
-    if (slot.userHasBooking || slot.remainingCapacity <= 0 || isPending) {
+    if (changesClosed || isPending) {
+      return;
+    }
+
+    if (!slot.userHasBooking && slot.remainingCapacity <= 0) {
       return;
     }
 
@@ -75,22 +89,36 @@ export function SlotBookingSelector({
     );
   }
 
-  function bookSlots() {
+  function saveSlotChanges() {
     setMessage("");
     setError("");
 
     startTransition(async () => {
-      const result = await bookOpportunitySlots(opportunityId, newSelectedSlotIds);
+      for (const slotId of removedBookedSlotIds) {
+        const releaseResult = await releaseOwnOpportunitySlot(opportunityId, slotId);
+
+        if (!releaseResult.ok) {
+          setError(releaseResult.message);
+          return;
+        }
+      }
+
+      const result =
+        newSelectedSlotIds.length > 0
+          ? await bookOpportunitySlots(opportunityId, newSelectedSlotIds)
+          : { ok: true as const, message: "Your slots were updated." };
 
       if (!result.ok) {
         setError(result.message);
         return;
       }
 
-      setMessage(result.message);
-      setSelectedSlotIds((current) => [...new Set([...current, ...newSelectedSlotIds])]);
+      setMessage(
+        removedBookedSlotIds.length > 0 && newSelectedSlotIds.length === 0
+          ? "Slot released."
+          : result.message,
+      );
       window.setTimeout(() => {
-        router.push(`/app/opportunities/${opportunityId}`);
         router.refresh();
       }, 700);
     });
@@ -113,7 +141,8 @@ export function SlotBookingSelector({
               {day.slots.map((slot) => {
                 const isSelected = selectedSlotIds.includes(slot.id);
                 const isFull = slot.remainingCapacity <= 0;
-                const disabled = isFull || slot.userHasBooking || isPending;
+                const disabled =
+                  changesClosed || isPending || (!slot.userHasBooking && isFull);
 
                 return (
                   <button
@@ -123,11 +152,15 @@ export function SlotBookingSelector({
                     onClick={() => toggleSlot(slot)}
                     className={`min-h-20 rounded-xl border px-2.5 py-2 text-left transition ${
                       slot.userHasBooking
-                        ? "border-emerald-300 bg-emerald-50"
+                        ? isSelected
+                          ? "border-emerald-300 bg-emerald-50"
+                          : "border-slate-300 bg-white"
                         : isSelected
                           ? "border-sky-300 bg-sky-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    } disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
+                          : isFull
+                            ? "border-slate-200 bg-slate-100 opacity-60"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                    } disabled:cursor-not-allowed disabled:text-slate-400`}
                   >
                     <span className="flex items-start justify-between gap-2">
                       <span className="min-w-0">
@@ -151,8 +184,10 @@ export function SlotBookingSelector({
                       </span>
                     </span>
                     <span className="mt-2 block text-[0.68rem] font-black uppercase text-slate-500">
-                      {slot.userHasBooking
+                      {slot.userHasBooking && isSelected
                         ? "Booked"
+                        : slot.userHasBooking
+                          ? "Will release"
                         : isFull
                           ? "Full"
                           : `${slot.remainingCapacity} open`}
@@ -170,6 +205,11 @@ export function SlotBookingSelector({
       )}
 
       <section className="sticky bottom-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+        {changesClosed ? (
+          <p className="mb-3 rounded-xl bg-slate-100 p-3 text-center text-sm font-black text-slate-600">
+            Booking changes are no longer available.
+          </p>
+        ) : null}
         <p className="mb-2 text-center text-xs font-bold text-slate-500">
           {formatMoney(price, currency)} per {priceBasisMinutes} min
         </p>
@@ -183,11 +223,11 @@ export function SlotBookingSelector({
         </div>
         <button
           type="button"
-          disabled={isPending || newSelectedSlotIds.length === 0}
-          onClick={bookSlots}
+          disabled={changesClosed || isPending || !hasPendingChanges}
+          onClick={saveSlotChanges}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >
-          <Send size={17} /> {isPending ? "Booking..." : "Book Slots"}
+          <Send size={17} /> {isPending ? "Saving..." : "Save Times"}
         </button>
         {message ? (
           <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">

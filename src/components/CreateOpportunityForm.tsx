@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarDays } from "lucide-react";
 import {
   publishOpportunity,
   updateOpportunity,
@@ -45,7 +46,7 @@ const uuidPattern =
 const fieldClass =
   "block h-10 w-full max-w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 const dateFieldClass =
-  "block box-border h-10 w-full max-w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-white px-2.5 text-base font-medium leading-none outline-none [color-scheme:light] focus:border-sky-400";
+  "block box-border h-9 w-full max-w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-white px-9 pr-2.5 text-sm font-bold leading-none outline-none [color-scheme:light] focus:border-sky-400";
 const areaClass =
   "block min-h-20 w-full max-w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base font-medium outline-none placeholder:text-slate-400 focus:border-sky-400 focus:placeholder:text-transparent";
 
@@ -430,7 +431,7 @@ export function CreateOpportunityForm({
 
   return (
     <form
-      className="mt-3 grid w-full gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
+      className="mt-3 grid w-full gap-3 overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (currentStep.id === "review") {
@@ -849,37 +850,56 @@ function ScheduleStep({
         className={
           isHuckJam
             ? "grid gap-2.5"
-            : "grid min-w-0 gap-2.5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+            : "grid min-w-0 gap-2.5 md:grid-cols-2"
         }
       >
         <Field label={isHuckJam ? "Event Date" : "Start Date"} required>
-          <input
-            type="date"
-            className={dateFieldClass}
+          <DateInput
             value={startDate}
-            onChange={(event) => onStartDateChange(event.target.value)}
+            onChange={onStartDateChange}
           />
         </Field>
         {!isHuckJam ? (
           <Field label="End Date" required>
-            <input
-              type="date"
-              className={dateFieldClass}
+            <DateInput
               value={endDate}
-              onChange={(event) => onEndDateChange(event.target.value)}
+              onChange={onEndDateChange}
             />
           </Field>
         ) : null}
       </div>
-      <Field label="Registration Deadline">
-        <input
-          type="date"
-          className={dateFieldClass}
-          value={registrationDeadline}
-          onChange={(event) => onRegistrationDeadlineChange(event.target.value)}
-        />
-      </Field>
+      <div className="max-w-xs">
+        <Field label="Registration Deadline">
+          <DateInput
+            value={registrationDeadline}
+            onChange={onRegistrationDeadlineChange}
+          />
+        </Field>
+      </div>
     </div>
+  );
+}
+
+function DateInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <span className="relative block w-full max-w-xs">
+      <CalendarDays
+        size={16}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+      <input
+        type="date"
+        className={dateFieldClass}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </span>
   );
 }
 
@@ -1283,7 +1303,7 @@ function TunnelCombobox({
       <span>
         Tunnel <span className="text-rose-600">*</span>
       </span>
-      <div className="relative">
+      <div className="relative z-20">
         <input
           className={fieldClass}
           value={tunnelSearch}
@@ -1304,7 +1324,7 @@ function TunnelCombobox({
           <div
             id="tunnel-options"
             role="listbox"
-            className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+            className="absolute z-50 mt-1 max-h-[min(22rem,55vh)] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
           >
             {matches.length > 0 ? (
               matches.map((tunnel) => (

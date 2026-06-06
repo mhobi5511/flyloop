@@ -559,3 +559,53 @@ export async function bookOpportunitySlots(
 
   return { ok: true, message: "Your slots are booked." };
 }
+
+export async function releaseOwnOpportunitySlot(
+  opportunityId: string,
+  slotId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: releasedCount, error } = await supabase.rpc(
+    "release_own_opportunity_slot_booking",
+    {
+      target_opportunity_id: opportunityId,
+      target_slot_id: slotId,
+    },
+  );
+
+  if (error) {
+    console.error("Own slot release failed", {
+      opportunityId,
+      slotId,
+      userId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Could not release slot.",
+    };
+  }
+
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/applications");
+  revalidatePath("/app/dashboard");
+
+  return {
+    ok: true,
+    message: Number(releasedCount) > 0 ? "Slot released." : "No booked slot to release.",
+  };
+}

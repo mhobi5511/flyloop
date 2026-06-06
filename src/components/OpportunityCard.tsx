@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { CalendarDays, MapPin, Users } from "lucide-react";
-import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { Badge } from "./Badge";
 import { NotificationCountBadge } from "./NotificationCountBadge";
 import {
@@ -10,6 +9,7 @@ import {
   formatPriceLabel,
   formatSessionTimeRange,
   getCapacityLines,
+  isOpportunityFull,
   opportunityViewModel,
 } from "@/lib/opportunities";
 import type { Opportunity } from "@/lib/types";
@@ -53,19 +53,20 @@ export function OpportunityCard({
     opportunity.endDate,
   );
   const unreadCount = opportunity.unreadNotificationCount ?? 0;
+  const isFull = isOpportunityFull(opportunity);
 
   return (
     <Link
       href={href}
-      className={`relative block rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dense ? "p-3" : "p-4"} ${statusBorder}`}
+      className={`relative block rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dense ? "p-3" : "p-4"} ${statusBorder} ${
+        isFull ? "grayscale opacity-70 hover:translate-y-0 hover:shadow-sm" : ""
+      }`}
     >
       <NotificationCountBadge count={unreadCount} />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={`flex flex-wrap ${dense ? "mb-1.5 gap-1.5" : "mb-2 gap-2"}`}>
-            {opportunity.viewerInterestStatus ? (
-              <ApplicationStatusBadge status={opportunity.viewerInterestStatus} />
-            ) : null}
+            {isFull ? <Badge tone="slate">Full</Badge> : null}
             <Badge tone={view.type === "camp" ? "blue" : "green"}>
               {view.typeLabel}
             </Badge>

@@ -1,8 +1,5 @@
 import Link from "next/link";
-import {
-  ApplicationStatusBadge,
-  applicantBorderClass,
-} from "@/components/ApplicationStatusBadge";
+import { applicantBorderClass } from "@/components/ApplicationStatusBadge";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
@@ -257,7 +254,6 @@ export default async function ApplicationsPage({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <ApplicationStatusBadge status={application.status} />
                     <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
                       {formatOpportunityType(opportunity.type)}
                     </Badge>

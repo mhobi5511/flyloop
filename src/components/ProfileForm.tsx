@@ -23,6 +23,7 @@ import {
   getPushSupportState,
 } from "@/lib/push-client";
 import { getPwaInstallState, type PwaInstallState } from "@/lib/pwa-client";
+import { uploadOptimizedImage } from "@/lib/image-upload";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const pushNotificationReleaseDate = new Date(
@@ -340,14 +341,8 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
     setError("");
     setToast("");
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      setError("Please upload a JPG, PNG or WebP image.");
-      return;
-    }
-
-    if (file.size > 3 * 1024 * 1024) {
-      setError("Profile photo must be smaller than 3 MB.");
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
       return;
     }
 
@@ -364,15 +359,27 @@ export function ProfileForm({ profile, tunnels }: ProfileFormProps) {
       return;
     }
 
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${user.id}/profile.${extension}`;
-    const { error: uploadError } = await supabase.storage
-      .from("profile-images")
-      .upload(path, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: true,
+    let uploadResult: Awaited<ReturnType<typeof uploadOptimizedImage>>;
+
+    try {
+      uploadResult = await uploadOptimizedImage(supabase, file, {
+        bucket: "profile-images",
+        pathWithoutExtension: `${user.id}/profile`,
+        maxDimension: 768,
+        quality: 0.84,
       });
+    } catch (optimizeError) {
+      console.error("Profile image optimization failed", optimizeError);
+      setIsUploading(false);
+      setError(
+        optimizeError instanceof Error
+          ? optimizeError.message
+          : "Could not process profile photo.",
+      );
+      return;
+    }
+
+    const { error: uploadError, path } = uploadResult;
 
     if (uploadError) {
       console.error("Profile image upload failed", uploadError);
@@ -909,7 +916,7 @@ function ProfileHeader({
         <input
           id="profile-photo-upload"
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           disabled={isUploading}
           className="sr-only"
           onChange={(event) => onUpload(event.target.files?.[0])}
