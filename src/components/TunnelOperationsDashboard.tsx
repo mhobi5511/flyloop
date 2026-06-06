@@ -17,7 +17,6 @@ import type {
   TunnelDashboardEvent,
   TunnelDashboardParticipant,
 } from "@/lib/tunnel-dashboard";
-import { formatRotation } from "@/lib/timetable";
 
 type TunnelOperationsDashboardProps = {
   data: TunnelDashboardData;
@@ -47,16 +46,6 @@ type ChangeEntry =
   | {
       id: string;
       type: "moved";
-      participantId: string;
-      participantName: string;
-      day: string;
-      sortTime: string;
-      text: string;
-      createdAt: string;
-    }
-  | {
-      id: string;
-      type: "rotation_changed";
       participantId: string;
       participantName: string;
       day: string;
@@ -106,6 +95,17 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
   );
   const changeGroups = useMemo(
     () => groupChangeEntries(detectMoves(visibleEvents)),
+    [visibleEvents],
+  );
+  const fullChangeEntries = useMemo(
+    () =>
+      detectMoves(data.events).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [data.events],
+  );
+  const changedSlotKeys = useMemo(
+    () => new Set(visibleEvents.map((event) => makeSlotKey(event.slotDate, event.startTime))),
     [visibleEvents],
   );
 
@@ -186,12 +186,6 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
               </h1>
               <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
                 <InfoPill icon={<UserRound size={15} />} label={data.coach.name} />
-                {data.coach.email ? (
-                  <InfoPill icon={<Mail size={15} />} label={data.coach.email} />
-                ) : null}
-                {data.coach.phone ? (
-                  <InfoPill icon={<Phone size={15} />} label={data.coach.phone} />
-                ) : null}
                 <InfoPill
                   icon={<CalendarDays size={15} />}
                   label={`${formatDay(data.opportunity.startDate)} - ${formatDay(
@@ -204,7 +198,24 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                 />
               </div>
             </div>
-            <div className="grid gap-1 rounded-xl bg-slate-950 px-4 py-3 text-white">
+            <div className="grid gap-3 rounded-xl bg-slate-950 px-4 py-3 text-white">
+              <div className="grid gap-1">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-200">
+                  Coach
+                </p>
+                <p className="text-lg font-black">{data.coach.name}</p>
+                {data.coach.email ? (
+                  <p className="flex items-center gap-2 text-sm font-bold text-slate-300">
+                    <Mail size={14} /> {data.coach.email}
+                  </p>
+                ) : null}
+                {data.coach.phone ? (
+                  <p className="flex items-center gap-2 text-sm font-bold text-slate-300">
+                    <Phone size={14} /> {data.coach.phone}
+                  </p>
+                ) : null}
+              </div>
+              <div className="border-t border-white/10 pt-3">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-200">
                 Tunnel
               </p>
@@ -212,6 +223,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
               <p className="text-sm font-bold text-slate-300">
                 {[data.tunnel.city, data.tunnel.country].filter(Boolean).join(", ")}
               </p>
+              </div>
             </div>
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-3">
@@ -222,7 +234,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
             />
             <StatCard
               label="Total booked hours"
-              value={`${data.stats.totalBookedHours} h`}
+              value={formatDuration(data.stats.totalBookedMinutes)}
             />
           </div>
         </header>
@@ -232,9 +244,6 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-xl font-black tracking-tight">Live Timetable</h2>
-                <p className="text-sm font-bold text-slate-500">
-                  Polling every 20 seconds
-                </p>
               </div>
               <div
                 className="mt-4 grid gap-3"
@@ -256,12 +265,21 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                       {day.slots.map((slot) => (
                         <article
                           key={slot.id}
-                          className="rounded-lg border border-slate-200 bg-white p-2"
+                          className={`relative rounded-lg border bg-white p-2 ${
+                            changedSlotKeys.has(makeSlotKey(slot.slotDate, slot.startTime))
+                              ? "border-amber-400 ring-2 ring-amber-200"
+                              : "border-slate-200"
+                          }`}
                         >
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-sm font-black">
                               {formatTime(slot.startTime)}
                             </p>
+                            {changedSlotKeys.has(makeSlotKey(slot.slotDate, slot.startTime)) ? (
+                              <span className="animate-pulse rounded-full bg-amber-500 px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-white shadow-sm">
+                                Changed
+                              </span>
+                            ) : null}
                           </div>
                           <div className="grid gap-1">
                             {slot.bookings.length > 0 ? (
@@ -281,9 +299,6 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                                     </span>
                                     <span className="text-xs font-bold text-white/80">
                                       {booking.minutes} min
-                                    </span>
-                                    <span className="text-xs font-semibold text-white/75">
-                                      {formatRotation(booking.rotationMinutes)}
                                     </span>
                                   </button>
                                 );
@@ -305,6 +320,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
             <ChangeLog
               lastViewedAt={lastViewedAt}
               groups={changeGroups}
+              fullEntries={fullChangeEntries}
             />
           </div>
 
@@ -387,7 +403,7 @@ function ParticipantList({
                 </span>
               </span>
               <span className="pl-5 text-xs font-bold text-slate-500">
-                {participant.totalBookedMinutes} min booked
+                {formatParticipantTotal(participant.totalBookedMinutes)} booked
               </span>
               <span className="pl-5 text-xs font-bold text-slate-600">
                 Tunnel time: {formatTunnelTimeStatus(participant.tunnelTimeStatus)}
@@ -446,6 +462,9 @@ function ParticipantPanel({
           <p className="text-sm font-bold text-slate-500">
             {participant.totalBookedMinutes} min total
           </p>
+          <p className="text-sm font-black text-slate-700">
+            {formatDuration(participant.totalBookedMinutes)}
+          </p>
         </div>
       </div>
       <div className="mt-4 grid gap-2 text-sm font-bold text-slate-700">
@@ -488,9 +507,6 @@ function ParticipantPanel({
                   className="rounded-lg bg-slate-50 px-2.5 py-2 text-sm font-bold text-slate-700"
                 >
                   {formatTime(slot.startTime)} - {slot.minutes} min
-                  <span className="block text-xs font-semibold text-slate-500">
-                    {formatRotation(slot.rotationMinutes)}
-                  </span>
                 </p>
               ))}
             </div>
@@ -504,10 +520,14 @@ function ParticipantPanel({
 function ChangeLog({
   lastViewedAt,
   groups,
+  fullEntries,
 }: {
   lastViewedAt: string | null;
   groups: ReturnType<typeof groupChangeEntries>;
+  fullEntries: ChangeEntry[];
 }) {
+  const [showFullHistory, setShowFullHistory] = useState(false);
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -521,54 +541,90 @@ function ChangeLog({
           {lastViewedAt ? formatVisitTimestamp(lastViewedAt) : "First visit on this device"}
         </p>
       </div>
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowFullHistory((current) => !current)}
+          className="inline-flex h-9 items-center rounded-lg border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+        >
+          {showFullHistory ? "Show Recent Changes" : "View Full History"}
+        </button>
+      </div>
       <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600">
         <p className="flex gap-2">
           <Info size={16} className="mt-0.5 shrink-0 text-sky-700" />
           <span>
-            The Change Log displays changes since this device last viewed the
-            dashboard. On the first visit, there are naturally no changes to
-            display.
+            {showFullHistory
+              ? "Full History displays all changes since this timetable was created, newest first."
+              : "The Change Log displays changes since this device last viewed the dashboard. On the first visit, there are naturally no changes to display."}
           </span>
         </p>
-        <p className="pl-6 text-xs font-bold text-slate-500">
+        {!showFullHistory ? (
+          <p className="pl-6 text-xs font-bold text-slate-500">
           If browser cache or local storage is cleared, previous visit information
           cannot be restored.
-        </p>
-      </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
-        {groups.map((day) => (
-          <section key={day.date} className="grid gap-2">
-            <h3 className="text-base font-black text-slate-950">
-              {formatLongDay(day.date)}
-            </h3>
-            {day.participants.map((participant) => (
-              <div
-                key={`${day.date}-${participant.participantId}`}
-                className="rounded-xl bg-slate-50 p-3"
-              >
-                <p className="text-sm font-black text-slate-900">
-                  {participant.participantName}
-                </p>
-                <ul className="mt-2 grid gap-1">
-                  {participant.changes.map((change) => (
-                    <li
-                      key={change.id}
-                      className="text-sm font-semibold text-slate-700"
-                    >
-                      {change.text}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </section>
-        ))}
-        {groups.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-500">
-            No changes since the last visit on this device.
           </p>
         ) : null}
       </div>
+      {showFullHistory ? (
+        <div className="mt-4 grid gap-2">
+          {fullEntries.map((change) => (
+            <article key={change.id} className="rounded-xl bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-black text-slate-900">
+                  {change.participantName}
+                </p>
+                <p className="text-xs font-black text-slate-500">
+                  {formatChangeTimestamp(change.createdAt)}
+                </p>
+              </div>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {formatLongDay(change.day)} - {change.text}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 lg:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
+          {groups.map((day) => (
+            <section key={day.date} className="grid gap-2">
+              <h3 className="text-base font-black text-slate-950">
+                {formatLongDay(day.date)}
+              </h3>
+              {day.participants.map((participant) => (
+                <div
+                  key={`${day.date}-${participant.participantId}`}
+                  className="rounded-xl bg-slate-50 p-3"
+                >
+                  <p className="text-sm font-black text-slate-900">
+                    {participant.participantName}
+                  </p>
+                  <ul className="mt-2 grid gap-1">
+                    {participant.changes.map((change) => (
+                      <li
+                        key={change.id}
+                        className="text-sm font-semibold text-slate-700"
+                      >
+                        <span className="mb-0.5 block text-xs font-black text-slate-500">
+                          {formatChangeTimestamp(change.createdAt)}
+                        </span>
+                        {change.text}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+      )}
+      {(showFullHistory ? fullEntries.length : groups.length) === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-500">
+            {showFullHistory
+              ? "No change history is available yet."
+              : "No changes since the last visit on this device."}
+          </p>
+        ) : null}
     </section>
   );
 }
@@ -620,7 +676,7 @@ function groupParticipantSlotsByDay(
 }
 
 function detectMoves(events: TunnelDashboardEvent[]) {
-  const sortedEvents = [...events].sort((a, b) =>
+  const sortedEvents = events.filter((event) => event.eventType !== "rotation_changed").sort((a, b) =>
     `${a.createdAt} ${a.slotDate} ${a.startTime}`.localeCompare(
       `${b.createdAt} ${b.slotDate} ${b.startTime}`,
     ),
@@ -631,24 +687,6 @@ function detectMoves(events: TunnelDashboardEvent[]) {
   for (const event of sortedEvents) {
     if (event.eventType === "removed") {
       removedPool.push(event);
-      continue;
-    }
-
-    if (event.eventType === "rotation_changed") {
-      entries.push({
-        id: event.id,
-        type: "rotation_changed",
-        participantId: event.participantId,
-        participantName: event.participantName,
-        day: event.slotDate,
-        sortTime: event.startTime,
-        text: `Rotation changed from ${formatRotationValue(
-          event.previousRotationMinutes,
-        )} to ${formatRotationValue(event.newRotationMinutes)} at ${formatTime(
-          event.startTime,
-        )}`,
-        createdAt: event.createdAt,
-      });
       continue;
     }
 
@@ -770,16 +808,6 @@ function formatTime(value: string) {
   return value.slice(0, 5);
 }
 
-function formatRotationValue(value: number | null) {
-  if (value === null) {
-    return "No rotation";
-  }
-
-  return `${new Intl.NumberFormat("en", {
-    maximumFractionDigits: 2,
-  }).format(value)} min`;
-}
-
 function formatTunnelTimeStatus(
   status: TunnelDashboardParticipant["tunnelTimeStatus"],
 ) {
@@ -808,4 +836,43 @@ function formatVisitTimestamp(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatChangeTimestamp(value: string) {
+  const date = new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+  const time = new Intl.DateTimeFormat("en", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+
+  return `${date} - ${time}`;
+}
+
+function formatDuration(totalMinutes: number) {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (hours === 0) {
+    return `${remainder} min`;
+  }
+
+  if (remainder === 0) {
+    return `${hours} h`;
+  }
+
+  return `${hours} h ${remainder} min`;
+}
+
+function formatParticipantTotal(totalMinutes: number) {
+  return `${totalMinutes} min - ${formatDuration(totalMinutes)}`;
+}
+
+function makeSlotKey(slotDate: string, startTime: string) {
+  return `${slotDate}-${formatTime(startTime)}`;
 }

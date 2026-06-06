@@ -75,7 +75,6 @@ export type TunnelDashboardData = {
   stats: {
     totalParticipants: number;
     totalBookedMinutes: number;
-    totalBookedHours: number;
   };
   slots: TunnelDashboardSlot[];
   participants: TunnelDashboardParticipant[];
@@ -313,7 +312,6 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       totalParticipants:
         ((acceptedInterests ?? []) as InterestRow[]).length || participants.length,
       totalBookedMinutes,
-      totalBookedHours: Number((totalBookedMinutes / 60).toFixed(2)),
     },
     slots: normalizedSlots,
     participants,

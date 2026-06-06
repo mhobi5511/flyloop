@@ -26,10 +26,21 @@ export function TunnelDashboardShareButton({
     try {
       await navigator.clipboard.writeText(message);
       setStatus("Message copied.");
+      window.setTimeout(() => {
+        setIsOpen(false);
+        setStatus("");
+      }, 700);
     } catch (error) {
       console.error("Tunnel dashboard message copy failed", error);
       setStatus("Could not copy message.");
     }
+  }
+
+  function completeShareAction() {
+    window.setTimeout(() => {
+      setIsOpen(false);
+      setStatus("");
+    }, 300);
   }
 
   return (
@@ -50,14 +61,14 @@ export function TunnelDashboardShareButton({
           aria-modal="true"
           aria-labelledby={titleId}
         >
-          <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id={titleId} className="text-lg font-black text-slate-950">
                   Share with Tunnel
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Send a short operations note with the dashboard link.
+                  Choose how to send the operations dashboard.
                 </p>
               </div>
               <button
@@ -72,35 +83,33 @@ export function TunnelDashboardShareButton({
               </button>
             </div>
 
-            <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm font-semibold leading-relaxed text-slate-700">
-              {message}
-            </pre>
-
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                onClick={copyMessage}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-black text-white hover:bg-slate-800"
+              >
+                <Clipboard size={16} />
+                Copy message
+              </button>
               <a
                 href={whatsappUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-sm font-black text-white hover:bg-emerald-600"
+                onClick={completeShareAction}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-sm font-black text-white hover:bg-emerald-600"
               >
                 <MessageCircle size={16} />
-                WhatsApp
+                Share via WhatsApp
               </a>
               <a
                 href={emailUrl}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                onClick={completeShareAction}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
               >
                 <Mail size={16} />
-                Email
+                Share via Email
               </a>
-              <button
-                type="button"
-                onClick={copyMessage}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
-              >
-                <Clipboard size={16} />
-                Copy
-              </button>
             </div>
 
             {status ? (

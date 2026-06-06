@@ -198,16 +198,6 @@ export function formatTimetableTime(value: string) {
   return value.slice(0, 5);
 }
 
-export function formatRotation(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return "No rotation";
-  }
-
-  return `Rotation: ${new Intl.NumberFormat("en", {
-    maximumFractionDigits: 2,
-  }).format(value)} min`;
-}
-
 export function formatTimetableMoney(value: number, currency: string) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 2,

@@ -695,54 +695,6 @@ export async function releaseParticipantSlotBooking(
   };
 }
 
-export async function setParticipantSlotRotation(
-  opportunityId: string,
-  bookingId: string,
-  rotationMinutes: number | null,
-): Promise<ActionResult> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, message: "Please log in again." };
-  }
-
-  const normalizedRotation =
-    rotationMinutes === null
-      ? null
-      : Number.isFinite(rotationMinutes)
-        ? Number(rotationMinutes.toFixed(2))
-        : Number.NaN;
-
-  if (normalizedRotation !== null && normalizedRotation <= 0) {
-    return { ok: false, message: "Choose a rotation above 0 minutes." };
-  }
-
-  const { error } = await supabase.rpc("set_opportunity_slot_booking_rotation", {
-    target_opportunity_id: opportunityId,
-    target_booking_id: bookingId,
-    target_rotation_minutes: normalizedRotation,
-  });
-
-  if (error) {
-    console.error("Slot rotation update failed", {
-      opportunityId,
-      bookingId,
-      organizerId: user.id,
-      rotationMinutes: normalizedRotation,
-      error,
-    });
-    return { ok: false, message: "Could not set rotation." };
-  }
-
-  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
-
-  return { ok: true, message: "Rotation updated." };
-}
-
 export async function assignParticipantSlotBooking(
   opportunityId: string,
   slotId: string,

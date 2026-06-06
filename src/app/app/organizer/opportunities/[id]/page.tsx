@@ -29,7 +29,6 @@ import { Avatar } from "@/components/Avatar";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { OrganizerOpportunityActions } from "@/components/OrganizerOpportunityActions";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
-import { SetRotationButton } from "@/components/SetRotationButton";
 import { organizerActivityNotificationTypes } from "@/lib/notifications";
 import {
   formatOpportunityDate,
@@ -46,7 +45,6 @@ import {
   formatTimetableDate,
   formatTimetableMoney,
   formatTimetableTime,
-  formatRotation,
   getTimetableSummary,
   groupTimetableSlotsByDay,
   type TimetableSlot,
@@ -349,7 +347,6 @@ export default async function OrganizerOpportunityPage({
         "- participant schedule",
         "- timetable",
         "- participant contact information",
-        "- rotation settings",
         "- latest changes",
         "",
         "Dashboard:",
@@ -546,16 +543,6 @@ export default async function OrganizerOpportunityPage({
                             {formatTimetableTime(slot.startTime)}
                           </p>
                           <div className="flex items-center gap-2">
-                            {slot.bookings.length > 0 ? (
-                              <SetRotationButton
-                                opportunityId={currentOpportunity.id}
-                                bookings={slot.bookings.map((booking) => ({
-                                  id: booking.id,
-                                  athleteName: booking.athleteName,
-                                  rotationMinutes: booking.rotationMinutes,
-                                }))}
-                              />
-                            ) : null}
                             <p className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-black">
                               {slot.bookings.length} / {slot.capacity} booked
                             </p>
@@ -573,9 +560,6 @@ export default async function OrganizerOpportunityPage({
                                 </p>
                                 <p className="text-xs font-bold text-slate-500">
                                   {booking.minutes} min
-                                </p>
-                                <p className="text-xs font-semibold text-slate-400">
-                                  {formatRotation(booking.rotationMinutes)}
                                 </p>
                               </div>
                               <div className="grid justify-items-end">
