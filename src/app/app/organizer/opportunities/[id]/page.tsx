@@ -86,6 +86,8 @@ type ApplicantRow = {
   status: InterestStatus;
   created_at: string;
   removal_requested_at: string | null;
+  tunnel_time_status: string | null;
+  tunnel_account_email: string | null;
   profiles:
     | {
         id: string;
@@ -190,7 +192,7 @@ export default async function OrganizerOpportunityPage({
 
   const { data: applicants } = await supabase
     .from("opportunity_interests")
-    .select("id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
+    .select("id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
     .eq("opportunity_id", id)
     .neq("interest_type", "timetable_reminder")
     .order("created_at", { ascending: false });
@@ -682,6 +684,29 @@ export default async function OrganizerOpportunityPage({
                         <div className="mt-1 grid gap-0.5 text-xs text-slate-600">
                           <p>{profile?.country ?? "Country not set"}</p>
                           <p>Phone: {phone || "Not provided"}</p>
+                          {!isHuckJam && applicant.status === "accepted" ? (
+                            <>
+                              <p>
+                                Tunnel Time Status:{" "}
+                                <span className="font-bold text-slate-800">
+                                  {formatTunnelTimeStatus(
+                                    applicant.tunnel_time_status,
+                                  )}
+                                </span>
+                              </p>
+                              {applicant.tunnel_account_email ? (
+                                <p>
+                                  Tunnel account email:{" "}
+                                  <a
+                                    href={`mailto:${applicant.tunnel_account_email}`}
+                                    className="font-bold text-sky-700"
+                                  >
+                                    {applicant.tunnel_account_email}
+                                  </a>
+                                </p>
+                              ) : null}
+                            </>
+                          ) : null}
                         </div>
                         {canSendTimetableReminder && profile?.id ? (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -757,6 +782,18 @@ export default async function OrganizerOpportunityPage({
 
 function formatLocation(city?: string | null, country?: string | null) {
   return [city, country].filter(Boolean).join(", ");
+}
+
+function formatTunnelTimeStatus(status: string | null) {
+  if (status === "owns_tunnel_time") {
+    return "Own tunnel time";
+  }
+
+  if (status === "needs_tunnel_time") {
+    return "Needs tunnel time";
+  }
+
+  return "Not provided";
 }
 
 async function getOrCreateTunnelDashboardUrl(

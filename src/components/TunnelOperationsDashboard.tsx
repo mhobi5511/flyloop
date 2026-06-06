@@ -450,6 +450,23 @@ function ParticipantPanel({
           {participant.phone || "Phone not available"}
         </p>
       </div>
+      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+          Tunnel Time
+        </p>
+        <p className="mt-1">{formatTunnelTimeStatus(participant.tunnelTimeStatus)}</p>
+        {participant.tunnelAccountEmail ? (
+          <p className="mt-2">
+            Tunnel Account Email:{" "}
+            <a
+              href={`mailto:${participant.tunnelAccountEmail}`}
+              className="text-sky-700"
+            >
+              {participant.tunnelAccountEmail}
+            </a>
+          </p>
+        ) : null}
+      </div>
       <div className="mt-4 grid gap-3">
         {slotsByDay.map((day) => (
           <section key={day.date}>
@@ -753,6 +770,20 @@ function formatRotationValue(value: number | null) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 2,
   }).format(value)} min`;
+}
+
+function formatTunnelTimeStatus(
+  status: TunnelDashboardParticipant["tunnelTimeStatus"],
+) {
+  if (status === "owns_tunnel_time") {
+    return "Own tunnel time";
+  }
+
+  if (status === "needs_tunnel_time") {
+    return "Needs tunnel time";
+  }
+
+  return "Not provided";
 }
 
 function formatTimeFromIso(value: string) {

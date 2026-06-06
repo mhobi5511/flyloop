@@ -11,7 +11,7 @@ import {
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
-import type { InterestStatus } from "@/lib/types";
+import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 
 type SlotAvailabilityRow = {
   id: string;
@@ -47,7 +47,7 @@ export default async function SlotBookingPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("status,interest_type")
+      .select("status,interest_type,tunnel_time_status,tunnel_account_email")
       .eq("opportunity_id", id)
       .eq("athlete_id", user.id)
       .maybeSingle(),
@@ -149,6 +149,10 @@ export default async function SlotBookingPage({
             priceAppliesToMinutes={opportunity.minMinutesOrHours}
             currency={opportunity.currency}
             slots={slots}
+            initialTunnelTimeStatus={
+              (viewerInterest?.tunnel_time_status as TunnelTimeStatus | null) ?? null
+            }
+            initialTunnelAccountEmail={viewerInterest?.tunnel_account_email ?? null}
             changesClosed={changesClosed}
           />
         </div>

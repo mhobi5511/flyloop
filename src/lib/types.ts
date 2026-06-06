@@ -13,6 +13,8 @@ export type InterestStatus =
 
 export type InterestType = "application" | "timetable_reminder";
 
+export type TunnelTimeStatus = "owns_tunnel_time" | "needs_tunnel_time";
+
 export type ContactMethod = "whatsapp" | "instagram" | "email";
 
 export type Athlete = {

@@ -26,6 +26,8 @@ export type TunnelDashboardParticipant = {
   name: string;
   email: string;
   phone: string;
+  tunnelTimeStatus: "owns_tunnel_time" | "needs_tunnel_time" | null;
+  tunnelAccountEmail: string;
   totalBookedMinutes: number;
   slots: {
     id: string;
@@ -154,6 +156,12 @@ type EventRow = {
     | null;
 };
 
+type InterestRow = {
+  athlete_id: string;
+  tunnel_time_status: "owns_tunnel_time" | "needs_tunnel_time" | null;
+  tunnel_account_email: string | null;
+};
+
 export async function getTunnelDashboardData(secret: string) {
   const supabase = createSupabaseAdminClient();
 
@@ -223,7 +231,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     { data: opportunity },
     { data: slots },
     { data: events },
-    { count: acceptedParticipantCount },
+    { data: acceptedInterests },
     { data: latestEvent },
   ] = await Promise.all([
     supabase
@@ -246,7 +254,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .order("created_at", { ascending: true }),
     supabase
       .from("opportunity_interests")
-      .select("id", { count: "exact", head: true })
+      .select("athlete_id,tunnel_time_status,tunnel_account_email")
       .eq("opportunity_id", link.opportunity_id)
       .eq("status", "accepted")
       .neq("interest_type", "timetable_reminder"),
@@ -268,7 +276,10 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     ...collectParticipantIds((slots ?? []) as SlotRow[]),
   ]);
   const normalizedSlots = normalizeSlots((slots ?? []) as SlotRow[], userEmails);
-  const participants = getParticipants(normalizedSlots);
+  const tunnelTimeByParticipant = getTunnelTimeByParticipant(
+    (acceptedInterests ?? []) as InterestRow[],
+  );
+  const participants = getParticipants(normalizedSlots, tunnelTimeByParticipant);
   const totalBookedMinutes = participants.reduce(
     (total, participant) => total + participant.totalBookedMinutes,
     0,
@@ -299,7 +310,8 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       country: tunnel?.country ?? "",
     },
     stats: {
-      totalParticipants: acceptedParticipantCount ?? participants.length,
+      totalParticipants:
+        ((acceptedInterests ?? []) as InterestRow[]).length || participants.length,
       totalBookedMinutes,
       totalBookedHours: Number((totalBookedMinutes / 60).toFixed(2)),
     },
@@ -340,7 +352,16 @@ function normalizeSlots(rows: SlotRow[], participantEmails: Map<string, string>)
   });
 }
 
-function getParticipants(slots: TunnelDashboardSlot[]) {
+function getParticipants(
+  slots: TunnelDashboardSlot[],
+  tunnelTimeByParticipant: Map<
+    string,
+    {
+      tunnelTimeStatus: TunnelDashboardParticipant["tunnelTimeStatus"];
+      tunnelAccountEmail: string;
+    }
+  >,
+) {
   const participantMap = new Map<string, TunnelDashboardParticipant>();
 
   for (const slot of slots) {
@@ -352,6 +373,10 @@ function getParticipants(slots: TunnelDashboardSlot[]) {
           name: booking.participantName,
           email: booking.participantEmail,
           phone: booking.participantPhone,
+          tunnelTimeStatus:
+            tunnelTimeByParticipant.get(booking.userId)?.tunnelTimeStatus ?? null,
+          tunnelAccountEmail:
+            tunnelTimeByParticipant.get(booking.userId)?.tunnelAccountEmail ?? "",
           totalBookedMinutes: 0,
           slots: [],
         } satisfies TunnelDashboardParticipant);
@@ -376,6 +401,18 @@ function getParticipants(slots: TunnelDashboardSlot[]) {
       ),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getTunnelTimeByParticipant(rows: InterestRow[]) {
+  return new Map(
+    rows.map((row) => [
+      row.athlete_id,
+      {
+        tunnelTimeStatus: row.tunnel_time_status,
+        tunnelAccountEmail: row.tunnel_account_email ?? "",
+      },
+    ]),
+  );
 }
 
 function normalizeEvents(rows: EventRow[]) {

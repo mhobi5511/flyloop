@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
-import type { InterestStatus } from "@/lib/types";
+import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 
 type ActionResult =
   | { ok: true; message: string; status?: InterestStatus }
@@ -491,6 +491,10 @@ export async function deleteOpportunity(
 export async function bookOpportunitySlots(
   opportunityId: string,
   slotIds: string[],
+  tunnelTime: {
+    status: TunnelTimeStatus | "";
+    accountEmail: string;
+  },
 ): Promise<ActionResult> {
   const uniqueSlotIds = [...new Set(slotIds)].filter(Boolean);
 
@@ -506,6 +510,17 @@ export async function bookOpportunitySlots(
 
   if (userError || !user) {
     return { ok: false, message: "Please log in again." };
+  }
+
+  const tunnelTimeResult = await saveTunnelTimeStatus(
+    supabase,
+    opportunityId,
+    user.id,
+    tunnelTime,
+  );
+
+  if (!tunnelTimeResult.ok) {
+    return tunnelTimeResult;
   }
 
   const { error } = await supabase.rpc("book_opportunity_slots", {
@@ -560,6 +575,42 @@ export async function bookOpportunitySlots(
   return { ok: true, message: "Your slots are booked." };
 }
 
+export async function setCampTunnelTimeStatus(
+  opportunityId: string,
+  tunnelTime: {
+    status: TunnelTimeStatus | "";
+    accountEmail: string;
+  },
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const result = await saveTunnelTimeStatus(
+    supabase,
+    opportunityId,
+    user.id,
+    tunnelTime,
+  );
+
+  if (!result.ok) {
+    return result;
+  }
+
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/applications");
+  revalidatePath("/app/dashboard");
+
+  return { ok: true, message: "Tunnel time status saved." };
+}
+
 export async function releaseOwnOpportunitySlot(
   opportunityId: string,
   slotId: string,
@@ -608,4 +659,67 @@ export async function releaseOwnOpportunitySlot(
     ok: true,
     message: Number(releasedCount) > 0 ? "Slot released." : "No booked slot to release.",
   };
+}
+
+async function saveTunnelTimeStatus(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+  userId: string,
+  tunnelTime: {
+    status: TunnelTimeStatus | "";
+    accountEmail: string;
+  },
+): Promise<ActionResult> {
+  if (
+    tunnelTime.status !== "owns_tunnel_time" &&
+    tunnelTime.status !== "needs_tunnel_time"
+  ) {
+    return { ok: false, message: "Choose your tunnel time status." };
+  }
+
+  const tunnelAccountEmail = tunnelTime.accountEmail.trim().toLowerCase();
+
+  if (tunnelTime.status === "owns_tunnel_time") {
+    if (!tunnelAccountEmail) {
+      return {
+        ok: false,
+        message: "Enter the email address used for your tunnel account.",
+      };
+    }
+
+    if (!isEmailInput(tunnelAccountEmail)) {
+      return { ok: false, message: "Enter a valid tunnel account email address." };
+    }
+  }
+
+  const { error } = await supabase.rpc(
+    "set_opportunity_participant_tunnel_time_status",
+    {
+      target_opportunity_id: opportunityId,
+      target_tunnel_time_status: tunnelTime.status,
+      target_tunnel_account_email:
+        tunnelTime.status === "owns_tunnel_time" ? tunnelAccountEmail : null,
+    },
+  );
+
+  if (error) {
+    console.error("Tunnel time status update failed", {
+      opportunityId,
+      userId,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return {
+      ok: false,
+      message: error.message || "Could not save tunnel time status.",
+    };
+  }
+
+  return { ok: true, message: "Tunnel time status saved." };
+}
+
+function isEmailInput(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }

@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import {
   bookOpportunitySlots,
   releaseOwnOpportunitySlot,
+  setCampTunnelTimeStatus,
 } from "@/app/app/opportunities/actions";
 import {
   calculateEstimatedCost,
   getPriceAppliesToMinutesNumber,
 } from "@/lib/timetable";
+import type { TunnelTimeStatus } from "@/lib/types";
 
 type SlotOption = {
   id: string;
@@ -29,6 +31,8 @@ type SlotBookingSelectorProps = {
   priceAppliesToMinutes?: string | null;
   currency: string;
   slots: SlotOption[];
+  initialTunnelTimeStatus?: TunnelTimeStatus | null;
+  initialTunnelAccountEmail?: string | null;
   changesClosed?: boolean;
 };
 
@@ -38,6 +42,8 @@ export function SlotBookingSelector({
   priceAppliesToMinutes,
   currency,
   slots,
+  initialTunnelTimeStatus = null,
+  initialTunnelAccountEmail = null,
   changesClosed = false,
 }: SlotBookingSelectorProps) {
   const router = useRouter();
@@ -46,6 +52,12 @@ export function SlotBookingSelector({
     [slots],
   );
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(bookedSlotIds);
+  const [tunnelTimeStatus, setTunnelTimeStatus] = useState<TunnelTimeStatus | "">(
+    initialTunnelTimeStatus ?? "",
+  );
+  const [tunnelAccountEmail, setTunnelAccountEmail] = useState(
+    initialTunnelAccountEmail ?? "",
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -58,6 +70,13 @@ export function SlotBookingSelector({
   );
   const hasPendingChanges =
     newSelectedSlotIds.length > 0 || removedBookedSlotIds.length > 0;
+  const hasTunnelTimeStatusChange =
+    selectedSlotIds.length > 0 &&
+    (tunnelTimeStatus !== (initialTunnelTimeStatus ?? "") ||
+      normalizedEmail(tunnelAccountEmail) !==
+        normalizedEmail(initialTunnelAccountEmail ?? ""));
+  const canSave =
+    hasPendingChanges || (hasTunnelTimeStatusChange && selectedSlotIds.length > 0);
   const selectedCount = selectedSlotIds.length;
   const totalMinutes = selectedSlots.reduce(
     (sum, slot) => sum + slot.durationMinutes,
@@ -93,7 +112,34 @@ export function SlotBookingSelector({
     setMessage("");
     setError("");
 
+    if (selectedSlotIds.length > 0) {
+      const tunnelTimeError = getTunnelTimeError(
+        tunnelTimeStatus,
+        tunnelAccountEmail,
+      );
+
+      if (tunnelTimeError) {
+        setError(tunnelTimeError);
+        return;
+      }
+    }
+
     startTransition(async () => {
+      let statusResult: Awaited<ReturnType<typeof setCampTunnelTimeStatus>> | null =
+        null;
+
+      if (selectedSlotIds.length > 0) {
+        statusResult = await setCampTunnelTimeStatus(opportunityId, {
+          status: tunnelTimeStatus,
+          accountEmail: tunnelAccountEmail,
+        });
+
+        if (!statusResult.ok) {
+          setError(statusResult.message);
+          return;
+        }
+      }
+
       for (const slotId of removedBookedSlotIds) {
         const releaseResult = await releaseOwnOpportunitySlot(opportunityId, slotId);
 
@@ -105,8 +151,11 @@ export function SlotBookingSelector({
 
       const result =
         newSelectedSlotIds.length > 0
-          ? await bookOpportunitySlots(opportunityId, newSelectedSlotIds)
-          : { ok: true as const, message: "Your slots were updated." };
+          ? await bookOpportunitySlots(opportunityId, newSelectedSlotIds, {
+              status: tunnelTimeStatus,
+              accountEmail: tunnelAccountEmail,
+            })
+          : statusResult ?? { ok: true as const, message: "Your slots were updated." };
 
       if (!result.ok) {
         setError(result.message);
@@ -213,6 +262,51 @@ export function SlotBookingSelector({
         <p className="mb-2 text-center text-xs font-bold text-slate-500">
           {formatMoney(price, currency)} per {priceBasisMinutes} min
         </p>
+        {selectedSlotIds.length > 0 ? (
+          <section className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left">
+            <h2 className="text-sm font-black text-slate-950">Tunnel Time</h2>
+            <div className="mt-2 grid gap-2">
+              <label className="flex gap-2 rounded-lg bg-white px-2.5 py-2 text-sm font-bold text-slate-700">
+                <input
+                  type="radio"
+                  name="tunnel-time-status"
+                  value="owns_tunnel_time"
+                  checked={tunnelTimeStatus === "owns_tunnel_time"}
+                  onChange={() => setTunnelTimeStatus("owns_tunnel_time")}
+                  className="mt-1"
+                />
+                <span>I already have tunnel time at this tunnel</span>
+              </label>
+              <label className="flex gap-2 rounded-lg bg-white px-2.5 py-2 text-sm font-bold text-slate-700">
+                <input
+                  type="radio"
+                  name="tunnel-time-status"
+                  value="needs_tunnel_time"
+                  checked={tunnelTimeStatus === "needs_tunnel_time"}
+                  onChange={() => setTunnelTimeStatus("needs_tunnel_time")}
+                  className="mt-1"
+                />
+                <span>I need to purchase tunnel time</span>
+              </label>
+            </div>
+            {tunnelTimeStatus === "owns_tunnel_time" ? (
+              <label className="mt-3 grid gap-1 text-sm font-bold text-slate-700">
+                Email address used for the tunnel account
+                <input
+                  type="email"
+                  value={tunnelAccountEmail}
+                  onChange={(event) => setTunnelAccountEmail(event.target.value)}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 font-semibold outline-none focus:border-sky-400"
+                  placeholder="name@example.com"
+                />
+                <span className="text-xs font-semibold text-slate-500">
+                  Please enter the email address that you used to purchase or
+                  manage your tunnel time at this tunnel.
+                </span>
+              </label>
+            ) : null}
+          </section>
+        ) : null}
         <div className="grid grid-cols-3 gap-2 text-center">
           <SummaryValue label="Slots" value={String(selectedCount)} />
           <SummaryValue label="Minutes" value={String(totalMinutes)} />
@@ -223,7 +317,7 @@ export function SlotBookingSelector({
         </div>
         <button
           type="button"
-          disabled={changesClosed || isPending || !hasPendingChanges}
+          disabled={changesClosed || isPending || !canSave}
           onClick={saveSlotChanges}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >
@@ -286,4 +380,31 @@ function formatMoney(value: number, currency: string) {
   return `${new Intl.NumberFormat("en", {
     maximumFractionDigits: 2,
   }).format(value)} ${currency}`;
+}
+
+function getTunnelTimeError(
+  status: TunnelTimeStatus | "",
+  accountEmail: string,
+) {
+  if (!status) {
+    return "Choose your tunnel time status.";
+  }
+
+  if (status === "owns_tunnel_time") {
+    const email = normalizedEmail(accountEmail);
+
+    if (!email) {
+      return "Enter the email address used for your tunnel account.";
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return "Enter a valid tunnel account email address.";
+    }
+  }
+
+  return "";
+}
+
+function normalizedEmail(value: string) {
+  return value.trim().toLowerCase();
 }
