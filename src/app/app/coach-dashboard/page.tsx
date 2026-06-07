@@ -151,8 +151,7 @@ export default async function CoachDashboardPage({
       .select("id,title,body,type,created_at,opportunity_id")
       .eq("user_id", user.id)
       .in("type", [...organizerActivityNotificationTypes])
-      .order("created_at", { ascending: false })
-      .limit(20),
+      .order("created_at", { ascending: false }),
     supabase
       .from("tunnel_profiles")
       .select("id,name,city,country")
@@ -305,13 +304,6 @@ export default async function CoachDashboardPage({
       opportunity.type === "camp" && tunnelDashboardLink?.secret
         ? getTunnelDashboardUrl(tunnelDashboardLink.secret)
         : "";
-    const tunnelDashboardShareText = tunnelDashboardUrl
-      ? getTunnelDashboardShareText({
-          title: opportunity.title,
-          url: tunnelDashboardUrl,
-          coachName: profile?.full_name?.trim() || "Coach",
-        })
-      : "";
 
     return {
       id: opportunity.id,
@@ -334,7 +326,6 @@ export default async function CoachDashboardPage({
       tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
       tunnelLocation: [tunnel?.city, tunnel?.country].filter(Boolean).join(", "),
       tunnelDashboardUrl,
-      tunnelDashboardShareText,
       dateLabel: formatOpportunityDate(
         opportunity.type,
         opportunity.start_date,
@@ -391,34 +382,4 @@ function compareWorkspaceOpportunities(
 function getDefaultSelectedCampId(camps: Array<{ id: string; endDate: string }>) {
   const today = new Date().toISOString().slice(0, 10);
   return camps.find((camp) => camp.endDate >= today)?.id ?? camps[0]?.id;
-}
-
-function getTunnelDashboardShareText({
-  title,
-  url,
-  coachName,
-}: {
-  title: string;
-  url: string;
-  coachName: string;
-}) {
-  return [
-    "Hello,",
-    "",
-    `Here is the Flyloop Operations Dashboard for ${title}.`,
-    "",
-    "This dashboard reflects the current camp planning and updates whenever changes are made.",
-    "",
-    "You can use it to view:",
-    "- participant schedule",
-    "- timetable",
-    "- participant contact information",
-    "- latest changes",
-    "",
-    "Dashboard:",
-    url,
-    "",
-    "Kind regards,",
-    coachName,
-  ].join("\n");
 }

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -10,8 +11,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Copy,
-  ExternalLink,
   MapPin,
   Menu,
   PanelLeftClose,
@@ -30,6 +29,7 @@ import {
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
 import {
+  sendCoachDashboardSlotReminder,
   saveCampTimetable,
   type TimetableSlotInput,
 } from "@/app/app/organizer/opportunities/actions";
@@ -100,7 +100,6 @@ type CampWorkspace = {
   tunnelName: string;
   tunnelLocation: string;
   tunnelDashboardUrl: string;
-  tunnelDashboardShareText: string;
   dateLabel: string;
   participants: Participant[];
   timetableSlots: TimetableSlot[];
@@ -297,8 +296,7 @@ export function CoachDashboardWorkspace({
   const attention = getAttentionItems(activeCamp);
   const assignableParticipants = getAssignableParticipants(activeCamp);
   const scopedActivity = activity
-    .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id)
-    .slice(0, 8);
+    .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id);
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
@@ -371,8 +369,11 @@ export function CoachDashboardWorkspace({
                 />
               </div>
             </div>
-            <div className="relative grid h-full content-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950">
-              <div className="grid gap-2">
+            <div className="relative grid h-full content-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950">
+              <div className="grid gap-1.5">
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
+                  Utilities
+                </p>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -383,7 +384,7 @@ export function CoachDashboardWorkspace({
                     }
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   >
-                    <Share2 size={16} /> Share
+                    <Share2 size={17} /> Share
                   </button>
                   <button
                     type="button"
@@ -394,30 +395,35 @@ export function CoachDashboardWorkspace({
                     }
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   >
-                    <Activity size={16} /> Activity
+                    <Activity size={17} /> Activity
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsSettingsOpen(true)}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   >
-                    <Settings size={16} /> Settings
+                    <Settings size={17} /> Settings
                   </button>
                 </div>
+              </div>
+              <div className="grid gap-1.5">
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
+                  Create
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setCreationType("camp")}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700"
                   >
-                    <Plus size={16} /> New Camp
+                    <Plus size={17} /> New Camp
                   </button>
                   <button
                     type="button"
                     onClick={() => setCreationType("huck_jam")}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700"
                   >
-                    <Plus size={16} /> New Huck Jam
+                    <Plus size={17} /> New Huck Jam
                   </button>
                 </div>
               </div>
@@ -529,11 +535,11 @@ export function CoachDashboardWorkspace({
           <div className="grid min-w-0 gap-4">
           <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-xl font-black tracking-tight">Live Timetable</h2>
-                <p className="mt-0.5 text-sm font-bold text-slate-500">
+              <div className="flex min-w-0 items-baseline gap-3">
+                <h2 className="shrink-0 text-xl font-black tracking-tight">Schedule</h2>
+                <p className="truncate text-xs font-black uppercase tracking-[0.12em] text-slate-400">
                   {visibleDays.length > desktopDays.length
-                    ? `${clampedDesktopDayStart + 1}-${clampedDesktopDayStart + desktopDays.length} of ${visibleDays.length} days`
+                    ? `${clampedDesktopDayStart + 1}-${clampedDesktopDayStart + desktopDays.length} days of ${visibleDays.length} days`
                     : `${visibleDays.length} day${visibleDays.length === 1 ? "" : "s"}`}
                 </p>
               </div>
@@ -576,7 +582,7 @@ export function CoachDashboardWorkspace({
                     key={day.date}
                     className="min-w-0 rounded-xl border border-slate-200 bg-slate-50"
                   >
-                    <div className="border-b border-slate-200 px-3 py-2">
+                    <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-3 py-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <h3 className="text-sm font-black text-slate-950">
@@ -598,12 +604,17 @@ export function CoachDashboardWorkspace({
                       {day.slots.length > 0 ? (
                         day.slots.map((slot) => {
                           const isFull = slot.bookings.length >= slot.capacity;
+                          const isSelectedSlot = slot.bookings.some(
+                            (booking) => booking.id === activeBookingActionId,
+                          );
 
                           return (
                             <article
                               key={slot.id}
-                              className={`relative rounded-xl border bg-white p-2 shadow-sm ${
-                                isFull
+                              className={`relative rounded-xl border bg-white p-2 shadow-sm transition ${
+                                isSelectedSlot
+                                  ? "border-sky-300 bg-sky-50/60 ring-2 ring-sky-100"
+                                  : isFull
                                   ? "border-emerald-200"
                                   : "border-slate-200"
                               }`}
@@ -740,7 +751,7 @@ export function CoachDashboardWorkspace({
         <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-black tracking-tight">Live Timetable</h2>
+              <h2 className="text-lg font-black tracking-tight">Schedule</h2>
               <p className="mt-0.5 text-xs font-bold text-slate-500">
                 {activeCamp.dateLabel}
               </p>
@@ -765,7 +776,7 @@ export function CoachDashboardWorkspace({
                   key={day.date}
                   className="min-w-0 rounded-xl border border-slate-200 bg-slate-50"
                 >
-                  <div className="border-b border-slate-200 px-3 py-2">
+                  <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-3 py-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <h3 className="text-sm font-black text-slate-950">
@@ -879,8 +890,6 @@ export function CoachDashboardWorkspace({
           key={`tablet-${activeCamp.id}`}
           camp={activeCamp}
           tunnels={tunnels}
-          publicUrl={publicUrl}
-          shareText={shareText}
         />
       </main>
 
@@ -971,7 +980,6 @@ export function CoachDashboardWorkspace({
             publicUrl={publicUrl}
             shareText={shareText}
             tunnelDashboardUrl={activeCamp.tunnelDashboardUrl}
-            tunnelDashboardShareText={activeCamp.tunnelDashboardShareText}
           />
         </CenteredModal>
       ) : null}
@@ -986,8 +994,6 @@ export function CoachDashboardWorkspace({
             key={`modal-${activeCamp.id}`}
             camp={activeCamp}
             tunnels={tunnels}
-            publicUrl={publicUrl}
-            shareText={shareText}
           />
         </CenteredModal>
       ) : null}
@@ -1268,9 +1274,9 @@ function AddSlotButton({
   const [isOpen, setIsOpen] = useState(false);
   const [startTime, setStartTime] = useState("15:00");
   const [durationMinutes, setDurationMinutes] = useState(15);
-  const [capacity, setCapacity] = useState(2);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const capacity = getSlotCapacity(durationMinutes);
 
   function save() {
     setError("");
@@ -1314,8 +1320,9 @@ function AddSlotButton({
       >
         <Plus size={14} /> Add Slot
       </button>
-      {isOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
@@ -1342,20 +1349,16 @@ function AddSlotButton({
                 >
                   <option value={10}>10 minutes</option>
                   <option value={15}>15 minutes</option>
-                  <option value={30}>30 minutes</option>
-                  <option value={60}>60 minutes</option>
                 </select>
               </DashboardField>
-              <DashboardField label="Capacity">
-                <input
-                  inputMode="numeric"
-                  value={capacity}
-                  onChange={(event) =>
-                    setCapacity(Math.max(1, Number(event.target.value) || 1))
-                  }
-                  className={dashboardInputClass}
-                />
-              </DashboardField>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                  Capacity
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-950">
+                  {capacity} athletes
+                </p>
+              </div>
             </div>
             {error ? (
               <p className="mt-3 rounded-xl bg-rose-50 p-2 text-sm font-bold text-rose-700">
@@ -1380,8 +1383,10 @@ function AddSlotButton({
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </>
   );
 }
@@ -1389,13 +1394,9 @@ function AddSlotButton({
 function CampSettingsPanel({
   camp,
   tunnels,
-  publicUrl,
-  shareText,
 }: {
   camp: CampWorkspace;
   tunnels: TunnelOption[];
-  publicUrl: string;
-  shareText: string;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -1476,11 +1477,8 @@ function CampSettingsPanel({
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="inline-flex items-center gap-2 text-base font-black">
-          <Settings size={17} /> Camp settings
-        </h2>
-        {camp.status === "draft" ? (
+      {camp.status === "draft" ? (
+        <div className="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={publish}
@@ -1489,8 +1487,8 @@ function CampSettingsPanel({
           >
             Publish
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       <div className="mt-3 grid gap-2">
         <DashboardField label="Camp Name">
           <input
@@ -1629,22 +1627,6 @@ function CampSettingsPanel({
       >
         <Save size={16} /> {isPending ? "Saving..." : "Save immediately"}
       </button>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <ShareOpportunityButton
-          label="Share"
-          shareText={shareText}
-          url={publicUrl}
-          compact
-          fill
-        />
-        <button
-          type="button"
-          onClick={() => navigator.clipboard?.writeText(publicUrl)}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm font-black text-slate-700"
-        >
-          <Copy size={16} /> Copy Link
-        </button>
-      </div>
       {message ? (
         <p className="mt-2 rounded-xl bg-emerald-50 p-2 text-sm font-bold text-emerald-700">
           {message}
@@ -1755,7 +1737,68 @@ function ParticipantPanel({
           currentStatus={participant.status}
         />
       </div>
+      {participant.status === "accepted" &&
+      bookedSlots.length === 0 &&
+      participant.userId ? (
+        <div className="mt-2">
+          <ParticipantSlotReminderButton
+            opportunityId={camp.id}
+            participantId={participant.userId}
+          />
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function ParticipantSlotReminderButton({
+  opportunityId,
+  participantId,
+}: {
+  opportunityId: string;
+  participantId: string;
+}) {
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function sendReminder() {
+    setMessage("");
+    setError("");
+
+    startTransition(async () => {
+      const result = await sendCoachDashboardSlotReminder(
+        opportunityId,
+        participantId,
+      );
+
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      setMessage(result.message);
+    });
+  }
+
+  return (
+    <div className="grid gap-1.5">
+      <button
+        type="button"
+        onClick={sendReminder}
+        disabled={isPending}
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-black text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:bg-slate-100 disabled:text-slate-400"
+      >
+        <Clock3 size={16} />
+        {isPending ? "Sending..." : "Send reminder"}
+      </button>
+      {message ? (
+        <p className="text-center text-xs font-bold text-emerald-700">{message}</p>
+      ) : null}
+      {error ? (
+        <p className="text-center text-xs font-bold text-rose-700">{error}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1763,19 +1806,14 @@ function SharePanel({
   publicUrl,
   shareText,
   tunnelDashboardUrl = "",
-  tunnelDashboardShareText = "",
 }: {
   publicUrl: string;
   shareText: string;
   tunnelDashboardUrl?: string;
-  tunnelDashboardShareText?: string;
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <h2 className="inline-flex items-center gap-2 text-base font-black">
-        <Share2 size={17} /> Share
-      </h2>
-      <div className="mt-3 grid gap-2">
+      <div className="grid gap-2">
         <ShareOpportunityButton
           label="Invite Athlete"
           shareText={shareText}
@@ -1786,19 +1824,12 @@ function SharePanel({
         {tunnelDashboardUrl ? (
           <ShareOpportunityButton
             label="Tunnel Operations Dashboard"
-            shareText={tunnelDashboardShareText || tunnelDashboardUrl}
+            shareText={tunnelDashboardUrl}
             url={tunnelDashboardUrl}
             compact
             fill
           />
         ) : null}
-        <Link
-          href={publicUrl}
-          target="_blank"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm font-black text-slate-700"
-        >
-          <ExternalLink size={16} /> Open Camp Link
-        </Link>
       </div>
     </section>
   );
@@ -1807,10 +1838,7 @@ function SharePanel({
 function ActivityPanel({ activity }: { activity: ActivityItem[] }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <h2 className="inline-flex items-center gap-2 text-base font-black">
-        <Activity size={17} /> Activity
-      </h2>
-      <div className="mt-3 grid gap-2">
+      <div className="grid gap-2">
         {activity.length > 0 ? (
           activity.map((item) => (
             <article key={item.id} className="rounded-xl bg-slate-50 p-2">
@@ -1869,6 +1897,10 @@ function DashboardField({
 
 const dashboardInputClass =
   "min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-sky-400";
+
+function getSlotCapacity(durationMinutes: number) {
+  return durationMinutes === 10 ? 3 : 2;
+}
 
 function getVisibleTimetableDays(
   camp: CampWorkspace,

@@ -23,6 +23,7 @@ type ExistingTimetableSlotWithBookings = {
   duration_minutes: number;
   capacity: number;
   is_published: boolean;
+  published_at: string | null;
   opportunity_slot_bookings:
     | Array<{ user_id: string }>
     | { user_id: string }
@@ -388,7 +389,7 @@ export async function saveCampTimetable(
 
   const { data: existingSlots, error: existingError } = await supabase
     .from("opportunity_time_slots")
-    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(user_id)")
+    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,published_at,opportunity_slot_bookings(user_id)")
     .eq("opportunity_id", opportunityId);
 
   if (existingError) {
@@ -428,14 +429,22 @@ export async function saveCampTimetable(
   }
 
   for (const slot of normalizedSlots) {
+    const existingSlot = slot.id
+      ? existingSlotRows.find((existing) => existing.id === slot.id)
+      : null;
+    const keepPublished = publish || existingSlot?.is_published === true;
     const payload = {
       opportunity_id: opportunityId,
       slot_date: slot.slotDate,
       start_time: slot.startTime,
       duration_minutes: slot.durationMinutes,
       capacity: slot.capacity,
-      is_published: publish,
-      published_at: publish ? timestamp : null,
+      is_published: keepPublished,
+      published_at: publish
+        ? timestamp
+        : keepPublished
+          ? existingSlot?.published_at ?? timestamp
+          : null,
     };
 
     if (slot.id && existingIds.has(slot.id)) {
@@ -562,6 +571,163 @@ export async function sendTimetableBookingReminder(
   }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+
+  return { ok: true, message: "Reminder sent." };
+}
+
+export async function sendCoachDashboardSlotReminder(
+  opportunityId: string,
+  participantId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("id,title,booking_mode,created_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityError) {
+    console.error("Coach dashboard reminder opportunity lookup failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      error: opportunityError,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  if (!opportunity || opportunity.created_by !== user.id) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  const { data: participantInterest, error: participantError } = await supabase
+    .from("opportunity_interests")
+    .select("id")
+    .eq("opportunity_id", opportunityId)
+    .eq("athlete_id", participantId)
+    .eq("status", "accepted")
+    .maybeSingle();
+
+  if (participantError) {
+    console.error("Coach dashboard reminder participant lookup failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      error: participantError,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  if (!participantInterest) {
+    return { ok: false, message: "Only accepted participants can be reminded." };
+  }
+
+  const { data: existingBooking, error: bookingError } = await supabase
+    .from("opportunity_slot_bookings")
+    .select("id")
+    .eq("opportunity_id", opportunityId)
+    .eq("user_id", participantId)
+    .limit(1)
+    .maybeSingle();
+
+  if (bookingError) {
+    console.error("Coach dashboard reminder booking lookup failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      error: bookingError,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  if (existingBooking) {
+    return { ok: false, message: "This participant already has flying times." };
+  }
+
+  const { data: coachProfile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  const coachName = coachProfile?.full_name?.trim() || "Your coach";
+  const title = "Choose your flying times";
+  const body =
+    opportunity.booking_mode === "direct_time_booking"
+      ? `${coachName} reminded you to select your flying times for ${opportunity.title}.`
+      : `${coachName} reminded you that your flying times still need to be assigned for ${opportunity.title}.`;
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (!adminSupabase) {
+    console.error("Coach dashboard reminder failed: missing admin Supabase client", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  const { data: existingNotification, error: existingNotificationError } =
+    await adminSupabase
+      .from("notifications")
+      .select("id")
+      .eq("user_id", participantId)
+      .eq("opportunity_id", opportunityId)
+      .eq("type", "timetable_booking_reminder")
+      .maybeSingle();
+
+  if (existingNotificationError) {
+    console.error("Coach dashboard reminder notification lookup failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      error: existingNotificationError,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  const notificationPayload = {
+    user_id: participantId,
+    title,
+    body,
+    type: "timetable_booking_reminder",
+    opportunity_id: opportunityId,
+    read: false,
+    push_sent_at: null,
+  };
+
+  const notificationResult = existingNotification
+    ? await adminSupabase
+        .from("notifications")
+        .update({ ...notificationPayload, created_at: new Date().toISOString() })
+        .eq("id", existingNotification.id)
+    : await adminSupabase.from("notifications").insert(notificationPayload);
+
+  if (notificationResult.error) {
+    console.error("Coach dashboard reminder notification write failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      error: notificationResult.error,
+    });
+    return { ok: false, message: "Could not send reminder." };
+  }
+
+  await sendServerPush([participantId], "timetable_booking_reminder", {
+    opportunityId,
+    types: ["timetable_booking_reminder"],
+  });
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath("/app/coach-dashboard");
 
   return { ok: true, message: "Reminder sent." };
 }
@@ -717,6 +883,60 @@ export async function assignParticipantSlotBooking(
 
   if (!slotId || !participantId) {
     return { ok: false, message: "Choose a participant and slot." };
+  }
+
+  const { data: slot, error: slotLookupError } = await supabase
+    .from("opportunity_time_slots")
+    .select("id,opportunity_id,is_published,opportunities(created_by)")
+    .eq("id", slotId)
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
+  if (slotLookupError) {
+    console.error("Coach slot lookup failed", {
+      opportunityId,
+      slotId,
+      participantId,
+      organizerId: user.id,
+      code: slotLookupError.code,
+      message: slotLookupError.message,
+      details: slotLookupError.details,
+      hint: slotLookupError.hint,
+    });
+    return { ok: false, message: "Could not assign slot." };
+  }
+
+  const slotOpportunity = Array.isArray(slot?.opportunities)
+    ? slot?.opportunities[0]
+    : slot?.opportunities;
+
+  if (!slot || slotOpportunity?.created_by !== user.id) {
+    return { ok: false, message: "Slot is no longer available" };
+  }
+
+  if (!slot.is_published) {
+    const { error: publishSlotError } = await supabase
+      .from("opportunity_time_slots")
+      .update({
+        is_published: true,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", slotId)
+      .eq("opportunity_id", opportunityId);
+
+    if (publishSlotError) {
+      console.error("Coach slot publish before assignment failed", {
+        opportunityId,
+        slotId,
+        participantId,
+        organizerId: user.id,
+        code: publishSlotError.code,
+        message: publishSlotError.message,
+        details: publishSlotError.details,
+        hint: publishSlotError.hint,
+      });
+      return { ok: false, message: "Could not assign slot." };
+    }
   }
 
   const { error } = await supabase.rpc("assign_opportunity_slot_booking", {
