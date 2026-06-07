@@ -9,7 +9,6 @@ import {
   Mail,
   Phone,
   RefreshCw,
-  UserRound,
   Users,
 } from "lucide-react";
 import type {
@@ -168,30 +167,29 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                 <Image
                   src="/flyloop-icon-192.png"
                   alt="Flyloop"
-                  width={32}
-                  height={32}
-                  className="size-8 rounded-lg"
+                  width={40}
+                  height={40}
+                  className="size-10 rounded-xl"
                 />
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
+                  <p className="text-sm font-black uppercase tracking-[0.16em] text-sky-700">
                     Tunnel Operations Dashboard
                   </p>
-                  <p className="text-xs font-bold text-slate-500">
+                  <p className="text-sm font-bold text-slate-500">
                     Powered by Flyloop
                   </p>
                 </div>
               </div>
-              <h1 className="mt-1 text-3xl font-black tracking-tight">
-                {data.opportunity.title}
-              </h1>
-              <div className="mt-2 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
-                <InfoPill icon={<UserRound size={15} />} label={data.coach.name} />
-                <InfoPill
-                  icon={<CalendarDays size={15} />}
-                  label={`${formatDay(data.opportunity.startDate)} - ${formatDay(
-                    data.opportunity.endDate,
-                  )}`}
+              <div className="mt-2 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <h1 className="text-3xl font-black tracking-tight">
+                  {data.opportunity.title}
+                </h1>
+                <DateCard
+                  startDate={data.opportunity.startDate}
+                  endDate={data.opportunity.endDate}
                 />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
                 <InfoPill
                   icon={<Clock3 size={15} />}
                   label={`Loaded ${formatTimeFromIso(data.loadedAt)}`}
@@ -358,6 +356,24 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
         {label}
       </p>
       <p className="text-2xl font-black text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function DateCard({ startDate, endDate }: { startDate: string; endDate: string }) {
+  return (
+    <div className="inline-flex min-h-16 min-w-[13rem] items-center gap-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-2 text-slate-950 shadow-sm">
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm">
+        <CalendarDays size={20} />
+      </span>
+      <span className="grid">
+        <span className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
+          Camp Date
+        </span>
+        <span className="text-lg font-black">
+          {formatDay(startDate)} - {formatDay(endDate)}
+        </span>
+      </span>
     </div>
   );
 }
