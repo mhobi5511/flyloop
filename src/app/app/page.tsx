@@ -266,9 +266,16 @@ export default async function AppHomePage({
 
       <section className="mt-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold tracking-tight text-slate-950">
-            {useRadiusFilter ? "Opportunities Near You" : "Recommended Opportunities"}
-          </h2>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-slate-950">
+              {useRadiusFilter ? "Opportunities Near You" : "Recommended Opportunities"}
+            </h2>
+            <p className="mt-0.5 text-sm font-semibold text-slate-500">
+              {useRadiusFilter
+                ? "Based on your preferences and location."
+                : "Based on your profile and upcoming availability."}
+            </p>
+          </div>
           {discoveryFeed.length > visibleDiscoveryFeed.length ? (
             <Link
               href="#find-camps-worldwide"

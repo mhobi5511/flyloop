@@ -109,6 +109,9 @@ export function OpportunityCard({
             <h3 className={`${dense ? "line-clamp-1 text-base" : "text-lg"} font-bold tracking-tight text-slate-950`}>
               {opportunity.title}
             </h3>
+            {dense ? (
+              <DateLine dateLabel={dateLabel} sessionRange={sessionRange} />
+            ) : null}
             <div className={`${dense ? "mt-0.5 gap-0 text-xs" : "mt-1 gap-0.5 text-sm"} grid text-slate-600`}>
               <p className="line-clamp-1">{view.coachDisplayName ?? "Organizer-led"}</p>
               <p className="font-semibold text-slate-700">
@@ -146,11 +149,8 @@ export function OpportunityCard({
             <div className="mt-2 flex items-end justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                  <CalendarDays size={14} className="shrink-0 text-sky-600" />
-                  <span className="line-clamp-1">
-                    {dateLabel}
-                    {sessionRange ? ` - ${sessionRange}` : ""} - {capacityLines[0]}
-                  </span>
+                  <Users size={14} className="shrink-0 text-sky-600" />
+                  <span>{capacityLines[0]}</span>
                 </div>
                 {capacityLines[1] ? (
                   <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -168,21 +168,11 @@ export function OpportunityCard({
           </>
         ) : (
           <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
+            <DateLine dateLabel={dateLabel} sessionRange={sessionRange} />
             <div className="flex items-center gap-1.5">
-              <CalendarDays size={15} className="text-sky-600" />
-              <span>{dateLabel}</span>
+              <MapPin size={15} className="text-sky-600" />
+              <span>{location}</span>
             </div>
-            {sessionRange ? (
-              <div className="flex items-center gap-1.5">
-                <CalendarDays size={15} className="text-sky-600" />
-                <span>{sessionRange}</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <MapPin size={15} className="text-sky-600" />
-                <span>{location}</span>
-              </div>
-            )}
             <div className="flex items-center gap-1.5">
               <Users size={15} className="text-sky-600" />
               <span>{capacityLines[0]}</span>
@@ -197,6 +187,24 @@ export function OpportunityCard({
         )}
       </div>
     </Link>
+  );
+}
+
+function DateLine({
+  dateLabel,
+  sessionRange,
+}: {
+  dateLabel: string;
+  sessionRange: string;
+}) {
+  return (
+    <div className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-sky-50 px-2 py-1 text-sm font-black text-sky-800">
+      <CalendarDays size={15} className="shrink-0 text-sky-700" />
+      <span className="truncate">
+        {dateLabel}
+        {sessionRange ? ` - ${sessionRange}` : ""}
+      </span>
+    </div>
   );
 }
 

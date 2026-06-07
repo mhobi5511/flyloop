@@ -53,7 +53,7 @@ export function GlobalCampSearch({
     try {
       setResults(filterOpportunities(opportunities, nextSearch));
     } catch (searchError) {
-      console.error("Find Camps Worldwide search failed", searchError);
+      console.error("Explore Camps Worldwide search failed", searchError);
       setResults([]);
     } finally {
       setIsSearching(false);
@@ -76,7 +76,7 @@ export function GlobalCampSearch({
     >
       <div>
         <h2 className="text-xl font-black tracking-tight text-slate-950">
-          Find Camps Worldwide
+          Explore Camps Worldwide
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           Search all upcoming Camps and Huck Jams by country, month, coach, or tunnel.
