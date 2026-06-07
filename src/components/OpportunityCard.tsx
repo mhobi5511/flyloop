@@ -20,6 +20,7 @@ type OpportunityCardProps = {
   compact?: boolean;
   dense?: boolean;
   currentUserId?: string;
+  showViewCta?: boolean;
   discoveryBadges?: Array<{
     label: string;
     tone: "amber" | "blue" | "green" | "slate";
@@ -31,6 +32,7 @@ export function OpportunityCard({
   compact = false,
   dense = false,
   currentUserId,
+  showViewCta = false,
   discoveryBadges = [],
 }: OpportunityCardProps) {
   const view = opportunityViewModel(opportunity);
@@ -141,19 +143,28 @@ export function OpportunityCard({
 
         {dense ? (
           <>
-            <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-              <CalendarDays size={14} className="shrink-0 text-sky-600" />
-              <span className="line-clamp-1">
-                {dateLabel}
-                {sessionRange ? ` - ${sessionRange}` : ""} - {capacityLines[0]}
-              </span>
-            </div>
-            {capacityLines[1] ? (
-              <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                <Users size={14} className="shrink-0 text-sky-600" />
-                <span>{capacityLines[1]}</span>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                  <CalendarDays size={14} className="shrink-0 text-sky-600" />
+                  <span className="line-clamp-1">
+                    {dateLabel}
+                    {sessionRange ? ` - ${sessionRange}` : ""} - {capacityLines[0]}
+                  </span>
+                </div>
+                {capacityLines[1] ? (
+                  <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                    <Users size={14} className="shrink-0 text-sky-600" />
+                    <span>{capacityLines[1]}</span>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+              {showViewCta ? (
+                <span className="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-xs font-black text-white">
+                  View
+                </span>
+              ) : null}
+            </div>
           </>
         ) : (
           <div className="mt-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-3">
