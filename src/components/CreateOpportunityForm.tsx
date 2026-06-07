@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Check, CircleDollarSign, ClipboardCheck, MapPin, Users } from "lucide-react";
 import {
   publishOpportunity,
   updateOpportunity,
@@ -55,8 +55,8 @@ const campSteps: { id: StepId; label: string }[] = [
   { id: "basics", label: "Basics" },
   { id: "location", label: "Location" },
   { id: "schedule", label: "Schedule" },
-  { id: "capacity", label: "Capacity" },
   { id: "pricing", label: "Pricing" },
+  { id: "capacity", label: "Capacity" },
   { id: "review", label: "Review" },
 ];
 
@@ -572,7 +572,7 @@ export function CreateOpportunityForm({
         <button
           type="submit"
           disabled={isPending || (currentStep.id === "pricing" && Boolean(priceAppliesToError))}
-          className="h-10 rounded-lg bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-700 disabled:bg-slate-300 sm:px-5"
+          className="h-10 rounded-lg bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300 sm:px-5"
         >
           {currentStep.id === "review"
             ? isPending
@@ -581,8 +581,8 @@ export function CreateOpportunityForm({
                 : `Creating ${flowName}...`
               : mode === "edit"
                 ? "Save changes"
-                : `Create ${flowName}`
-            : "Continue"}
+                : `Create ${flowName} 🚀`
+            : "Continue →"}
         </button>
       </div>
     </form>
@@ -601,10 +601,25 @@ function ProgressNav({
   onSelect: (index: number) => void;
 }) {
   return (
-    <nav aria-label="Create progress">
-      <ol className="grid grid-cols-3 gap-1.5 sm:grid-cols-6 lg:grid-cols-7">
+    <nav aria-label="Create progress" className="grid gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
+          Step {currentIndex + 1} of {steps.length}
+        </p>
+        <p className="text-xs font-bold text-slate-500">
+          {steps[currentIndex]?.label}
+        </p>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-sky-600 transition-all"
+          style={{ width: `${((currentIndex + 1) / steps.length) * 100}%` }}
+        />
+      </div>
+      <ol className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-7">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
+          const isComplete = index < currentIndex;
           const canSelect = index <= maxVisitedIndex;
 
           return (
@@ -613,15 +628,42 @@ function ProgressNav({
                 type="button"
                 disabled={!canSelect}
                 onClick={() => onSelect(index)}
-                className={`h-8 w-full truncate rounded-lg border px-2 text-[0.68rem] font-black transition sm:text-xs ${
+                className={`grid w-full min-w-0 gap-1 rounded-xl border px-2 py-2 text-left transition ${
                   isCurrent
-                    ? "border-sky-600 bg-sky-600 text-white"
-                    : canSelect
-                      ? "border-slate-200 bg-white text-slate-700 hover:bg-sky-50"
-                      : "border-slate-100 bg-slate-50 text-slate-300"
+                    ? "border-sky-300 bg-sky-50"
+                    : isComplete
+                      ? "border-emerald-200 bg-emerald-50"
+                      : canSelect
+                        ? "border-slate-200 bg-white hover:bg-sky-50"
+                        : "border-slate-100 bg-slate-50"
                 }`}
               >
-                {step.label}
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className={`grid size-5 shrink-0 place-items-center rounded-full text-[0.68rem] font-black ${
+                      isComplete
+                        ? "bg-emerald-600 text-white"
+                        : isCurrent
+                          ? "bg-sky-600 text-white"
+                          : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {isComplete ? <Check size={13} /> : index + 1}
+                  </span>
+                  <span
+                    className={`truncate text-[0.68rem] font-black sm:text-xs ${
+                      isCurrent
+                        ? "text-sky-800"
+                        : isComplete
+                          ? "text-emerald-800"
+                          : canSelect
+                            ? "text-slate-700"
+                            : "text-slate-300"
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </span>
               </button>
             </li>
           );
@@ -765,6 +807,9 @@ function BasicsStep({
             onChange={(event) => onDescriptionChange(event.target.value)}
             placeholder="Optional notes for flyers"
           />
+          <span className="text-xs font-semibold leading-4 text-slate-500">
+            This information will be visible to athletes.
+          </span>
         </Field>
       </div>
     </div>
@@ -828,17 +873,17 @@ function ScheduleStep({
   onRegistrationDeadlineChange: (value: string) => void;
 }) {
   const isHuckJam = type === "huck_jam";
+  const [deadlineMode, setDeadlineMode] = useState<"start" | "custom">(
+    registrationDeadline ? "custom" : "start",
+  );
+  const startLabel = isHuckJam ? "When the event starts" : "When the camp starts";
 
   return (
     <div className="grid gap-3">
       <StepHeader
         eyebrow={isHuckJam ? "Session" : "Schedule"}
         title={isHuckJam ? "Set the event date" : "Set the camp dates"}
-        description={
-          isHuckJam
-            ? "Huck Jams happen on one day. Leave registration deadline empty to keep sign-up open until the event starts."
-            : "Leave registration deadline empty to keep registration open until the camp starts."
-        }
+        description="Set when this opportunity happens and when sign-up should close."
       />
       {showLastMinuteNotice ? (
         <p className="rounded-lg bg-amber-50 p-2.5 text-sm font-semibold leading-5 text-amber-800">
@@ -868,13 +913,55 @@ function ScheduleStep({
           </Field>
         ) : null}
       </div>
-      <div className="max-w-xs">
-        <Field label="Registration Deadline">
-          <DateInput
-            value={registrationDeadline}
-            onChange={onRegistrationDeadlineChange}
-          />
-        </Field>
+      <div className="grid gap-2">
+        <p className="text-sm font-black text-slate-800">Registration closes</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label
+            className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold ${
+              deadlineMode === "start"
+                ? "border-sky-300 bg-sky-50 text-sky-800"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <input
+              type="radio"
+              name="registrationDeadlineMode"
+              checked={deadlineMode === "start"}
+              onChange={() => {
+                setDeadlineMode("start");
+                onRegistrationDeadlineChange("");
+              }}
+              className="size-4 accent-sky-600"
+            />
+            {startLabel}
+          </label>
+          <label
+            className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold ${
+              deadlineMode === "custom"
+                ? "border-sky-300 bg-sky-50 text-sky-800"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <input
+              type="radio"
+              name="registrationDeadlineMode"
+              checked={deadlineMode === "custom"}
+              onChange={() => setDeadlineMode("custom")}
+              className="size-4 accent-sky-600"
+            />
+            Custom date
+          </label>
+        </div>
+        {deadlineMode === "custom" ? (
+          <div className="max-w-xs">
+            <Field label="Registration Deadline">
+              <DateInput
+                value={registrationDeadline}
+                onChange={onRegistrationDeadlineChange}
+              />
+            </Field>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -919,8 +1006,24 @@ function CapacityStep({
       <StepHeader
         eyebrow="Capacity"
         title="How should booking work?"
-        description="Keep the existing booking behavior, then set the maximum number of participants."
+        description="Choose how athletes join, then set the maximum number of participants."
       />
+      <div className="grid gap-2 md:grid-cols-2">
+        <BookingModeOption
+          value="approval_required"
+          selectedValue={bookingMode}
+          title="Coach approves participants"
+          description="Recommended for Camps"
+          onChange={onBookingModeChange}
+        />
+        <BookingModeOption
+          value="direct_time_booking"
+          selectedValue={bookingMode}
+          title="Direct booking"
+          description="Recommended for Huck Jams"
+          onChange={onBookingModeChange}
+        />
+      </div>
       <Field label="Maximum Participants" required>
         <input
           type="text"
@@ -931,22 +1034,6 @@ function CapacityStep({
           onChange={(event) => onCapacityChange(event.target.value)}
         />
       </Field>
-      <div className="grid gap-2 md:grid-cols-2">
-        <BookingModeOption
-          value="approval_required"
-          selectedValue={bookingMode}
-          title="Approval Required"
-          description="Participants apply first. You decide who gets accepted. Accepted participants can then select times."
-          onChange={onBookingModeChange}
-        />
-        <BookingModeOption
-          value="direct_time_booking"
-          selectedValue={bookingMode}
-          title="Direct Booking"
-          description="Participants can immediately select available times. Booking a slot confirms participation."
-          onChange={onBookingModeChange}
-        />
-      </div>
     </div>
   );
 }
@@ -973,56 +1060,66 @@ function PricingStep({
       <StepHeader
         eyebrow="Pricing"
         title="Set the price"
-        description="Price is normally per hour. The duration field must contain a valid number of minutes."
+        description="Set the amount athletes see for the flying-time duration."
       />
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-2.5 sm:grid-cols-[minmax(0,1fr)_6.5rem]">
-        <Field label="Price" required>
-          <input
-            type="text"
-            inputMode="decimal"
-            className={fieldClass}
-            value={price}
-            onChange={(event) => onPriceChange(event.target.value)}
-          />
-        </Field>
-        <Field label="Currency" required>
-          <select
-            className={fieldClass}
-            value={currency}
-            onChange={(event) => onCurrencyChange(event.target.value)}
-          >
-            {currencies.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <Field label="Price Applies To" required>
-        <input
-          inputMode="decimal"
-          className={fieldClass}
-          value={minMinutesOrHours}
-          onBlur={() => {
-            if (!minMinutesOrHours.trim()) {
-              onMinMinutesOrHoursChange("60");
-            }
-          }}
-          onChange={(event) => onMinMinutesOrHoursChange(event.target.value)}
-          placeholder="60"
-          aria-invalid={Boolean(priceAppliesToError)}
-        />
-      <span className="text-xs font-semibold leading-4 text-slate-500">
-        Displayed as {formatCurrency(price || "0", currency)} per{" "}
-        {minMinutesOrHours || "60"} minutes.
-      </span>
+      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+        <p className="text-sm font-black text-slate-800">Price</p>
+        <div className="mt-2 grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_auto_minmax(0,1fr)_auto]">
+          <label className="grid gap-1 text-xs font-bold text-slate-600">
+            Amount
+            <input
+              type="text"
+              inputMode="decimal"
+              className={fieldClass}
+              value={price}
+              onChange={(event) => onPriceChange(event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">
+            Currency
+            <select
+              className={fieldClass}
+              value={currency}
+              onChange={(event) => onCurrencyChange(event.target.value)}
+            >
+              {currencies.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="hidden pb-2 text-sm font-black text-slate-500 sm:block">
+            for
+          </span>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">
+            Minutes
+            <input
+              inputMode="decimal"
+              className={fieldClass}
+              value={minMinutesOrHours}
+              onBlur={() => {
+                if (!minMinutesOrHours.trim()) {
+                  onMinMinutesOrHoursChange("60");
+                }
+              }}
+              onChange={(event) => onMinMinutesOrHoursChange(event.target.value)}
+              placeholder="60"
+              aria-invalid={Boolean(priceAppliesToError)}
+            />
+          </label>
+          <span className="pb-2 text-sm font-black text-slate-500">minutes</span>
+        </div>
+        <span className="mt-2 block text-xs font-semibold leading-4 text-slate-500">
+          Displayed as {formatCurrency(price || "0", currency)} per{" "}
+          {minMinutesOrHours || "60"} minutes.
+        </span>
         {priceAppliesToError ? (
-          <span className="text-xs font-bold leading-5 text-rose-600">
+          <span className="mt-1 block text-xs font-bold leading-5 text-rose-600">
             {priceAppliesToError}
           </span>
         ) : null}
-      </Field>
+      </div>
     </div>
   );
 }
@@ -1118,146 +1215,111 @@ function ReviewStep({
 }) {
   const isHuckJam = type === "huck_jam";
   const name = title.trim() || fallbackOpportunityName(type, organizerName);
-  const reviewGroups = isHuckJam
-    ? [
-        {
-          title: "Basics",
-          stepId: "basics" as StepId,
-          items: [{ label: "Name", value: name }],
-        },
-        {
-          title: "Location",
-          stepId: "location" as StepId,
-          items: [
-            {
-              label: "Tunnel",
-              value: selectedTunnel
-                ? `${selectedTunnel.name}, ${selectedTunnel.city}`
-                : "Not set",
-            },
-          ],
-        },
-        {
-          title: "Session",
-          stepId: "schedule" as StepId,
-          items: [
-            { label: "Event Date", value: formatDate(startDate) },
-            {
-              label: "Registration Deadline",
-              value: registrationDeadline
-                ? formatDate(registrationDeadline)
-                : "Open until event start",
-            },
-          ],
-        },
-        {
-          title: "Participation",
-          stepId: "participation" as StepId,
-          items: [
-            { label: "Capacity", value: totalCapacity },
-            {
-              label: "Fee",
-              value: formatCurrency(price, currency),
-            },
-          ],
-        },
-      ]
-    : [
-        {
-          title: "Basics",
-          stepId: "basics" as StepId,
-          items: [{ label: "Camp Name", value: name }],
-        },
-        {
-          title: "Location",
-          stepId: "location" as StepId,
-          items: [
-            {
-              label: "Tunnel",
-              value: selectedTunnel
-                ? `${selectedTunnel.name}, ${selectedTunnel.city}`
-                : "Not set",
-            },
-          ],
-        },
-        {
-          title: "Schedule",
-          stepId: "schedule" as StepId,
-          items: [
-            { label: "Start Date", value: formatDate(startDate) },
-            { label: "End Date", value: formatDate(endDate) },
-            {
-              label: "Registration Deadline",
-              value: registrationDeadline
-                ? formatDate(registrationDeadline)
-                : "Open until camp start",
-            },
-          ],
-        },
-        {
-          title: "Capacity",
-          stepId: "capacity" as StepId,
-          items: [
-            { label: "Maximum Participants", value: totalCapacity },
-            {
-              label: "Booking Mode",
-              value:
-                bookingMode === "direct_time_booking"
-                  ? "Direct Booking"
-                  : "Approval Required",
-            },
-          ],
-        },
-        {
-          title: "Pricing",
-          stepId: "pricing" as StepId,
-          items: [
-            { label: "Price", value: formatCurrency(price, currency) },
-            {
-              label: "Applies To",
-              value: `${minMinutesOrHours || "60"} minutes`,
-            },
-          ],
-        },
-      ];
+  const tunnelLabel = selectedTunnel
+    ? `${selectedTunnel.name}, ${selectedTunnel.city}`
+    : "Tunnel not selected";
+  const dateLabel = isHuckJam
+    ? formatDate(startDate)
+    : `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  const bookingLabel =
+    isHuckJam || bookingMode === "approval_required"
+      ? "Approval Required"
+      : "Direct Booking";
+  const priceLabel = isHuckJam
+    ? formatCurrency(price, currency)
+    : `${formatCurrency(price, currency)} per ${minMinutesOrHours || "60"} minutes`;
+  const deadlineLabel = registrationDeadline
+    ? `Registration closes ${formatDate(registrationDeadline)}`
+    : `Registration closes when the ${isHuckJam ? "event" : "camp"} starts`;
 
   return (
     <div className="grid gap-3">
       <StepHeader
         eyebrow="Review"
         title={`Ready to create this ${isHuckJam ? "Huck Jam" : "camp"}?`}
-        description="Check each section, make grouped edits, then publish when it looks right."
+        description="Preview what athletes will see before publishing."
       />
-      <div className="grid gap-2 sm:grid-cols-2">
-        {reviewGroups.map((group) => (
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
+          {isHuckJam ? "Huck Jam" : "Camp"}
+        </p>
+        <h3 className="mt-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+          {name}
+        </h3>
+        <div className="mt-4 grid gap-2">
+          <ReviewLine
+            icon={<MapPin size={17} />}
+            value={tunnelLabel}
+            onEdit={() => onEdit("location")}
+          />
+          <ReviewLine
+            icon={<CalendarDays size={17} />}
+            value={dateLabel}
+            onEdit={() => onEdit("schedule")}
+          />
+          <ReviewLine
+            icon={<Users size={17} />}
+            value={`${totalCapacity || "0"} Participants`}
+            onEdit={() => onEdit(isHuckJam ? "participation" : "capacity")}
+          />
+          <ReviewLine
+            icon={<ClipboardCheck size={17} />}
+            value={bookingLabel}
+            onEdit={() => onEdit(isHuckJam ? "participation" : "capacity")}
+          />
+          <ReviewLine
+            icon={<CircleDollarSign size={17} />}
+            value={priceLabel}
+            onEdit={() => onEdit(isHuckJam ? "participation" : "pricing")}
+          />
+        </div>
+        <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+          {deadlineLabel}
+        </p>
+      </section>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {[
+          { label: "Edit details", stepId: "basics" as StepId },
+          { label: "Edit schedule", stepId: "schedule" as StepId },
+          {
+            label: isHuckJam ? "Edit participation" : "Edit pricing",
+            stepId: isHuckJam ? ("participation" as StepId) : ("pricing" as StepId),
+          },
+        ].map((item) => (
           <button
             type="button"
-            key={`${group.title}-${group.stepId}`}
-            onClick={() => onEdit(group.stepId)}
-            className="grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5 text-left transition hover:border-sky-200 hover:bg-sky-50/60"
+            key={item.stepId}
+            onClick={() => onEdit(item.stepId)}
+            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-sky-50"
           >
-            <h3 className="text-sm font-black text-slate-950">
-              {group.title}
-            </h3>
-            <dl className="grid gap-1">
-              {group.items.map((item) => (
-                <div
-                  key={`${group.title}-${item.label}`}
-                  className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2"
-                >
-                  <dt className="truncate text-xs font-bold text-slate-400">
-                    {item.label}
-                  </dt>
-                  <dd className="min-w-0 truncate text-xs font-black text-slate-900">
-                    {item.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            {item.label}
           </button>
         ))}
       </div>
     </div>
+  );
+}
+
+function ReviewLine({
+  icon,
+  value,
+  onEdit,
+}: {
+  icon: ReactNode;
+  value: string;
+  onEdit: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-black text-slate-800 transition hover:bg-sky-50"
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{value}</span>
+    </button>
   );
 }
 
@@ -1316,9 +1378,19 @@ function TunnelCombobox({
           autoComplete="off"
         />
         {selectedTunnel && !tunnelSearch ? (
-          <p className="mt-1.5 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800">
-            Selected: {selectedTunnel.name}, {selectedTunnel.city}
-          </p>
+          <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-left shadow-sm">
+            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sky-600 text-xs font-black text-white">
+              <Check size={15} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-black text-sky-950">
+                {selectedTunnel.name}
+              </span>
+              <span className="block truncate text-xs font-semibold text-sky-700">
+                {selectedTunnel.city}, {selectedTunnel.country}
+              </span>
+            </span>
+          </div>
         ) : null}
         {isOpen ? (
           <div
@@ -1374,7 +1446,7 @@ function BookingModeOption({
 
   return (
     <label
-      className={`grid cursor-pointer gap-1 rounded-xl border px-3 py-2.5 text-sm transition ${
+      className={`grid cursor-pointer gap-1.5 rounded-xl border px-3 py-3 text-sm transition ${
         isSelected
           ? "border-sky-300 bg-sky-50"
           : "border-slate-200 bg-white hover:bg-slate-50"
@@ -1391,7 +1463,7 @@ function BookingModeOption({
         />
         {title}
       </span>
-      <span className="pl-6 text-xs font-semibold leading-4 text-slate-600">
+      <span className="pl-6 text-xs font-bold leading-4 text-slate-500">
         {description}
       </span>
     </label>
