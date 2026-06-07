@@ -159,6 +159,7 @@ type InterestRow = {
   athlete_id: string;
   tunnel_time_status: "owns_tunnel_time" | "needs_tunnel_time" | null;
   tunnel_account_email: string | null;
+  updated_at: string;
 };
 
 export async function getTunnelDashboardData(secret: string) {
@@ -204,15 +205,26 @@ export async function getTunnelDashboardLatestEventAt(secret: string) {
     return undefined;
   }
 
-  const { data: latestEvent } = await supabase
-    .from("opportunity_slot_booking_events")
-    .select("created_at")
-    .eq("opportunity_id", link.opportunity_id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [{ data: latestEvent }, { data: latestInterest }] = await Promise.all([
+    supabase
+      .from("opportunity_slot_booking_events")
+      .select("created_at")
+      .eq("opportunity_id", link.opportunity_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("opportunity_interests")
+      .select("updated_at")
+      .eq("opportunity_id", link.opportunity_id)
+      .eq("status", "accepted")
+      .neq("interest_type", "timetable_reminder")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  return latestEvent?.created_at ?? null;
+  return latestIso(latestEvent?.created_at, latestInterest?.updated_at);
 }
 
 export function getTunnelDashboardUrl(secret: string) {
@@ -253,7 +265,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .order("created_at", { ascending: true }),
     supabase
       .from("opportunity_interests")
-      .select("athlete_id,tunnel_time_status,tunnel_account_email")
+      .select("athlete_id,tunnel_time_status,tunnel_account_email,updated_at")
       .eq("opportunity_id", link.opportunity_id)
       .eq("status", "accepted")
       .neq("interest_type", "timetable_reminder"),
@@ -290,7 +302,10 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
   return {
     secret: link.secret,
     loadedAt: new Date().toISOString(),
-    latestEventAt: latestEvent?.created_at ?? null,
+    latestEventAt: latestIso(
+      latestEvent?.created_at,
+      latestAcceptedInterestUpdate((acceptedInterests ?? []) as InterestRow[]),
+    ),
     opportunity: {
       id: opportunity.id,
       title: opportunity.title,
@@ -317,6 +332,30 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     participants,
     events: normalizeEvents((events ?? []) as EventRow[]),
   } satisfies TunnelDashboardData;
+}
+
+function latestAcceptedInterestUpdate(rows: InterestRow[]) {
+  return rows.reduce<string | null>((latest, row) => {
+    if (!latest) {
+      return row.updated_at;
+    }
+
+    return new Date(row.updated_at).getTime() > new Date(latest).getTime()
+      ? row.updated_at
+      : latest;
+  }, null);
+}
+
+function latestIso(...values: Array<string | null | undefined>) {
+  const validValues = values.filter((value): value is string => Boolean(value));
+
+  if (validValues.length === 0) {
+    return null;
+  }
+
+  return validValues.sort(
+    (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+  )[0];
 }
 
 function normalizeSlots(rows: SlotRow[], participantEmails: Map<string, string>) {

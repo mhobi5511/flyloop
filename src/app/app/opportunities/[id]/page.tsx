@@ -273,6 +273,25 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
+          {canSelectTimes && isAccepted ? (
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+                You&apos;re accepted
+              </p>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-base font-black text-slate-950">
+                  Next step: select your flying times.
+                </p>
+                <Link
+                  href={`/app/opportunities/${opportunity.id}/times`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+                >
+                  <Clock3 size={17} /> Select Times
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2 text-sky-700">
               <MapPin size={17} className="mt-0.5 shrink-0" />
@@ -382,23 +401,18 @@ export default async function OpportunityDetailPage({
             )}
           />
 
-          {canRequestCampRemoval && viewerInterest?.id ? (
-            <RequestCampRemovalButton
-              interestId={viewerInterest.id}
-              initialRequested={Boolean(viewerInterest.removal_requested_at)}
-            />
-          ) : null}
-
           {canSelectTimes ? (
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
-              <Link
-                href={`/app/opportunities/${opportunity.id}/times`}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
-              >
-                <Clock3 size={17} /> Select Times
-              </Link>
+              {!isAccepted ? (
+                <Link
+                  href={`/app/opportunities/${opportunity.id}/times`}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+                >
+                  <Clock3 size={17} /> Select Times
+                </Link>
+              ) : null}
               {bookedTimes.length > 0 ? (
-                <div className="mt-3">
+                <div className={isAccepted ? "" : "mt-3"}>
                   <p className="text-xs font-black uppercase text-slate-500">
                     Your booked times
                   </p>
@@ -451,6 +465,20 @@ export default async function OpportunityDetailPage({
               compact
             />
           </div>
+
+          {canRequestCampRemoval && viewerInterest?.id ? (
+            <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
+                Manage Participation v
+              </summary>
+              <div className="mt-3">
+                <RequestCampRemovalButton
+                  interestId={viewerInterest.id}
+                  initialRequested={Boolean(viewerInterest.removal_requested_at)}
+                />
+              </div>
+            </details>
+          ) : null}
 
           {detailRows.length > 0 ? (
             <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
@@ -589,7 +617,9 @@ function formatBookedTime(dateValue: string, timeValue: string) {
 }
 
 function formatEstimatedPrice(value: number, currency: string) {
+  const currencyLabel = currency === "EUR" ? "€" : currency;
   return `${new Intl.NumberFormat("en", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value)} ${currency}`;
+  }).format(value)} ${currencyLabel}`;
 }

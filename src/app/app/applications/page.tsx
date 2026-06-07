@@ -467,7 +467,9 @@ function formatBookedTime(dateValue: string, timeValue: string) {
 }
 
 function formatMoney(value: number, currency: string) {
+  const currencyLabel = currency === "EUR" ? "€" : currency;
   return `${new Intl.NumberFormat("en", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value)} ${currency}`;
+  }).format(value)} ${currencyLabel}`;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Send } from "lucide-react";
+import { Check, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   bookOpportunitySlots,
@@ -60,6 +60,7 @@ export function SlotBookingSelector({
   );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [isTunnelTimeModalOpen, setIsTunnelTimeModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
   const newSelectedSlotIds = selectedSlotIds.filter(
@@ -106,6 +107,18 @@ export function SlotBookingSelector({
         ? current.filter((slotId) => slotId !== slot.id)
         : [...current, slot.id],
     );
+  }
+
+  function handleSaveRequest() {
+    setMessage("");
+    setError("");
+
+    if (selectedSlotIds.length > 0) {
+      setIsTunnelTimeModalOpen(true);
+      return;
+    }
+
+    saveSlotChanges();
   }
 
   function saveSlotChanges() {
@@ -162,6 +175,7 @@ export function SlotBookingSelector({
         return;
       }
 
+      setIsTunnelTimeModalOpen(false);
       setMessage(
         removedBookedSlotIds.length > 0 && newSelectedSlotIds.length === 0
           ? "Slot released."
@@ -262,51 +276,6 @@ export function SlotBookingSelector({
         <p className="mb-2 text-center text-xs font-bold text-slate-500">
           {formatMoney(price, currency)} per {priceBasisMinutes} min
         </p>
-        {selectedSlotIds.length > 0 ? (
-          <section className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left">
-            <h2 className="text-sm font-black text-slate-950">Tunnel Time</h2>
-            <div className="mt-2 grid gap-2">
-              <label className="flex gap-2 rounded-lg bg-white px-2.5 py-2 text-sm font-bold text-slate-700">
-                <input
-                  type="radio"
-                  name="tunnel-time-status"
-                  value="owns_tunnel_time"
-                  checked={tunnelTimeStatus === "owns_tunnel_time"}
-                  onChange={() => setTunnelTimeStatus("owns_tunnel_time")}
-                  className="mt-1"
-                />
-                <span>I already have tunnel time at this tunnel</span>
-              </label>
-              <label className="flex gap-2 rounded-lg bg-white px-2.5 py-2 text-sm font-bold text-slate-700">
-                <input
-                  type="radio"
-                  name="tunnel-time-status"
-                  value="needs_tunnel_time"
-                  checked={tunnelTimeStatus === "needs_tunnel_time"}
-                  onChange={() => setTunnelTimeStatus("needs_tunnel_time")}
-                  className="mt-1"
-                />
-                <span>I need to purchase tunnel time</span>
-              </label>
-            </div>
-            {tunnelTimeStatus === "owns_tunnel_time" ? (
-              <label className="mt-3 grid gap-1 text-sm font-bold text-slate-700">
-                Email address used for the tunnel account
-                <input
-                  type="email"
-                  value={tunnelAccountEmail}
-                  onChange={(event) => setTunnelAccountEmail(event.target.value)}
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-base font-semibold outline-none focus:border-sky-400"
-                  placeholder="name@example.com"
-                />
-                <span className="text-xs font-semibold text-slate-500">
-                  Please enter the email address that you used to purchase or
-                  manage your tunnel time at this tunnel.
-                </span>
-              </label>
-            ) : null}
-          </section>
-        ) : null}
         <div className="grid grid-cols-3 gap-2 text-center">
           <SummaryValue label="Slots" value={String(selectedCount)} />
           <SummaryValue label="Minutes" value={String(totalMinutes)} />
@@ -318,10 +287,10 @@ export function SlotBookingSelector({
         <button
           type="button"
           disabled={changesClosed || isPending || !canSave}
-          onClick={saveSlotChanges}
+          onClick={handleSaveRequest}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >
-          <Send size={17} /> {isPending ? "Saving..." : "Save Times"}
+          <Send size={17} /> {isPending ? "Saving..." : "Confirm Times"}
         </button>
         {message ? (
           <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
@@ -334,6 +303,106 @@ export function SlotBookingSelector({
           </p>
         ) : null}
       </section>
+
+      {isTunnelTimeModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tunnel-time-title"
+        >
+          <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2
+                  id="tunnel-time-title"
+                  className="text-lg font-black text-slate-950"
+                >
+                  Do you already have tunnel time at this tunnel?
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  This is needed before your selected times are booked.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTunnelTimeModalOpen(false)}
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+                aria-label="Close"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              <label className="flex gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700">
+                <input
+                  type="radio"
+                  name="tunnel-time-status"
+                  value="owns_tunnel_time"
+                  checked={tunnelTimeStatus === "owns_tunnel_time"}
+                  onChange={() => setTunnelTimeStatus("owns_tunnel_time")}
+                  className="mt-1"
+                />
+                <span>I already have tunnel time</span>
+              </label>
+              <label className="flex gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700">
+                <input
+                  type="radio"
+                  name="tunnel-time-status"
+                  value="needs_tunnel_time"
+                  checked={tunnelTimeStatus === "needs_tunnel_time"}
+                  onChange={() => setTunnelTimeStatus("needs_tunnel_time")}
+                  className="mt-1"
+                />
+                <span>I need to buy tunnel time</span>
+              </label>
+            </div>
+
+            {tunnelTimeStatus === "owns_tunnel_time" ? (
+              <label className="mt-4 grid gap-1 text-sm font-bold text-slate-700">
+                Email address used for your tunnel account
+                <input
+                  type="email"
+                  required
+                  value={tunnelAccountEmail}
+                  onChange={(event) => setTunnelAccountEmail(event.target.value)}
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-base font-semibold outline-none focus:border-sky-400"
+                  placeholder="name@example.com"
+                />
+                <span className="text-xs font-semibold leading-5 text-slate-500">
+                  Please enter the email address you used to buy or manage your
+                  tunnel time at this tunnel.
+                </span>
+              </label>
+            ) : null}
+
+            {error ? (
+              <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsTunnelTimeModalOpen(false)}
+                className="h-11 rounded-xl bg-slate-100 px-4 text-sm font-black text-slate-700 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={saveSlotChanges}
+                className="h-11 rounded-xl bg-sky-600 px-4 text-sm font-black text-white hover:bg-sky-700 disabled:bg-slate-300"
+              >
+                {isPending ? "Booking..." : "Confirm Booking"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -377,9 +446,11 @@ function formatSlotTime(value: string) {
 }
 
 function formatMoney(value: number, currency: string) {
+  const currencyLabel = currency === "EUR" ? "€" : currency;
   return `${new Intl.NumberFormat("en", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value)} ${currency}`;
+  }).format(value)} ${currencyLabel}`;
 }
 
 function getTunnelTimeError(

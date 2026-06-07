@@ -198,9 +198,9 @@ function DateLine({
   sessionRange: string;
 }) {
   return (
-    <div className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-sky-50 px-2 py-1 text-sm font-black text-sky-800">
+    <div className="mt-1.5 inline-flex max-w-full items-start gap-1.5 rounded-lg bg-sky-50 px-2 py-1 text-sm font-black leading-5 text-sky-800">
       <CalendarDays size={15} className="shrink-0 text-sky-700" />
-      <span className="truncate">
+      <span className="min-w-0 whitespace-normal break-words">
         {dateLabel}
         {sessionRange ? ` - ${sessionRange}` : ""}
       </span>
