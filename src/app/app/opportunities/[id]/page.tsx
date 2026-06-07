@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CalendarDays, Clock3, MapPin, Users } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, MapPin, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
@@ -209,6 +209,9 @@ export default async function OpportunityDetailPage({
     bookedMinutes,
     opportunity.minMinutesOrHours,
   );
+  const hasBookedSlots = bookedTimes.length > 0;
+  const showAcceptedNextAction = canSelectTimes && isAccepted && !hasBookedSlots;
+  const showBookedStatus = canSelectTimes && isAccepted && hasBookedSlots;
   const sessionRange = formatSessionTimeRange(
     opportunity.sessionStart,
     opportunity.sessionEnd,
@@ -281,51 +284,7 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
-          {!isAccepted ? (
-            <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-start gap-2 text-sky-700">
-                <MapPin size={17} className="mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <Link
-                    className="block truncate text-sm font-black text-slate-900"
-                    href={`/app/tunnels/${opportunity.tunnelId}`}
-                  >
-                    {opportunity.tunnelName}
-                  </Link>
-                  <p className="text-xs font-semibold text-slate-600">
-                    {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
-                  </p>
-                </div>
-              </div>
-              {!isOrganizer ? (
-                <div className="shrink-0">
-                  <FollowButton
-                    targetType="tunnel"
-                    targetId={opportunity.tunnelId}
-                    label="Follow Tunnel"
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="mt-4 rounded-2xl bg-sky-50 px-4 py-4 text-sky-800">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
-              {isHuckJam ? "Participation Fee" : "Price"}
-            </p>
-            <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-              {formatPrice(opportunity.price, opportunity.currency)}
-            </p>
-            <p className="mt-0.5 text-sm font-bold text-sky-800">
-              {isHuckJam
-                ? "Participation Fee"
-                : `per ${formatPriceAppliesToMinutes(
-                    opportunity.minMinutesOrHours,
-                  )} min`}
-            </p>
-          </div>
-
-          {canSelectTimes && isAccepted ? (
+          {showAcceptedNextAction ? (
             <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
               <p className="text-xs font-black uppercase tracking-wide text-sky-700">
                 You&apos;re accepted
@@ -342,194 +301,187 @@ export default async function OpportunityDetailPage({
                 </Link>
               </div>
             </div>
-          ) : null}
-
-          {!isAccepted ? (
-            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <Link href={`/app/users/${profileUserId}`} className="shrink-0">
-                  <Avatar
-                    name={opportunity.coachName ?? personLabel}
-                    imageUrl={opportunityRow.coach_profile_image_url}
-                    size="md"
-                  />
-                </Link>
-                <div className="min-w-0">
-                  <Link
-                    href={`/app/users/${profileUserId}`}
-                    className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
-                  >
-                    {opportunity.coachName ?? personLabel}
-                  </Link>
-                  <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
-                    {personLabel}
+          ) : showBookedStatus ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 size={19} className="mt-0.5 shrink-0 text-emerald-700" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                    You&apos;re in
                   </p>
+                  <div className="mt-1.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-base font-black text-slate-950">
+                      Your flying times are booked.
+                    </p>
+                    <Link
+                      href={`/app/opportunities/${opportunity.id}/times`}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-700"
+                    >
+                      <Clock3 size={17} /> Edit Times
+                    </Link>
+                  </div>
                 </div>
               </div>
-              {opportunity.coachFollowId && !isOrganizer ? (
-                <div className="shrink-0">
-                  <FollowButton
-                    targetType="coach"
-                    targetId={opportunity.coachFollowId}
-                    label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
-                  />
-                </div>
-              ) : null}
             </div>
           ) : null}
 
-          {isDeclined ? (
-            <StatusMessage message="Your application was declined." />
-          ) : isWaitlisted ? (
-            <StatusMessage message="You are on the waitlist." />
-          ) : isHuckJam && isAccepted ? (
-            <StatusMessage message="You're in. Your spot is confirmed." />
-          ) : isAccepted && !hasPublishedTimetable ? (
-            <StatusMessage message="You are accepted. The timetable is not available yet." />
-          ) : opportunity.bookingMode === "approval_required" ? (
-            <div className="mt-4">
-              <InterestButton
-                opportunityId={opportunity.id}
-                disabled={isUnavailable}
-                initialStatus={viewerApplicationStatus}
-                compact
-              />
-            </div>
-          ) : !hasPublishedTimetable && !isUnavailable ? (
-            <div className="mt-4">
-              <TimetableReminderButton
-                opportunityId={opportunity.id}
-                initialReminderSet={viewerHasTimetableReminder}
-              />
-            </div>
+          {!showAcceptedNextAction && !showBookedStatus ? (
+            isDeclined ? (
+              <StatusMessage message="Your application was declined." />
+            ) : isWaitlisted ? (
+              <StatusMessage message="You are on the waitlist." />
+            ) : isHuckJam && isAccepted ? (
+              <StatusMessage message="You're in. Your spot is confirmed." />
+            ) : isAccepted && !hasPublishedTimetable ? (
+              <StatusMessage message="You are accepted. The timetable is not available yet." />
+            ) : opportunity.bookingMode === "approval_required" ? (
+              <div className="mt-4">
+                <InterestButton
+                  opportunityId={opportunity.id}
+                  disabled={isUnavailable}
+                  initialStatus={viewerApplicationStatus}
+                  compact
+                />
+              </div>
+            ) : !hasPublishedTimetable && !isUnavailable ? (
+              <div className="mt-4">
+                <TimetableReminderButton
+                  opportunityId={opportunity.id}
+                  initialReminderSet={viewerHasTimetableReminder}
+                />
+              </div>
+            ) : null
           ) : null}
 
-          {canSelectTimes ? (
-            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
-              {!isAccepted ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <Link href={`/app/users/${profileUserId}`} className="shrink-0">
+                <Avatar
+                  name={opportunity.coachName ?? personLabel}
+                  imageUrl={opportunityRow.coach_profile_image_url}
+                  size="md"
+                />
+              </Link>
+              <div className="min-w-0">
                 <Link
-                  href={`/app/opportunities/${opportunity.id}/times`}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+                  href={`/app/users/${profileUserId}`}
+                  className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
                 >
-                  <Clock3 size={17} /> Select Times
+                  {opportunity.coachName ?? personLabel}
                 </Link>
-              ) : null}
-              {bookedTimes.length > 0 ? (
-                <div className={isAccepted ? "" : "mt-3"}>
-                  <p className="text-xs font-black uppercase text-slate-500">
-                    Your booked times
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    Modify your selections via &apos;Select Times&apos;.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {bookedTimes.map((booking) => (
-                      <span
-                        key={booking.id}
-                        className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-black text-sky-700"
-                      >
-                        {formatBookedTime(booking.date, booking.time)}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-3 rounded-xl bg-slate-50 p-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs font-black uppercase text-slate-500">
-                          Your booked time
-                        </p>
-                        <p className="mt-1 text-lg font-black text-slate-950">
-                          {bookedMinutes} min
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-black uppercase text-slate-500">
-                          Estimated total
-                        </p>
-                        <p className="mt-1 text-lg font-black text-slate-950">
-                          {formatEstimatedPrice(
-                            bookedEstimate,
-                            opportunity.currency,
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-                      This is an estimate based on your selected times and may change.
-                    </p>
-                  </div>
+                <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
+                  {personLabel}
+                </p>
+              </div>
+            </div>
+            {opportunity.coachFollowId && !isOrganizer ? (
+              <div className="shrink-0">
+                <FollowButton
+                  targetType="coach"
+                  targetId={opportunity.coachFollowId}
+                  label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2 text-sky-700">
+              <MapPin size={17} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <Link
+                  className="block truncate text-sm font-black text-slate-900"
+                  href={`/app/tunnels/${opportunity.tunnelId}`}
+                >
+                  {opportunity.tunnelName}
+                </Link>
+                <p className="text-xs font-semibold text-slate-600">
+                  {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
+                </p>
+              </div>
+            </div>
+            {!isOrganizer ? (
+              <div className="shrink-0">
+                <FollowButton
+                  targetType="tunnel"
+                  targetId={opportunity.tunnelId}
+                  label="Follow Tunnel"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-3 rounded-2xl bg-sky-50 px-4 py-4 text-sky-800">
+            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+              {isHuckJam ? "Participation Fee" : "Price"}
+            </p>
+            <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+              {formatPrice(opportunity.price, opportunity.currency)}
+            </p>
+            <p className="mt-0.5 text-sm font-bold text-sky-800">
+              {isHuckJam
+                ? "Participation Fee"
+                : `per ${formatPriceAppliesToMinutes(
+                    opportunity.minMinutesOrHours,
+                  )} min`}
+            </p>
+          </div>
+
+          {canSelectTimes && hasBookedSlots ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+              <div>
+                <p className="text-xs font-black uppercase text-slate-500">
+                  Your booked times
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Modify your selections via &apos;Edit Times&apos;.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {bookedTimes.map((booking) => (
+                    <span
+                      key={booking.id}
+                      className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-black text-sky-700"
+                    >
+                      {formatBookedTime(booking.date, booking.time)}
+                    </span>
+                  ))}
                 </div>
-              ) : null}
+                <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-500">
+                        Your booked time
+                      </p>
+                      <p className="mt-1 text-lg font-black text-slate-950">
+                        {bookedMinutes} min
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-500">
+                        Estimated total
+                      </p>
+                      <p className="mt-1 text-lg font-black text-slate-950">
+                        {formatEstimatedPrice(bookedEstimate, opportunity.currency)}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                    This is an estimate based on your selected times and may change.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : null}
 
-          {isAccepted ? (
-            <>
-              <div className="mt-3 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Link href={`/app/users/${profileUserId}`} className="shrink-0">
-                    <Avatar
-                      name={opportunity.coachName ?? personLabel}
-                      imageUrl={opportunityRow.coach_profile_image_url}
-                      size="md"
-                    />
-                  </Link>
-                  <div className="min-w-0">
-                    <Link
-                      href={`/app/users/${profileUserId}`}
-                      className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
-                    >
-                      {opportunity.coachName ?? personLabel}
-                    </Link>
-                    <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
-                      {personLabel}
-                    </p>
-                  </div>
-                </div>
-                {opportunity.coachFollowId && !isOrganizer ? (
-                  <div className="shrink-0">
-                    <FollowButton
-                      targetType="coach"
-                      targetId={opportunity.coachFollowId}
-                      label={
-                        personLabel === "Coach"
-                          ? "Follow Coach"
-                          : "Follow Organizer"
-                      }
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-start gap-2 text-sky-700">
-                  <MapPin size={17} className="mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <Link
-                      className="block truncate text-sm font-black text-slate-900"
-                      href={`/app/tunnels/${opportunity.tunnelId}`}
-                    >
-                      {opportunity.tunnelName}
-                    </Link>
-                    <p className="text-xs font-semibold text-slate-600">
-                      {formatLocation(
-                        opportunity.tunnelCity,
-                        opportunity.tunnelCountry,
-                      )}
-                    </p>
-                  </div>
-                </div>
-                {!isOrganizer ? (
-                  <div className="shrink-0">
-                    <FollowButton
-                      targetType="tunnel"
-                      targetId={opportunity.tunnelId}
-                      label="Follow Tunnel"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </>
+          {canSelectTimes && !isAccepted ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+              <Link
+                href={`/app/opportunities/${opportunity.id}/times`}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+              >
+                <Clock3 size={17} /> Select Times
+              </Link>
+            </div>
           ) : null}
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -553,10 +505,16 @@ export default async function OpportunityDetailPage({
                   initialAccountEmail={viewerTunnelAccountEmail}
                 />
                 {canRequestCampRemoval ? (
-                  <RequestCampRemovalButton
-                    interestId={viewerInterest.id}
-                    initialRequested={Boolean(viewerInterest.removal_requested_at)}
-                  />
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <h3 className="text-sm font-black text-slate-950">
+                      Leave Camp
+                    </h3>
+                    <RequestCampRemovalButton
+                      interestId={viewerInterest.id}
+                      initialRequested={Boolean(viewerInterest.removal_requested_at)}
+                      embedded
+                    />
+                  </div>
                 ) : null}
               </div>
             </details>
@@ -565,7 +523,7 @@ export default async function OpportunityDetailPage({
           {detailRows.length > 0 ? (
             <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
               <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
-                Additional Information ▼
+                Additional Information v
               </summary>
               <div className="mt-2 grid gap-1.5 text-sm leading-5 text-slate-600">
                 {detailRows.map((row) => (
@@ -586,6 +544,7 @@ export default async function OpportunityDetailPage({
                 (!followsTunnel || (opportunity.coachFollowId && !followsCoach)),
             )}
           />
+
         </article>
 
         <aside className="hidden content-start gap-4 lg:grid">

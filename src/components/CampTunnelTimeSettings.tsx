@@ -67,7 +67,10 @@ export function CampTunnelTimeSettings({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-black text-slate-950">Tunnel Time</h3>
-          <p className="mt-1 text-sm font-semibold text-slate-600">
+          <p className="mt-1 text-xs font-black uppercase text-slate-500">
+            Current status
+          </p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-700">
             {formatTunnelTimeStatus(initialStatus)}
           </p>
           {initialStatus === "owns_tunnel_time" && initialAccountEmail ? (

@@ -7,11 +7,13 @@ import { requestCampRemoval } from "@/app/app/applications/actions";
 type RequestCampRemovalButtonProps = {
   interestId: string;
   initialRequested: boolean;
+  embedded?: boolean;
 };
 
 export function RequestCampRemovalButton({
   interestId,
   initialRequested,
+  embedded = false,
 }: RequestCampRemovalButtonProps) {
   const router = useRouter();
   const [requested, setRequested] = useState(initialRequested);
@@ -52,7 +54,13 @@ export function RequestCampRemovalButton({
   }
 
   return (
-    <div className="mt-3 grid gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+    <div
+      className={
+        embedded
+          ? "grid gap-2"
+          : "mt-3 grid gap-2 rounded-2xl border border-slate-200 bg-white p-3"
+      }
+    >
       <button
         type="button"
         disabled={requested || isPending}

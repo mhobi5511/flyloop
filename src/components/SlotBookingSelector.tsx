@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Send, X } from "lucide-react";
+import { Check, CheckCircle2, Send, ShoppingCart, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   bookOpportunitySlots,
@@ -331,28 +331,36 @@ export function SlotBookingSelector({
             </div>
 
             <div className="mt-4 grid gap-2">
-              <label className="flex gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700">
-                <input
-                  type="radio"
-                  name="tunnel-time-status"
-                  value="owns_tunnel_time"
-                  checked={tunnelTimeStatus === "owns_tunnel_time"}
-                  onChange={() => setTunnelTimeStatus("owns_tunnel_time")}
-                  className="mt-1"
-                />
-                <span>I already have tunnel time</span>
-              </label>
-              <label className="flex gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700">
-                <input
-                  type="radio"
-                  name="tunnel-time-status"
-                  value="needs_tunnel_time"
-                  checked={tunnelTimeStatus === "needs_tunnel_time"}
-                  onChange={() => setTunnelTimeStatus("needs_tunnel_time")}
-                  className="mt-1"
-                />
-                <span>I need to buy tunnel time</span>
-              </label>
+              <button
+                type="button"
+                aria-pressed={tunnelTimeStatus === "owns_tunnel_time"}
+                onClick={() => setTunnelTimeStatus("owns_tunnel_time")}
+                className={`flex min-h-16 items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                  tunnelTimeStatus === "owns_tunnel_time"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <CheckCircle2 size={22} className="shrink-0" />
+                <span className="text-base font-black">
+                  I already have tunnel time
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={tunnelTimeStatus === "needs_tunnel_time"}
+                onClick={() => setTunnelTimeStatus("needs_tunnel_time")}
+                className={`flex min-h-16 items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                  tunnelTimeStatus === "needs_tunnel_time"
+                    ? "border-sky-300 bg-sky-50 text-sky-800"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <ShoppingCart size={22} className="shrink-0" />
+                <span className="text-base font-black">
+                  I need to buy tunnel time
+                </span>
+              </button>
             </div>
 
             {tunnelTimeStatus === "owns_tunnel_time" ? (
