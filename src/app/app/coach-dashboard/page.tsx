@@ -3,6 +3,7 @@ import { CoachDashboardWorkspace } from "@/components/CoachDashboardWorkspace";
 import { organizerActivityNotificationTypes } from "@/lib/notifications";
 import { formatOpportunityDate } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import {
   getTimetableSummary,
   type TimetableSlot,
@@ -69,6 +70,11 @@ type OpportunityRow = {
           | null;
       }>
     | null;
+};
+
+type TunnelDashboardLinkRow = {
+  opportunity_id: string;
+  secret: string;
 };
 
 type SlotRow = {
@@ -176,12 +182,66 @@ export default async function CoachDashboardPage({
           .order("slot_date", { ascending: true })
           .order("start_time", { ascending: true })
       : { data: [], error: null };
+  const { data: tunnelDashboardLinks, error: tunnelDashboardLinksError } =
+    opportunityIds.length > 0
+      ? await supabase
+          .from("opportunity_tunnel_dashboard_links")
+          .select("opportunity_id,secret")
+          .in("opportunity_id", opportunityIds)
+      : { data: [], error: null };
 
   if (slotsError) {
     console.error("Coach dashboard slots lookup failed", slotsError);
   }
+  if (tunnelDashboardLinksError) {
+    console.error(
+      "Coach dashboard tunnel links lookup failed",
+      tunnelDashboardLinksError,
+    );
+  }
 
   const slotRows = (slots ?? []) as SlotRow[];
+  const tunnelDashboardLinkByOpportunityId = new Map(
+    ((tunnelDashboardLinks ?? []) as TunnelDashboardLinkRow[]).map((link) => [
+      link.opportunity_id,
+      link,
+    ]),
+  );
+  const missingTunnelDashboardCampIds = opportunityRows
+    .filter(
+      (opportunity) =>
+        opportunity.type === "camp" &&
+        !tunnelDashboardLinkByOpportunityId.has(opportunity.id),
+    )
+    .map((opportunity) => opportunity.id);
+
+  if (missingTunnelDashboardCampIds.length > 0) {
+    const createdLinks = await Promise.all(
+      missingTunnelDashboardCampIds.map(async (opportunityId) => {
+        const { data: createdLink, error } = await supabase
+          .from("opportunity_tunnel_dashboard_links")
+          .insert({ opportunity_id: opportunityId })
+          .select("opportunity_id,secret")
+          .single();
+
+        if (error || !createdLink?.secret) {
+          console.error("Coach dashboard tunnel link creation failed", {
+            opportunityId,
+            error,
+          });
+          return null;
+        }
+
+        return createdLink as TunnelDashboardLinkRow;
+      }),
+    );
+
+    for (const link of createdLinks) {
+      if (link) {
+        tunnelDashboardLinkByOpportunityId.set(link.opportunity_id, link);
+      }
+    }
+  }
   const workspaceCamps = opportunityRows.map((opportunity) => {
     const tunnel = Array.isArray(opportunity.tunnel_profiles)
       ? opportunity.tunnel_profiles[0]
@@ -240,6 +300,18 @@ export default async function CoachDashboardPage({
       Number(opportunity.price),
       opportunity.min_minutes_or_hours,
     );
+    const tunnelDashboardLink = tunnelDashboardLinkByOpportunityId.get(opportunity.id);
+    const tunnelDashboardUrl =
+      opportunity.type === "camp" && tunnelDashboardLink?.secret
+        ? getTunnelDashboardUrl(tunnelDashboardLink.secret)
+        : "";
+    const tunnelDashboardShareText = tunnelDashboardUrl
+      ? getTunnelDashboardShareText({
+          title: opportunity.title,
+          url: tunnelDashboardUrl,
+          coachName: profile?.full_name?.trim() || "Coach",
+        })
+      : "";
 
     return {
       id: opportunity.id,
@@ -261,6 +333,8 @@ export default async function CoachDashboardPage({
       tunnelId: opportunity.tunnel_id,
       tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
       tunnelLocation: [tunnel?.city, tunnel?.country].filter(Boolean).join(", "),
+      tunnelDashboardUrl,
+      tunnelDashboardShareText,
       dateLabel: formatOpportunityDate(
         opportunity.type,
         opportunity.start_date,
@@ -317,4 +391,34 @@ function compareWorkspaceOpportunities(
 function getDefaultSelectedCampId(camps: Array<{ id: string; endDate: string }>) {
   const today = new Date().toISOString().slice(0, 10);
   return camps.find((camp) => camp.endDate >= today)?.id ?? camps[0]?.id;
+}
+
+function getTunnelDashboardShareText({
+  title,
+  url,
+  coachName,
+}: {
+  title: string;
+  url: string;
+  coachName: string;
+}) {
+  return [
+    "Hello,",
+    "",
+    `Here is the Flyloop Operations Dashboard for ${title}.`,
+    "",
+    "This dashboard reflects the current camp planning and updates whenever changes are made.",
+    "",
+    "You can use it to view:",
+    "- participant schedule",
+    "- timetable",
+    "- participant contact information",
+    "- latest changes",
+    "",
+    "Dashboard:",
+    url,
+    "",
+    "Kind regards,",
+    coachName,
+  ].join("\n");
 }
