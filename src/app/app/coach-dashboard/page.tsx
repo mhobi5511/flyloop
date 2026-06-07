@@ -1,0 +1,277 @@
+import { redirect } from "next/navigation";
+import { CoachDashboardWorkspace } from "@/components/CoachDashboardWorkspace";
+import { organizerActivityNotificationTypes } from "@/lib/notifications";
+import { formatOpportunityDate } from "@/lib/opportunities";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getTimetableSummary,
+  type TimetableSlot,
+} from "@/lib/timetable";
+import type {
+  BookingMode,
+  InterestStatus,
+  OpportunityStatus,
+  OpportunityType,
+} from "@/lib/types";
+
+type CoachDashboardSearchParams = {
+  camp?: string | string[];
+};
+
+type OpportunityRow = {
+  id: string;
+  title: string;
+  type: OpportunityType;
+  booking_mode: BookingMode;
+  status: OpportunityStatus;
+  start_date: string;
+  end_date: string;
+  registration_deadline: string | null;
+  session_start: string | null;
+  session_end: string | null;
+  total_capacity: number;
+  available_spots: number;
+  price: number | string;
+  currency: string;
+  min_minutes_or_hours: string | null;
+  description: string | null;
+  tunnel_id: string;
+  tunnel_profiles:
+    | { name: string; city: string | null; country: string | null }
+    | Array<{ name: string; city: string | null; country: string | null }>
+    | null;
+  opportunity_interests:
+    | Array<{
+        id: string;
+        status: InterestStatus;
+        created_at: string | null;
+        removal_requested_at: string | null;
+        tunnel_time_status: string | null;
+        tunnel_account_email: string | null;
+        interest_type: string | null;
+        profiles:
+          | {
+              id: string;
+              full_name: string | null;
+              email: string | null;
+              phone: string | null;
+              whatsapp_number: string | null;
+              country: string | null;
+              profile_image_url: string | null;
+            }
+          | Array<{
+              id: string;
+              full_name: string | null;
+              email: string | null;
+              phone: string | null;
+              whatsapp_number: string | null;
+              country: string | null;
+              profile_image_url: string | null;
+            }>
+          | null;
+      }>
+    | null;
+};
+
+type SlotRow = {
+  id: string;
+  opportunity_id: string;
+  slot_date: string;
+  start_time: string;
+  duration_minutes: number;
+  capacity: number;
+  opportunity_slot_bookings:
+    | Array<{
+        id: string;
+        minutes: number;
+        rotation_minutes: number | string | null;
+        user_id: string;
+        profiles:
+          | {
+              full_name: string | null;
+              phone: string | null;
+              whatsapp_number: string | null;
+            }
+          | Array<{
+              full_name: string | null;
+              phone: string | null;
+              whatsapp_number: string | null;
+            }>
+          | null;
+      }>
+    | null;
+};
+
+export default async function CoachDashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<CoachDashboardSearchParams>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const selectedCampParam = Array.isArray(resolvedSearchParams.camp)
+    ? resolvedSearchParams.camp[0]
+    : resolvedSearchParams.camp;
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/app/coach-dashboard");
+  }
+
+  const [
+    { data: profile },
+    { data: opportunities },
+    { data: slots },
+    { data: notifications },
+    { data: tunnels },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name,is_organizer,wants_to_create_opportunities")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("opportunities")
+      .select("id,title,type,booking_mode,status,start_date,end_date,registration_deadline,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,interest_type,profiles!opportunity_interests_athlete_id_fkey(id,full_name,email,phone,whatsapp_number,country,profile_image_url))")
+      .eq("created_by", user.id)
+      .order("start_date", { ascending: true }),
+    supabase
+      .from("opportunity_time_slots")
+      .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+      .order("slot_date", { ascending: true })
+      .order("start_time", { ascending: true }),
+    supabase
+      .from("notifications")
+      .select("id,title,body,type,created_at,opportunity_id")
+      .eq("user_id", user.id)
+      .in("type", [...organizerActivityNotificationTypes])
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("tunnel_profiles")
+      .select("id,name,city,country")
+      .order("name", { ascending: true }),
+  ]);
+
+  const canCreate =
+    profile?.is_organizer === true ||
+    profile?.wants_to_create_opportunities === true;
+
+  if (!canCreate) {
+    redirect("/app/dashboard");
+  }
+
+  const opportunityRows = (opportunities ?? []) as OpportunityRow[];
+  const slotRows = (slots ?? []) as SlotRow[];
+  const workspaceCamps = opportunityRows.map((opportunity) => {
+    const tunnel = Array.isArray(opportunity.tunnel_profiles)
+      ? opportunity.tunnel_profiles[0]
+      : opportunity.tunnel_profiles;
+    const participants = (opportunity.opportunity_interests ?? [])
+      .filter((interest) => interest.interest_type !== "timetable_reminder")
+      .map((interest) => {
+        const profileRow = Array.isArray(interest.profiles)
+          ? interest.profiles[0]
+          : interest.profiles;
+
+        return {
+          id: interest.id,
+          userId: profileRow?.id ?? "",
+          name: profileRow?.full_name ?? "Participant",
+          email: profileRow?.email ?? "",
+          phone: profileRow?.whatsapp_number ?? profileRow?.phone ?? "",
+          country: profileRow?.country ?? "",
+          profileImageUrl: profileRow?.profile_image_url ?? "",
+          status: interest.status,
+          createdAt: interest.created_at ?? "",
+          removalRequestedAt: interest.removal_requested_at,
+          tunnelTimeStatus: interest.tunnel_time_status,
+          tunnelAccountEmail: interest.tunnel_account_email,
+        };
+      });
+    const timetableSlots = slotRows
+      .filter((slot) => slot.opportunity_id === opportunity.id)
+      .map((slot): TimetableSlot => ({
+        id: slot.id,
+        slotDate: slot.slot_date,
+        startTime: slot.start_time,
+        durationMinutes: slot.duration_minutes,
+        capacity: slot.capacity,
+        bookings: (slot.opportunity_slot_bookings ?? []).map((booking) => {
+          const bookingProfile = Array.isArray(booking.profiles)
+            ? booking.profiles[0]
+            : booking.profiles;
+
+          return {
+            id: booking.id,
+            minutes: booking.minutes,
+            rotationMinutes:
+              booking.rotation_minutes === null
+                ? null
+                : Number(booking.rotation_minutes),
+            userId: booking.user_id,
+            athleteName: bookingProfile?.full_name ?? "Participant",
+            athletePhone:
+              bookingProfile?.whatsapp_number ?? bookingProfile?.phone ?? "",
+          };
+        }),
+      }));
+    const summary = getTimetableSummary(
+      timetableSlots,
+      Number(opportunity.price),
+      opportunity.min_minutes_or_hours,
+    );
+
+    return {
+      id: opportunity.id,
+      title: opportunity.title,
+      type: opportunity.type,
+      bookingMode: opportunity.booking_mode,
+      status: opportunity.status,
+      startDate: opportunity.start_date,
+      endDate: opportunity.end_date,
+      registrationDeadline: opportunity.registration_deadline,
+      sessionStart: opportunity.session_start,
+      sessionEnd: opportunity.session_end,
+      totalCapacity: opportunity.total_capacity,
+      availableSpots: opportunity.available_spots,
+      price: Number(opportunity.price),
+      currency: opportunity.currency,
+      priceAppliesToMinutes: opportunity.min_minutes_or_hours ?? "60",
+      description: opportunity.description ?? "",
+      tunnelId: opportunity.tunnel_id,
+      tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
+      tunnelLocation: [tunnel?.city, tunnel?.country].filter(Boolean).join(", "),
+      dateLabel: formatOpportunityDate(
+        opportunity.type,
+        opportunity.start_date,
+        opportunity.end_date,
+      ),
+      participants,
+      timetableSlots,
+      summary,
+    };
+  });
+  const selectedCampId =
+    workspaceCamps.find((camp) => camp.id === selectedCampParam)?.id ??
+    workspaceCamps[0]?.id ??
+    "";
+
+  return (
+    <CoachDashboardWorkspace
+      coachName={profile?.full_name ?? "Coach"}
+      selectedCampId={selectedCampId}
+      camps={workspaceCamps}
+      tunnels={tunnels ?? []}
+      activity={(notifications ?? []).map((notification) => ({
+        id: notification.id,
+        title: notification.title ?? "Activity",
+        body: notification.body ?? "",
+        opportunityId: notification.opportunity_id ?? "",
+        createdAt: notification.created_at ?? "",
+      }))}
+    />
+  );
+}

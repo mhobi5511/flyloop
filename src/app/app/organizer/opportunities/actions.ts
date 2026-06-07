@@ -136,6 +136,7 @@ export async function updateApplicantStatus(
   revalidatePath(`/app/opportunities/${updatedInterest.opportunity_id}`);
   revalidatePath(`/app/opportunities/${updatedInterest.opportunity_id}/times`);
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
   return { ok: true, message: "Applicant status updated." };
@@ -325,6 +326,7 @@ async function resolveCampRemovalRequest(
   revalidatePath(`/app/opportunities/${opportunity.id}`);
   revalidatePath(`/app/opportunities/${opportunity.id}/times`);
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
   return {
@@ -508,6 +510,7 @@ export async function saveCampTimetable(
   revalidatePath(`/app/organizer/opportunities/${opportunityId}/timetable`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
 
   if (publish) {
     redirect(`/app/organizer/opportunities/${opportunityId}`);
@@ -614,6 +617,7 @@ export async function releaseParticipantTimes(
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
   return {
@@ -684,6 +688,7 @@ export async function releaseParticipantSlotBooking(
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
   return {
@@ -747,6 +752,7 @@ export async function assignParticipantSlotBooking(
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
   return { ok: true, message: "Slot assigned." };

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Monitor, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
@@ -202,6 +202,14 @@ export default async function OrganizerDashboardPage({
       </div>
 
       <div className="mt-3">
+        <Link
+          href="/app/coach-dashboard"
+          target="_blank"
+          rel="noreferrer"
+          className="mb-2 hidden h-11 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 text-sm font-black text-sky-700 transition hover:bg-sky-100 md:inline-flex"
+        >
+          <Monitor size={17} /> Open Coach Dashboard
+        </Link>
         <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {tabs.map((tab) => (
             <Link

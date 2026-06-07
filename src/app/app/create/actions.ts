@@ -330,6 +330,7 @@ export async function publishOpportunity(
 
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
 
   return { ok: true, data: { id: data.id } };
 }
@@ -532,6 +533,7 @@ export async function updateOpportunity(
 
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
 
@@ -596,6 +598,7 @@ export async function publishDraftOpportunity(
 
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
 
