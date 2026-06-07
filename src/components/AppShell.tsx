@@ -32,7 +32,7 @@ type AppShellProps = {
 };
 
 const baseNavItems = [
-  { href: "/app", label: "Home", id: "home", icon: Home },
+  { href: "/app", label: "Discover", id: "home", icon: Home },
 ] as const;
 
 const organizerNavItems = [
@@ -42,7 +42,7 @@ const organizerNavItems = [
 
 const applicationNavItem = {
   href: "/app/applications",
-  label: "Flying",
+  label: "My Flying",
   id: "applications",
   icon: ClipboardList,
 } as const;
