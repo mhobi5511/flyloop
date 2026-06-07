@@ -160,10 +160,10 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-[96rem] gap-4 p-4 xl:p-6">
-        <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
-            <div>
+      <div className="mx-auto grid max-w-[96rem] gap-4 p-3 sm:p-4 xl:p-5">
+        <header className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-stretch">
+            <div className="grid content-start">
               <div className="flex flex-wrap items-center gap-2">
                 <Image
                   src="/flyloop-icon-192.png"
@@ -184,7 +184,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
               <h1 className="mt-1 text-3xl font-black tracking-tight">
                 {data.opportunity.title}
               </h1>
-              <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
+              <div className="mt-2 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
                 <InfoPill icon={<UserRound size={15} />} label={data.coach.name} />
                 <InfoPill
                   icon={<CalendarDays size={15} />}
@@ -197,9 +197,20 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                   label={`Loaded ${formatTimeFromIso(data.loadedAt)}`}
                 />
               </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <StatCard label="Total participants" value={data.stats.totalParticipants} />
+                <StatCard
+                  label="Total booked minutes"
+                  value={`${data.stats.totalBookedMinutes} min`}
+                />
+                <StatCard
+                  label="Total booked hours"
+                  value={formatDuration(data.stats.totalBookedMinutes)}
+                />
+              </div>
             </div>
-            <div className="grid gap-3 rounded-xl bg-slate-950 px-4 py-3 text-white">
-              <div className="grid gap-1">
+            <div className="grid h-full content-center gap-3 rounded-xl bg-slate-950 px-4 py-3 text-white">
+              <div className="grid gap-0.5">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-200">
                   Coach
                 </p>
@@ -216,30 +227,19 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
                 ) : null}
               </div>
               <div className="border-t border-white/10 pt-3">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-200">
-                Tunnel
-              </p>
-              <p className="text-lg font-black">{data.tunnel.name}</p>
-              <p className="text-sm font-bold text-slate-300">
-                {[data.tunnel.city, data.tunnel.country].filter(Boolean).join(", ")}
-              </p>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-200">
+                  Tunnel
+                </p>
+                <p className="text-lg font-black">{data.tunnel.name}</p>
+                <p className="text-sm font-bold text-slate-300">
+                  {[data.tunnel.city, data.tunnel.country].filter(Boolean).join(", ")}
+                </p>
               </div>
             </div>
           </div>
-          <div className="mt-4 grid gap-2 md:grid-cols-3">
-            <StatCard label="Total participants" value={data.stats.totalParticipants} />
-            <StatCard
-              label="Total booked minutes"
-              value={`${data.stats.totalBookedMinutes} min`}
-            />
-            <StatCard
-              label="Total booked hours"
-              value={formatDuration(data.stats.totalBookedMinutes)}
-            />
-          </div>
         </header>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="grid gap-4">
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
@@ -324,7 +324,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
             />
           </div>
 
-          <aside className="grid gap-4">
+          <aside className="grid content-start gap-3">
             <ParticipantList
               participants={data.participants}
               selectedParticipantId={selectedParticipant?.id ?? ""}
@@ -357,7 +357,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
       <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-black text-slate-950">{value}</p>
+      <p className="text-2xl font-black text-slate-950">{value}</p>
     </div>
   );
 }
@@ -374,12 +374,12 @@ function ParticipantList({
   onSelect: (participantId: string) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-black tracking-tight">Participants</h2>
         <Users size={18} className="text-sky-700" />
       </div>
-      <div className="mt-3 grid gap-2">
+      <div className="mt-2 grid gap-1.5">
         {participants.map((participant) => {
           const colors = participantColorMap.get(participant.id);
           const isSelected = participant.id === selectedParticipantId;
@@ -389,7 +389,7 @@ function ParticipantList({
               key={participant.id}
               type="button"
               onClick={() => onSelect(participant.id)}
-              className={`grid rounded-xl border px-3 py-2 text-left transition ${
+              className={`grid rounded-xl border px-3 py-1.5 text-left transition ${
                 isSelected ? "border-sky-300 bg-sky-50" : "border-slate-200"
               }`}
             >
@@ -402,10 +402,10 @@ function ParticipantList({
                   {participant.name}
                 </span>
               </span>
-              <span className="pl-5 text-xs font-bold text-slate-500">
+              <span className="truncate pl-5 text-xs font-bold text-slate-500">
                 {formatParticipantTotal(participant.totalBookedMinutes)} booked
               </span>
-              <span className="pl-5 text-xs font-bold text-slate-600">
+              <span className="truncate pl-5 text-xs font-bold text-slate-600">
                 Tunnel time: {formatTunnelTimeStatus(participant.tunnelTimeStatus)}
               </span>
               {participant.tunnelAccountEmail ? (
@@ -435,7 +435,7 @@ function ParticipantPanel({
 }) {
   if (!participant) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <p className="text-sm font-bold text-slate-500">
           Select a participant to see details.
         </p>
@@ -447,43 +447,40 @@ function ParticipantPanel({
   const slotsByDay = groupParticipantSlotsByDay(participant.slots);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-start gap-2.5">
         <div
-          className="grid size-11 shrink-0 place-items-center rounded-xl text-base font-black text-white"
+          className="grid size-9 shrink-0 place-items-center rounded-lg text-sm font-black text-white"
           style={{ backgroundColor: colors?.bg }}
         >
           {participant.name.slice(0, 1).toUpperCase()}
         </div>
         <div className="min-w-0">
-          <h2 className="truncate text-xl font-black tracking-tight">
+          <h2 className="truncate text-lg font-black tracking-tight">
             {participant.name}
           </h2>
-          <p className="text-sm font-bold text-slate-500">
-            {participant.totalBookedMinutes} min total
-          </p>
-          <p className="text-sm font-black text-slate-700">
-            {formatDuration(participant.totalBookedMinutes)}
+          <p className="text-sm font-bold text-slate-600">
+            {formatParticipantTotal(participant.totalBookedMinutes)}
           </p>
         </div>
       </div>
-      <div className="mt-4 grid gap-2 text-sm font-bold text-slate-700">
-        <p className="flex items-center gap-2">
+      <div className="mt-3 grid gap-1.5 text-sm font-bold text-slate-700">
+        <p className="flex min-w-0 items-center gap-2">
           <Mail size={15} className="text-sky-700" />
-          {participant.email || "Email not available"}
+          <span className="truncate">{participant.email || "Email not available"}</span>
         </p>
-        <p className="flex items-center gap-2">
+        <p className="flex min-w-0 items-center gap-2">
           <Phone size={15} className="text-sky-700" />
-          {participant.phone || "Phone not available"}
+          <span className="truncate">{participant.phone || "Phone not available"}</span>
         </p>
       </div>
-      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+      <div className="mt-3 rounded-xl bg-slate-50 p-2.5 text-sm font-bold text-slate-700">
         <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
           Tunnel Time
         </p>
-        <p className="mt-1">{formatTunnelTimeStatus(participant.tunnelTimeStatus)}</p>
+        <p>{formatTunnelTimeStatus(participant.tunnelTimeStatus)}</p>
         {participant.tunnelAccountEmail ? (
-          <p className="mt-2">
+          <p className="mt-1 truncate">
             Tunnel Account Email:{" "}
             <a
               href={`mailto:${participant.tunnelAccountEmail}`}
@@ -494,7 +491,7 @@ function ParticipantPanel({
           </p>
         ) : null}
       </div>
-      <div className="mt-4 grid gap-3">
+      <div className="mt-3 grid gap-2">
         {slotsByDay.map((day) => (
           <section key={day.date}>
             <h3 className="text-sm font-black text-slate-950">
@@ -504,7 +501,7 @@ function ParticipantPanel({
               {day.slots.map((slot) => (
                 <p
                   key={slot.id}
-                  className="rounded-lg bg-slate-50 px-2.5 py-2 text-sm font-bold text-slate-700"
+                  className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm font-bold text-slate-700"
                 >
                   {formatTime(slot.startTime)} - {slot.minutes} min
                 </p>
@@ -527,49 +524,51 @@ function ChangeLog({
   fullEntries: ChangeEntry[];
 }) {
   const [showFullHistory, setShowFullHistory] = useState(false);
+  const hasRecentChanges = groups.length > 0;
+  const hasFullHistory = fullEntries.length > 0;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h2 className="text-xl font-black tracking-tight">Change Log</h2>
-          <p className="mt-1 text-sm font-bold text-slate-500">
+          <p className="text-sm font-bold text-slate-500">
             Changes since this device last viewed the dashboard
           </p>
         </div>
-        <p className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
-          {lastViewedAt ? formatVisitTimestamp(lastViewedAt) : "First visit on this device"}
-        </p>
-      </div>
-      <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          onClick={() => setShowFullHistory((current) => !current)}
-          className="inline-flex h-9 items-center rounded-lg border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
-        >
-          {showFullHistory ? "Show Recent Changes" : "View Full History"}
-        </button>
-      </div>
-      <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600">
-        <p className="flex gap-2">
-          <Info size={16} className="mt-0.5 shrink-0 text-sky-700" />
-          <span>
-            {showFullHistory
-              ? "Full History displays all changes since this timetable was created, newest first."
-              : "The Change Log displays changes since this device last viewed the dashboard. On the first visit, there are naturally no changes to display."}
-          </span>
-        </p>
-        {!showFullHistory ? (
-          <p className="pl-6 text-xs font-bold text-slate-500">
-          If browser cache or local storage is cleared, previous visit information
-          cannot be restored.
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+            {lastViewedAt ? formatVisitTimestamp(lastViewedAt) : "First visit on this device"}
           </p>
-        ) : null}
+          <button
+            type="button"
+            onClick={() => setShowFullHistory((current) => !current)}
+            className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+          >
+            {showFullHistory ? "Show Recent Changes" : "View Full History"}
+          </button>
+        </div>
       </div>
-      {showFullHistory ? (
-        <div className="mt-4 grid gap-2">
+      {!showFullHistory && !hasRecentChanges ? (
+        <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+          <p className="flex gap-2">
+            <Info size={16} className="mt-0.5 shrink-0 text-sky-700" />
+            <span>
+              The Change Log displays changes since this device last viewed the
+              dashboard. On the first visit, there are naturally no changes to
+              display.
+            </span>
+          </p>
+          <p className="pl-6 text-xs font-bold text-slate-500">
+            If browser cache or local storage is cleared, previous visit information
+            cannot be restored.
+          </p>
+        </div>
+      ) : null}
+      {showFullHistory && hasFullHistory ? (
+        <div className="mt-3 grid gap-2">
           {fullEntries.map((change) => (
-            <article key={change.id} className="rounded-xl bg-slate-50 p-3">
+            <article key={change.id} className="rounded-xl bg-slate-50 p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-black text-slate-900">
                   {change.participantName}
@@ -584,8 +583,9 @@ function ChangeLog({
             </article>
           ))}
         </div>
-      ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
+      ) : null}
+      {!showFullHistory && hasRecentChanges ? (
+        <div className="mt-3 grid gap-3 lg:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
           {groups.map((day) => (
             <section key={day.date} className="grid gap-2">
               <h3 className="text-base font-black text-slate-950">
@@ -594,7 +594,7 @@ function ChangeLog({
               {day.participants.map((participant) => (
                 <div
                   key={`${day.date}-${participant.participantId}`}
-                  className="rounded-xl bg-slate-50 p-3"
+                  className="rounded-xl bg-slate-50 p-2.5"
                 >
                   <p className="text-sm font-black text-slate-900">
                     {participant.participantName}
@@ -617,14 +617,12 @@ function ChangeLog({
             </section>
           ))}
         </div>
-      )}
-      {(showFullHistory ? fullEntries.length : groups.length) === 0 ? (
-          <p className="rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-500">
-            {showFullHistory
-              ? "No change history is available yet."
-              : "No changes since the last visit on this device."}
-          </p>
-        ) : null}
+      ) : null}
+      {showFullHistory && !hasFullHistory ? (
+        <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-500">
+          No change history is available yet.
+        </p>
+      ) : null}
     </section>
   );
 }
