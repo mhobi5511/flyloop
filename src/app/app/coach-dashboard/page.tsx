@@ -120,6 +120,7 @@ export default async function CoachDashboardPage({
 
   const [
     { data: profile },
+    { data: coachProfile },
     opportunitiesResult,
     { data: notifications },
     { data: tunnels },
@@ -128,6 +129,11 @@ export default async function CoachDashboardPage({
       .from("profiles")
       .select("full_name,is_organizer,wants_to_create_opportunities")
       .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("coach_profiles")
+      .select("languages,disciplines")
+      .eq("user_id", user.id)
       .maybeSingle(),
     supabase
       .from("opportunities")
@@ -276,6 +282,10 @@ export default async function CoachDashboardPage({
       selectedCampId={selectedCampId}
       camps={workspaceCamps}
       tunnels={tunnels ?? []}
+      inheritedCoachProfile={{
+        languages: coachProfile?.languages ?? [],
+        disciplines: coachProfile?.disciplines ?? [],
+      }}
       activity={(notifications ?? []).map((notification) => ({
         id: notification.id,
         title: notification.title ?? "Activity",

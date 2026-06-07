@@ -27,7 +27,10 @@ type CreateOpportunityFormProps = {
   inheritedCoachProfile?: InheritedCoachProfile;
   organizerName?: string;
   initialOpportunity?: OpportunityFormInput & { id: string };
+  initialType?: OpportunityType;
   mode?: "create" | "edit";
+  onCancel?: () => void;
+  onSuccess?: (opportunityId: string) => void;
 };
 
 type StepId =
@@ -162,7 +165,10 @@ export function CreateOpportunityForm({
   inheritedCoachProfile,
   organizerName,
   initialOpportunity,
+  initialType,
   mode = "create",
+  onCancel,
+  onSuccess,
 }: CreateOpportunityFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -172,7 +178,7 @@ export function CreateOpportunityForm({
     inheritedCoachProfile?.disciplines ??
     splitCsv(initialOpportunity?.disciplines ?? "");
   const [type, setType] = useState<OpportunityType>(
-    initialOpportunity?.type ?? "camp",
+    initialOpportunity?.type ?? initialType ?? "camp",
   );
   const [bookingMode, setBookingMode] = useState<BookingMode>(
     initialOpportunity?.type === "huck_jam"
@@ -420,11 +426,15 @@ export function CreateOpportunityForm({
         return;
       }
 
-      router.push(
-        mode === "edit" && initialOpportunity
-          ? `/app/organizer/opportunities/${initialOpportunity.id}`
-          : `/app/organizer/opportunities/${result.data.id}?published=1`,
-      );
+      if (onSuccess) {
+        onSuccess(result.data.id);
+      } else {
+        router.push(
+          mode === "edit" && initialOpportunity
+            ? `/app/organizer/opportunities/${initialOpportunity.id}`
+            : `/app/organizer/opportunities/${result.data.id}?published=1`,
+        );
+      }
       router.refresh();
     });
   }
@@ -563,11 +573,18 @@ export function CreateOpportunityForm({
       <div className="flex flex-row items-center justify-between gap-2">
         <button
           type="button"
-          disabled={stepIndex === 0 || isPending}
-          onClick={() => goToStep(Math.max(stepIndex - 1, 0))}
+          disabled={isPending || (!onCancel && stepIndex === 0)}
+          onClick={() => {
+            if (onCancel && stepIndex === 0) {
+              onCancel();
+              return;
+            }
+
+            goToStep(Math.max(stepIndex - 1, 0));
+          }}
           className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 sm:px-4"
         >
-          Back
+          {onCancel && stepIndex === 0 ? "Cancel" : "Back"}
         </button>
         <button
           type="submit"

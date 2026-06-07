@@ -1,23 +1,26 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
-  Bell,
   CalendarDays,
   Clock3,
   Copy,
   ExternalLink,
   MapPin,
-  Plane,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Save,
   Settings,
   Share2,
   UserCircle,
   WalletCards,
+  X,
 } from "lucide-react";
 import {
   publishDraftOpportunity,
@@ -34,6 +37,10 @@ import {
   type AssignSlotParticipant,
 } from "@/components/AssignSlotButton";
 import { Avatar } from "@/components/Avatar";
+import {
+  CreateOpportunityForm,
+  type InheritedCoachProfile,
+} from "@/components/CreateOpportunityForm";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
@@ -119,13 +126,22 @@ type ActivityItem = {
   createdAt: string;
 };
 
-type WorkspaceRange = "today" | "tomorrow" | "entire";
+type HeaderPanel = "share" | "activity" | null;
+type TabletPanel = "participants" | "participant" | null;
+type CreationType = OpportunityType | null;
+type AttentionItem = {
+  label: string;
+  tone: "amber" | "slate";
+  target: "participant" | "timetable";
+  participantId?: string;
+};
 
 type CoachDashboardWorkspaceProps = {
   coachName: string;
   selectedCampId: string;
   camps: CampWorkspace[];
   tunnels: TunnelOption[];
+  inheritedCoachProfile?: InheritedCoachProfile;
   activity: ActivityItem[];
 };
 
@@ -152,11 +168,15 @@ export function CoachDashboardWorkspace({
   selectedCampId,
   camps,
   tunnels,
+  inheritedCoachProfile,
   activity,
 }: CoachDashboardWorkspaceProps) {
   const router = useRouter();
   const [activeCampId, setActiveCampId] = useState(selectedCampId);
-  const [range, setRange] = useState<WorkspaceRange>("entire");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [headerPanel, setHeaderPanel] = useState<HeaderPanel>(null);
+  const [tabletPanel, setTabletPanel] = useState<TabletPanel>(null);
+  const [creationType, setCreationType] = useState<CreationType>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const activeCamp = camps.find((camp) => camp.id === activeCampId) ?? camps[0];
   const participant =
@@ -196,34 +216,70 @@ export function CoachDashboardWorkspace({
   function selectCamp(campId: string) {
     setActiveCampId(campId);
     setSelectedParticipantId("");
+    setHeaderPanel(null);
+    setTabletPanel(null);
     router.replace(`/app/coach-dashboard?camp=${campId}`, { scroll: false });
+  }
+
+  function handleOpportunityCreated(opportunityId: string) {
+    setCreationType(null);
+    setActiveCampId(opportunityId);
+    setSelectedParticipantId("");
+    setHeaderPanel(null);
+    setTabletPanel(null);
+    router.replace(`/app/coach-dashboard?camp=${opportunityId}`, { scroll: false });
+    router.refresh();
+  }
+
+  function handleAttentionClick(item: AttentionItem) {
+    if (item.target === "participant" && item.participantId) {
+      setSelectedParticipantId(item.participantId);
+      setIsSidebarCollapsed(false);
+      setTabletPanel("participant");
+      return;
+    }
+
+    setTabletPanel(null);
+    document
+      .getElementById("coach-live-timetable")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   if (!activeCamp) {
     return (
-      <div className="min-h-dvh bg-slate-950 p-6 text-white">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-sky-300">
+      <div className="min-h-dvh bg-slate-100 p-6 text-slate-950">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-sky-700">
             Coach Dashboard
           </p>
           <h1 className="mt-2 text-3xl font-black">No workspaces yet</h1>
-          <p className="mt-2 text-sm font-semibold text-slate-300">
+          <p className="mt-2 text-sm font-semibold text-slate-600">
             Create your first Camp or Huck Jam to start running your coaching
             workspace.
           </p>
-          <Link
-            href="/app/create"
+          <button
+            type="button"
+            onClick={() => setCreationType("camp")}
             className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-sky-500 px-4 text-sm font-black text-white"
           >
             <Plus size={17} /> New Camp
-          </Link>
+          </button>
         </div>
+        {creationType ? (
+          <CreationPanel
+            type={creationType}
+            tunnels={tunnels}
+            inheritedCoachProfile={inheritedCoachProfile}
+            organizerName={coachName}
+            onCancel={() => setCreationType(null)}
+            onSuccess={handleOpportunityCreated}
+          />
+        ) : null}
       </div>
     );
   }
 
-  const visibleSlots = filterSlots(activeCamp.timetableSlots, range);
-  const visibleDays = getVisibleTimetableDays(activeCamp, visibleSlots, range);
+  const visibleDays = getVisibleTimetableDays(activeCamp, activeCamp.timetableSlots);
   const participantColorMap = buildParticipantColorMap(activeCamp.participants);
   const attention = getAttentionItems(activeCamp);
   const assignableParticipants = getAssignableParticipants(activeCamp);
@@ -234,14 +290,18 @@ export function CoachDashboardWorkspace({
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
       <div className="mx-auto grid max-w-[96rem] gap-4 p-3 sm:p-4 xl:p-5">
-        <header className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <header className="hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 xl:block">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-stretch">
             <div className="grid content-start">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="grid size-10 place-items-center rounded-xl bg-sky-600 text-white">
-                    <Plane size={22} />
-                  </div>
+                  <Image
+                    src="/flyloop-icon-192.png"
+                    alt="Flyloop"
+                    width={40}
+                    height={40}
+                    className="size-10 rounded-xl"
+                  />
                   <div>
                     <p className="text-sm font-black uppercase tracking-[0.16em] text-sky-700">
                       Coach Operations Workspace
@@ -252,9 +312,6 @@ export function CoachDashboardWorkspace({
                   </div>
                 </div>
                 <div className="hidden items-center gap-2 text-sm font-bold text-slate-600 lg:flex">
-                  <button className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <Bell size={18} />
-                  </button>
                   <Link
                     href="/app/profile"
                     className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white shadow-sm"
@@ -310,44 +367,180 @@ export function CoachDashboardWorkspace({
                 />
               </div>
             </div>
-            <div className="grid h-full content-between gap-3 rounded-xl bg-slate-950 px-4 py-3 text-white">
+            <div className="relative grid h-full content-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-200">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
                   Coach
                 </p>
                 <p className="text-lg font-black">{coachName}</p>
               </div>
-              <div className="grid gap-2 border-t border-white/10 pt-3">
-                <Link
-                  href="/app/create"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-500 px-3 text-sm font-black text-white transition hover:bg-sky-600"
-                >
-                  <Plus size={16} /> New Camp
-                </Link>
-                <Link
-                  href="/app/create"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-black text-white transition hover:bg-white/10"
-                >
-                  <Plus size={16} /> New Huck Jam
-                </Link>
+              <div className="grid gap-2 border-t border-slate-200 pt-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHeaderPanel((current) =>
+                        current === "share" ? null : "share",
+                      )
+                    }
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <Share2 size={16} /> Share
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHeaderPanel((current) =>
+                        current === "activity" ? null : "activity",
+                      )
+                    }
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <Activity size={16} /> Activity
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreationType("camp")}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700"
+                  >
+                    <Plus size={16} /> New Camp
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreationType("huck_jam")}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <Plus size={16} /> Huck Jam
+                  </button>
+                </div>
+                {headerPanel ? (
+                  <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-[min(24rem,calc(100vw-2rem))]">
+                    {headerPanel === "share" ? (
+                      <SharePanel publicUrl={publicUrl} shareText={shareText} />
+                    ) : (
+                      <ActivityPanel activity={scopedActivity} />
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
         </header>
 
-      <main className="hidden gap-4 md:grid">
-        <section className="grid items-start gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_22rem]">
+        <header className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:flex xl:hidden">
+          <button
+            type="button"
+            onClick={() => setTabletPanel("participants")}
+            className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-700"
+            aria-label="Open participant sidebar"
+          >
+            <Menu size={19} />
+          </button>
+          <select
+            value={activeCamp.id}
+            onChange={(event) => selectCamp(event.target.value)}
+            className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none focus:border-sky-400"
+          >
+            {camps.map((camp) => (
+              <option key={camp.id} value={camp.id}>
+                {camp.type === "huck_jam" ? "Huck Jam" : "Camp"} - {camp.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() =>
+              setHeaderPanel((current) => (current === "share" ? null : "share"))
+            }
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
+          >
+            <Share2 size={16} /> Share
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setHeaderPanel((current) =>
+                current === "activity" ? null : "activity",
+              )
+            }
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
+          >
+            <Activity size={16} /> Activity
+          </button>
+          {headerPanel ? (
+            <div className="absolute right-3 top-16 z-30 w-[min(24rem,calc(100vw-1.5rem))]">
+              {headerPanel === "share" ? (
+                <SharePanel publicUrl={publicUrl} shareText={shareText} />
+              ) : (
+                <ActivityPanel activity={scopedActivity} />
+              )}
+            </div>
+          ) : null}
+        </header>
+
+      <div id="coach-live-timetable" className="hidden md:block" />
+      <main className="hidden gap-4 xl:grid">
+        <section
+          className={`grid items-start gap-4 ${
+            isSidebarCollapsed
+              ? "xl:grid-cols-[3.25rem_minmax(0,1fr)]"
+              : "xl:grid-cols-[19rem_minmax(0,1fr)]"
+          }`}
+        >
           <aside className="grid content-start gap-3">
-            <RangeControl range={range} onRangeChange={setRange} />
-            <AttentionPanel items={attention} />
-            <ParticipantColumns
-              participants={activeCamp.participants}
-              selectedParticipantId={selectedParticipantId}
-              onSelectParticipant={setSelectedParticipantId}
-              participantColorMap={participantColorMap}
-            />
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed((current) => !current)}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+              aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen size={18} />
+              ) : (
+                <>
+                  <PanelLeftClose size={18} />
+                  <span>Collapse sidebar</span>
+                </>
+              )}
+            </button>
+            {isSidebarCollapsed ? (
+              <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 text-center shadow-sm">
+                <p className="text-xs font-black text-slate-500">
+                  {attention.length}
+                </p>
+                <p className="[writing-mode:vertical-rl] mx-auto text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  Participants
+                </p>
+              </div>
+            ) : (
+              <>
+                <AttentionPanel items={attention} onAction={handleAttentionClick} />
+                <ParticipantColumns
+                  participants={activeCamp.participants}
+                  selectedParticipantId={selectedParticipantId}
+                  onSelectParticipant={setSelectedParticipantId}
+                  participantColorMap={participantColorMap}
+                />
+                {participant ? (
+                  <ParticipantPanel
+                    participant={participant}
+                    camp={activeCamp}
+                    onClear={() => setSelectedParticipantId("")}
+                  />
+                ) : (
+                  <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <p className="text-sm font-bold text-slate-500">
+                      Select a participant to see details and booked slots.
+                    </p>
+                  </section>
+                )}
+              </>
+            )}
           </aside>
 
+          <div className="grid min-w-0 gap-4">
           <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -359,9 +552,9 @@ export function CoachDashboardWorkspace({
             </div>
             <div className="mt-4 overflow-x-auto pb-2">
               <div
-                className="grid min-h-[32rem] gap-3"
+                className="grid min-h-[34rem] gap-3"
                 style={{
-                  gridTemplateColumns: `repeat(${Math.max(visibleDays.length, 1)}, minmax(16rem, 1fr))`,
+                  gridTemplateColumns: `repeat(${Math.max(visibleDays.length, 1)}, minmax(14rem, 1fr))`,
                 }}
               >
                 {visibleDays.map((day) => (
@@ -421,35 +614,28 @@ export function CoachDashboardWorkspace({
                                   const colors = participantColorMap.get(booking.userId);
 
                                   return (
-                                    <div
+                                    <button
                                       key={booking.id}
-                                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-2.5 py-2 text-white shadow-sm"
+                                      type="button"
+                                      onClick={() => {
+                                        const match = activeCamp.participants.find(
+                                          (item) => item.userId === booking.userId,
+                                        );
+                                        if (match) {
+                                          setSelectedParticipantId(match.id);
+                                          setIsSidebarCollapsed(false);
+                                        }
+                                      }}
+                                      className="grid rounded-md px-2.5 py-2 text-left text-white shadow-sm"
                                       style={{ backgroundColor: colors?.bg }}
                                     >
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const match = activeCamp.participants.find(
-                                            (item) => item.userId === booking.userId,
-                                          );
-                                          if (match) {
-                                            setSelectedParticipantId(match.id);
-                                          }
-                                        }}
-                                        className="min-w-0 text-left"
-                                      >
-                                        <span className="block truncate text-sm font-black">
-                                          {booking.athleteName}
-                                        </span>
-                                        <span className="text-xs font-bold text-white/80">
-                                          {booking.minutes} min
-                                        </span>
-                                      </button>
-                                      <ReleaseSlotBookingButton
-                                        opportunityId={activeCamp.id}
-                                        bookingId={booking.id}
-                                      />
-                                    </div>
+                                      <span className="block truncate text-sm font-black">
+                                        {booking.athleteName}
+                                      </span>
+                                      <span className="text-xs font-bold text-white/80">
+                                        {booking.minutes} min
+                                      </span>
+                                    </button>
                                   );
                                 })}
                                 {Array.from({
@@ -495,26 +681,219 @@ export function CoachDashboardWorkspace({
             </div>
           </section>
 
-          <aside className="grid min-w-0 content-start gap-3">
-            {participant ? (
-              <ParticipantPanel
-                participant={participant}
-                camp={activeCamp}
-                onClear={() => setSelectedParticipantId("")}
-              />
-            ) : (
+            <div className="grid min-w-0 gap-3">
               <CampSettingsPanel
+                key={activeCamp.id}
                 camp={activeCamp}
                 tunnels={tunnels}
                 publicUrl={publicUrl}
                 shareText={shareText}
               />
-            )}
-            <SharePanel publicUrl={publicUrl} shareText={shareText} />
-            <ActivityPanel activity={scopedActivity} />
-          </aside>
+            </div>
+          </div>
         </section>
       </main>
+
+      <main className="hidden gap-3 md:grid xl:hidden">
+        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black tracking-tight">Live Timetable</h2>
+              <p className="mt-0.5 text-xs font-bold text-slate-500">
+                {activeCamp.dateLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTabletPanel("participants")}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+            >
+              <Menu size={15} /> Participants
+            </button>
+          </div>
+          <div className="mt-3 overflow-x-auto pb-2">
+            <div
+              className="grid min-h-[34rem] gap-3"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(visibleDays.length, 1)}, minmax(14rem, 1fr))`,
+              }}
+            >
+              {visibleDays.map((day) => (
+                <section
+                  key={day.date}
+                  className="min-w-0 rounded-xl border border-slate-200 bg-slate-50"
+                >
+                  <div className="border-b border-slate-200 px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-950">
+                          {formatLongDay(day.date)}
+                        </h3>
+                        <p className="text-xs font-bold text-slate-500">
+                          {day.slots.length} slots
+                        </p>
+                      </div>
+                      {activeCamp.type === "camp" ? (
+                        <AddSlotButton camp={activeCamp} date={day.date} />
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 p-2">
+                    {day.slots.length > 0 ? (
+                      day.slots.map((slot) => {
+                        const isFull = slot.bookings.length >= slot.capacity;
+
+                        return (
+                          <article
+                            key={slot.id}
+                            className={`relative rounded-lg border bg-white p-2 ${
+                              isFull ? "border-emerald-200" : "border-slate-200"
+                            }`}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="inline-flex items-center gap-1.5 text-sm font-black">
+                                <Clock3 size={15} className="text-sky-700" />
+                                {formatTimetableTime(slot.startTime)}
+                              </p>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
+                                  isFull
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {slot.bookings.length}/{slot.capacity}
+                              </span>
+                            </div>
+                            <div className="grid gap-1">
+                              {slot.bookings.map((booking) => {
+                                const colors = participantColorMap.get(booking.userId);
+
+                                return (
+                                  <button
+                                    key={booking.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const match = activeCamp.participants.find(
+                                        (item) => item.userId === booking.userId,
+                                      );
+                                      if (match) {
+                                        setSelectedParticipantId(match.id);
+                                        setTabletPanel("participant");
+                                      }
+                                    }}
+                                    className="grid rounded-md px-2.5 py-2 text-left text-white shadow-sm"
+                                    style={{ backgroundColor: colors?.bg }}
+                                  >
+                                    <span className="block truncate text-sm font-black">
+                                      {booking.athleteName}
+                                    </span>
+                                    <span className="text-xs font-bold text-white/80">
+                                      {booking.minutes} min
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                              {Array.from({
+                                length: Math.max(slot.capacity - slot.bookings.length, 0),
+                              }).map((_, index) => (
+                                <div
+                                  key={`${slot.id}-tablet-open-${index}`}
+                                  className="grid gap-2 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2"
+                                >
+                                  <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                                    Open slot
+                                  </p>
+                                  <AssignSlotButton
+                                    opportunityId={activeCamp.id}
+                                    slotId={slot.id}
+                                    participants={assignableParticipants.filter(
+                                      (item) =>
+                                        !slot.bookings.some(
+                                          (booking) => booking.userId === item.id,
+                                        ),
+                                    )}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </article>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-6 text-center">
+                        <p className="text-sm font-black text-slate-500">
+                          No slots yet
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </section>
+        <CampSettingsPanel
+          key={`tablet-${activeCamp.id}`}
+          camp={activeCamp}
+          tunnels={tunnels}
+          publicUrl={publicUrl}
+          shareText={shareText}
+        />
+      </main>
+
+      {tabletPanel ? (
+        <TabletSlideOver
+          title={tabletPanel === "participant" ? "Participant" : "Participants"}
+          onClose={() => setTabletPanel(null)}
+        >
+          {tabletPanel === "participant" && participant ? (
+            <ParticipantPanel
+              participant={participant}
+              camp={activeCamp}
+              onClear={() => {
+                setSelectedParticipantId("");
+                setTabletPanel("participants");
+              }}
+            />
+          ) : (
+            <div className="grid gap-3">
+              <AttentionPanel items={attention} onAction={handleAttentionClick} />
+              <ParticipantColumns
+                participants={activeCamp.participants}
+                selectedParticipantId={selectedParticipantId}
+                onSelectParticipant={(id) => {
+                  setSelectedParticipantId(id);
+                  setTabletPanel("participant");
+                }}
+                participantColorMap={participantColorMap}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTabletPanel(null);
+                    setCreationType("camp");
+                  }}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white"
+                >
+                  <Plus size={16} /> New Camp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTabletPanel(null);
+                    setCreationType("huck_jam");
+                  }}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700"
+                >
+                  <Plus size={16} /> Huck Jam
+                </button>
+              </div>
+            </div>
+          )}
+        </TabletSlideOver>
+      ) : null}
 
       <main className="p-4 md:hidden">
         <div className="rounded-2xl border border-white/10 bg-white p-5">
@@ -534,62 +913,146 @@ export function CoachDashboardWorkspace({
           </Link>
         </div>
       </main>
+      {creationType ? (
+        <CreationPanel
+          type={creationType}
+          tunnels={tunnels}
+          inheritedCoachProfile={inheritedCoachProfile}
+          organizerName={coachName}
+          onCancel={() => setCreationType(null)}
+          onSuccess={handleOpportunityCreated}
+        />
+      ) : null}
       </div>
     </div>
   );
 }
 
-function RangeControl({
-  range,
-  onRangeChange,
+function CreationPanel({
+  type,
+  tunnels,
+  inheritedCoachProfile,
+  organizerName,
+  onCancel,
+  onSuccess,
 }: {
-  range: WorkspaceRange;
-  onRangeChange: (range: WorkspaceRange) => void;
+  type: OpportunityType;
+  tunnels: TunnelOption[];
+  inheritedCoachProfile?: InheritedCoachProfile;
+  organizerName: string;
+  onCancel: () => void;
+  onSuccess: (opportunityId: string) => void;
 }) {
-  const options: Array<{ value: WorkspaceRange; label: string }> = [
-    { value: "today", label: "Today" },
-    { value: "tomorrow", label: "Tomorrow" },
-    { value: "entire", label: "Entire Camp" },
-  ];
-
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onRangeChange(option.value)}
-          className={`h-9 rounded-xl text-xs font-black transition ${
-            range === option.value
-              ? "bg-slate-950 text-white"
-              : "text-slate-500 hover:bg-slate-50"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="fixed inset-0 z-50 grid bg-slate-950/40 p-3 md:place-items-center md:p-5">
+      <section className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl md:max-h-[calc(100dvh-2.5rem)]">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
+              Create inside Coach Dashboard
+            </p>
+            <h2 className="mt-1 text-xl font-black tracking-tight">
+              New {type === "huck_jam" ? "Huck Jam" : "Camp"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+            aria-label="Close creation panel"
+          >
+            <X size={17} />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-4 pb-4">
+          <CreateOpportunityForm
+            tunnels={tunnels.map((tunnel) => ({
+              id: tunnel.id,
+              name: tunnel.name,
+              city: tunnel.city ?? "",
+              country: tunnel.country ?? "",
+            }))}
+            inheritedCoachProfile={inheritedCoachProfile}
+            organizerName={organizerName}
+            initialType={type}
+            onCancel={onCancel}
+            onSuccess={onSuccess}
+          />
+        </div>
+      </section>
     </div>
   );
 }
 
-function AttentionPanel({ items }: { items: Array<{ label: string; tone: string }> }) {
+function TabletSlideOver({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 bg-slate-950/30 xl:hidden">
+      <aside className="ml-auto grid h-full w-[min(26rem,92vw)] grid-rows-[auto_minmax(0,1fr)] border-l border-slate-200 bg-slate-100 shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+          <h2 className="text-lg font-black tracking-tight">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500"
+            aria-label="Close tablet panel"
+          >
+            <X size={17} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-3">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+function AttentionPanel({
+  items,
+  onAction,
+}: {
+  items: AttentionItem[];
+  onAction: (item: AttentionItem) => void;
+}) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <h2 className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
-        Needs attention
-      </h2>
-      <div className="mt-3 grid gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+          Needs attention
+        </h2>
+        {items.length > 0 ? (
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-black text-amber-800">
+            {items.length}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-2 grid gap-1.5">
         {items.length > 0 ? (
           items.map((item) => (
-            <div
+            <button
               key={item.label}
-              className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900"
+              type="button"
+              onClick={() => onAction(item)}
+              className={`flex min-h-9 items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 text-left text-sm font-black transition ${
+                item.tone === "amber"
+                  ? "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
             >
-              {item.label}
-            </div>
+              <span className="min-w-0 truncate">{item.label}</span>
+              <span className="shrink-0 text-xs opacity-70">
+                {item.target === "timetable" ? "View" : "Open"}
+              </span>
+            </button>
           ))
         ) : (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700">
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-sm font-black text-emerald-700">
             Everything is clear
           </p>
         )}
@@ -1088,6 +1551,7 @@ function ParticipantPanel({
       })),
   );
   const bookedMinutes = bookedSlots.reduce((total, slot) => total + slot.minutes, 0);
+  const bookedSlotsByDay = groupBookedSlotsByDay(bookedSlots);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -1135,15 +1599,29 @@ function ParticipantPanel({
           Booked Slots
         </h3>
         <div className="mt-2 grid gap-1.5">
-          {bookedSlots.length > 0 ? (
-            bookedSlots.map((slot) => (
-              <div
-                key={slot.id}
-                className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-black"
-              >
-                {formatTimetableDate(slot.date)} at {formatTimetableTime(slot.time)} -{" "}
-                {slot.minutes} min
-              </div>
+          {bookedSlotsByDay.length > 0 ? (
+            bookedSlotsByDay.map((day) => (
+              <section key={day.date} className="rounded-xl bg-slate-50 p-2.5">
+                <h4 className="text-sm font-black text-slate-950">
+                  {formatTimetableDate(day.date)}
+                </h4>
+                <div className="mt-1.5 grid gap-1">
+                  {day.slots.map((slot) => (
+                    <div
+                      key={slot.id}
+                      className="grid gap-2 rounded-lg bg-white px-2.5 py-2 text-sm font-black sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    >
+                      <span>
+                        {formatTimetableTime(slot.time)} - {slot.minutes} min
+                      </span>
+                      <ReleaseSlotBookingButton
+                        opportunityId={camp.id}
+                        bookingId={slot.id}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))
           ) : (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-black text-amber-700">
@@ -1260,32 +1738,14 @@ function DashboardField({
 const dashboardInputClass =
   "min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-sky-400";
 
-function filterSlots(slots: TimetableSlot[], range: WorkspaceRange) {
-  if (range === "entire") {
-    return slots;
-  }
-
-  const date = new Date();
-  if (range === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-  }
-  const target = date.toISOString().slice(0, 10);
-
-  return slots.filter((slot) => slot.slotDate === target);
-}
-
 function getVisibleTimetableDays(
   camp: CampWorkspace,
   slots: TimetableSlot[],
-  range: WorkspaceRange,
 ) {
   const slotsByDate = new Map(
     groupTimetableSlotsByDay(slots).map((day) => [day.date, day.slots]),
   );
-  const dates =
-    range === "entire"
-      ? getDateRange(camp.startDate, camp.endDate)
-      : [getRangeDate(range)];
+  const dates = getDateRange(camp.startDate, camp.endDate);
 
   return dates.map((date) => ({
     date,
@@ -1293,15 +1753,6 @@ function getVisibleTimetableDays(
       a.startTime.localeCompare(b.startTime),
     ),
   }));
-}
-
-function getRangeDate(range: Exclude<WorkspaceRange, "entire">) {
-  const date = new Date();
-  if (range === "tomorrow") {
-    date.setDate(date.getDate() + 1);
-  }
-
-  return date.toISOString().slice(0, 10);
 }
 
 function getDateRange(startDate: string, endDate: string) {
@@ -1324,6 +1775,25 @@ function getDateRange(startDate: string, endDate: string) {
   return dates;
 }
 
+function groupBookedSlotsByDay<T extends { date: string; time: string }>(
+  slots: T[],
+) {
+  const groups = new Map<string, T[]>();
+
+  for (const slot of slots) {
+    const daySlots = groups.get(slot.date) ?? [];
+    daySlots.push(slot);
+    groups.set(slot.date, daySlots);
+  }
+
+  return [...groups.entries()]
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, daySlots]) => ({
+      date,
+      slots: daySlots.sort((a, b) => a.time.localeCompare(b.time)),
+    }));
+}
+
 function buildParticipantColorMap(participants: Participant[]) {
   const map = new Map<string, (typeof participantColors)[number]>();
   participants
@@ -1337,36 +1807,65 @@ function buildParticipantColorMap(participants: Participant[]) {
 }
 
 function getAttentionItems(camp: CampWorkspace) {
-  const items: Array<{ label: string; tone: string }> = [];
-  const pending = camp.participants.filter((item) => item.status === "pending").length;
+  const items: AttentionItem[] = [];
+  const pendingParticipants = camp.participants.filter(
+    (item) => item.status === "pending",
+  );
   const accepted = camp.participants.filter((item) => item.status === "accepted");
   const participantsWithSlots = new Set(
     camp.timetableSlots.flatMap((slot) =>
       slot.bookings.map((booking) => booking.userId),
     ),
   );
-  const missingSlots = accepted.filter(
+  const participantsMissingSlots = accepted.filter(
     (item) => item.userId && !participantsWithSlots.has(item.userId),
-  ).length;
-  const missingTunnelTime = accepted.filter(
+  );
+  const participantsMissingTunnelTime = accepted.filter(
     (item) => !item.tunnelTimeStatus,
-  ).length;
+  );
+  const waitlistParticipants = camp.participants.filter(
+    (item) => item.status === "waitlist",
+  );
   const openSlots = camp.summary.openSlots;
 
-  if (pending > 0) {
-    items.push({ label: `${pending} new applicants`, tone: "amber" });
-  }
-  if (missingSlots > 0) {
-    items.push({ label: `${missingSlots} participants missing slots`, tone: "amber" });
-  }
-  if (missingTunnelTime > 0) {
+  if (pendingParticipants.length > 0) {
     items.push({
-      label: `${missingTunnelTime} participants missing tunnel time`,
+      label: `${pendingParticipants.length} new applicants`,
       tone: "amber",
+      target: "participant",
+      participantId: pendingParticipants[0]?.id,
+    });
+  }
+  if (participantsMissingSlots.length > 0) {
+    items.push({
+      label: `${participantsMissingSlots.length} participants missing slots`,
+      tone: "amber",
+      target: "participant",
+      participantId: participantsMissingSlots[0]?.id,
+    });
+  }
+  if (participantsMissingTunnelTime.length > 0) {
+    items.push({
+      label: `${participantsMissingTunnelTime.length} participants missing tunnel time`,
+      tone: "amber",
+      target: "participant",
+      participantId: participantsMissingTunnelTime[0]?.id,
     });
   }
   if (openSlots > 0) {
-    items.push({ label: `${openSlots} open slots`, tone: "slate" });
+    items.push({
+      label: `${openSlots} open slots`,
+      tone: "slate",
+      target: "timetable",
+    });
+  }
+  if (waitlistParticipants.length > 0) {
+    items.push({
+      label: `${waitlistParticipants.length} waitlist items`,
+      tone: "slate",
+      target: "participant",
+      participantId: waitlistParticipants[0]?.id,
+    });
   }
 
   return items;
