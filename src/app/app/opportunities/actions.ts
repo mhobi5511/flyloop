@@ -569,6 +569,7 @@ export async function bookOpportunitySlots(
 
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath("/app/applications");
   revalidatePath("/app/dashboard");
 
@@ -605,6 +606,7 @@ export async function setCampTunnelTimeStatus(
 
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath("/app/applications");
   revalidatePath("/app/dashboard");
 
@@ -652,6 +654,7 @@ export async function releaseOwnOpportunitySlot(
 
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath("/app/applications");
   revalidatePath("/app/dashboard");
 

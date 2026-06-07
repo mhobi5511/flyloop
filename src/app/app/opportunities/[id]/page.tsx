@@ -4,6 +4,7 @@ import { CalendarDays, Clock3, MapPin, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
+import { CampTunnelTimeSettings } from "@/components/CampTunnelTimeSettings";
 import { FollowButton } from "@/components/FollowButton";
 import { FollowGuidance } from "@/components/FollowGuidance";
 import { InterestButton } from "@/components/InterestButton";
@@ -27,7 +28,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { calculateEstimatedCost } from "@/lib/timetable";
-import type { InterestStatus } from "@/lib/types";
+import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 
 type OpportunityDetailRow = HomeFeedRow & {
   coach_profile_image_url?: string | null;
@@ -76,7 +77,7 @@ export default async function OpportunityDetailPage({
     user && user.id !== opportunity.createdBy
       ? await supabase
           .from("opportunity_interests")
-          .select("id,status,interest_type,removal_requested_at")
+          .select("id,status,interest_type,removal_requested_at,tunnel_time_status,tunnel_account_email")
           .eq("opportunity_id", opportunity.id)
           .eq("athlete_id", user.id)
           .maybeSingle()
@@ -85,6 +86,11 @@ export default async function OpportunityDetailPage({
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
     viewerInterest?.interest_type === "timetable_reminder";
+  const viewerTunnelTimeStatus =
+    (viewerInterest?.tunnel_time_status as TunnelTimeStatus | null | undefined) ??
+    null;
+  const viewerTunnelAccountEmail =
+    (viewerInterest?.tunnel_account_email as string | null | undefined) ?? null;
   const viewerApplicationStatus = viewerHasTimetableReminder
     ? undefined
     : viewerInterestStatus === "withdrawn"
@@ -153,6 +159,8 @@ export default async function OpportunityDetailPage({
   const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
   const isAccepted = viewerApplicationStatus === "accepted";
   const canRequestCampRemoval =
+    !isHuckJam && isAccepted && Boolean(viewerInterest?.id);
+  const canManageParticipation =
     !isHuckJam && isAccepted && Boolean(viewerInterest?.id);
   const isDeclined = viewerApplicationStatus === "declined";
   const isWaitlisted = viewerApplicationStatus === "waitlist";
@@ -273,50 +281,33 @@ export default async function OpportunityDetailPage({
             ) : null}
           </div>
 
-          {canSelectTimes && isAccepted ? (
-            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-sky-700">
-                You&apos;re accepted
-              </p>
-              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-base font-black text-slate-950">
-                  Next step: select your flying times.
-                </p>
-                <Link
-                  href={`/app/opportunities/${opportunity.id}/times`}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
-                >
-                  <Clock3 size={17} /> Select Times
-                </Link>
+          {!isAccepted ? (
+            <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-2 text-sky-700">
+                <MapPin size={17} className="mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <Link
+                    className="block truncate text-sm font-black text-slate-900"
+                    href={`/app/tunnels/${opportunity.tunnelId}`}
+                  >
+                    {opportunity.tunnelName}
+                  </Link>
+                  <p className="text-xs font-semibold text-slate-600">
+                    {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
+                  </p>
+                </div>
               </div>
+              {!isOrganizer ? (
+                <div className="shrink-0">
+                  <FollowButton
+                    targetType="tunnel"
+                    targetId={opportunity.tunnelId}
+                    label="Follow Tunnel"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
-
-          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-2 text-sky-700">
-              <MapPin size={17} className="mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <Link
-                  className="block truncate text-sm font-black text-slate-900"
-                  href={`/app/tunnels/${opportunity.tunnelId}`}
-                >
-                  {opportunity.tunnelName}
-                </Link>
-                <p className="text-xs font-semibold text-slate-600">
-                  {formatLocation(opportunity.tunnelCity, opportunity.tunnelCountry)}
-                </p>
-              </div>
-            </div>
-            {!isOrganizer ? (
-              <div className="shrink-0">
-                <FollowButton
-                  targetType="tunnel"
-                  targetId={opportunity.tunnelId}
-                  label="Follow Tunnel"
-                />
-              </div>
-            ) : null}
-          </div>
 
           <div className="mt-4 rounded-2xl bg-sky-50 px-4 py-4 text-sky-800">
             <p className="text-xs font-black uppercase tracking-wide text-sky-700">
@@ -334,37 +325,58 @@ export default async function OpportunityDetailPage({
             </p>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link href={`/app/users/${profileUserId}`} className="shrink-0">
-                <Avatar
-                  name={opportunity.coachName ?? personLabel}
-                  imageUrl={opportunityRow.coach_profile_image_url}
-                  size="md"
-                />
-              </Link>
-              <div className="min-w-0">
-                <Link
-                  href={`/app/users/${profileUserId}`}
-                  className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
-                >
-                  {opportunity.coachName ?? personLabel}
-                </Link>
-                <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
-                  {personLabel}
+          {canSelectTimes && isAccepted ? (
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+                You&apos;re accepted
+              </p>
+              <div className="mt-1.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-base font-black text-slate-950">
+                  Next step: select your flying times.
                 </p>
+                <Link
+                  href={`/app/opportunities/${opportunity.id}/times`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+                >
+                  <Clock3 size={17} /> Select Times
+                </Link>
               </div>
             </div>
-            {opportunity.coachFollowId && !isOrganizer ? (
-              <div className="shrink-0">
-                <FollowButton
-                  targetType="coach"
-                  targetId={opportunity.coachFollowId}
-                  label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
-                />
+          ) : null}
+
+          {!isAccepted ? (
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link href={`/app/users/${profileUserId}`} className="shrink-0">
+                  <Avatar
+                    name={opportunity.coachName ?? personLabel}
+                    imageUrl={opportunityRow.coach_profile_image_url}
+                    size="md"
+                  />
+                </Link>
+                <div className="min-w-0">
+                  <Link
+                    href={`/app/users/${profileUserId}`}
+                    className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
+                  >
+                    {opportunity.coachName ?? personLabel}
+                  </Link>
+                  <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
+                    {personLabel}
+                  </p>
+                </div>
               </div>
-            ) : null}
-          </div>
+              {opportunity.coachFollowId && !isOrganizer ? (
+                <div className="shrink-0">
+                  <FollowButton
+                    targetType="coach"
+                    targetId={opportunity.coachFollowId}
+                    label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {isDeclined ? (
             <StatusMessage message="Your application was declined." />
@@ -392,15 +404,6 @@ export default async function OpportunityDetailPage({
             </div>
           ) : null}
 
-          <FollowGuidance
-            opportunityId={opportunity.id}
-            show={Boolean(
-              user &&
-                !isOrganizer &&
-                (!followsTunnel || (opportunity.coachFollowId && !followsCoach)),
-            )}
-          />
-
           {canSelectTimes ? (
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
               {!isAccepted ? (
@@ -415,6 +418,9 @@ export default async function OpportunityDetailPage({
                 <div className={isAccepted ? "" : "mt-3"}>
                   <p className="text-xs font-black uppercase text-slate-500">
                     Your booked times
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Modify your selections via &apos;Select Times&apos;.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {bookedTimes.map((booking) => (
@@ -457,6 +463,75 @@ export default async function OpportunityDetailPage({
             </div>
           ) : null}
 
+          {isAccepted ? (
+            <>
+              <div className="mt-3 flex flex-col gap-3 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Link href={`/app/users/${profileUserId}`} className="shrink-0">
+                    <Avatar
+                      name={opportunity.coachName ?? personLabel}
+                      imageUrl={opportunityRow.coach_profile_image_url}
+                      size="md"
+                    />
+                  </Link>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/app/users/${profileUserId}`}
+                      className="block truncate text-base font-black text-slate-900 hover:text-sky-700"
+                    >
+                      {opportunity.coachName ?? personLabel}
+                    </Link>
+                    <p className="mt-0.5 text-xs font-bold uppercase text-slate-400">
+                      {personLabel}
+                    </p>
+                  </div>
+                </div>
+                {opportunity.coachFollowId && !isOrganizer ? (
+                  <div className="shrink-0">
+                    <FollowButton
+                      targetType="coach"
+                      targetId={opportunity.coachFollowId}
+                      label={
+                        personLabel === "Coach"
+                          ? "Follow Coach"
+                          : "Follow Organizer"
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-2 text-sky-700">
+                  <MapPin size={17} className="mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <Link
+                      className="block truncate text-sm font-black text-slate-900"
+                      href={`/app/tunnels/${opportunity.tunnelId}`}
+                    >
+                      {opportunity.tunnelName}
+                    </Link>
+                    <p className="text-xs font-semibold text-slate-600">
+                      {formatLocation(
+                        opportunity.tunnelCity,
+                        opportunity.tunnelCountry,
+                      )}
+                    </p>
+                  </div>
+                </div>
+                {!isOrganizer ? (
+                  <div className="shrink-0">
+                    <FollowButton
+                      targetType="tunnel"
+                      targetId={opportunity.tunnelId}
+                      label="Follow Tunnel"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+
           <div className="mt-3 flex flex-wrap gap-2">
             <ShareOpportunityButton
               label={shareLabel}
@@ -466,16 +541,23 @@ export default async function OpportunityDetailPage({
             />
           </div>
 
-          {canRequestCampRemoval && viewerInterest?.id ? (
+          {canManageParticipation && viewerInterest?.id ? (
             <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
               <summary className="cursor-pointer list-none text-sm font-black text-slate-900">
                 Manage Participation v
               </summary>
-              <div className="mt-3">
-                <RequestCampRemovalButton
-                  interestId={viewerInterest.id}
-                  initialRequested={Boolean(viewerInterest.removal_requested_at)}
+              <div className="mt-3 grid gap-3">
+                <CampTunnelTimeSettings
+                  opportunityId={opportunity.id}
+                  initialStatus={viewerTunnelTimeStatus}
+                  initialAccountEmail={viewerTunnelAccountEmail}
                 />
+                {canRequestCampRemoval ? (
+                  <RequestCampRemovalButton
+                    interestId={viewerInterest.id}
+                    initialRequested={Boolean(viewerInterest.removal_requested_at)}
+                  />
+                ) : null}
               </div>
             </details>
           ) : null}
@@ -495,6 +577,15 @@ export default async function OpportunityDetailPage({
               </div>
             </details>
           ) : null}
+
+          <FollowGuidance
+            opportunityId={opportunity.id}
+            show={Boolean(
+              user &&
+                !isOrganizer &&
+                (!followsTunnel || (opportunity.coachFollowId && !followsCoach)),
+            )}
+          />
         </article>
 
         <aside className="hidden content-start gap-4 lg:grid">

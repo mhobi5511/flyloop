@@ -71,13 +71,9 @@ export function SlotBookingSelector({
   );
   const hasPendingChanges =
     newSelectedSlotIds.length > 0 || removedBookedSlotIds.length > 0;
-  const hasTunnelTimeStatusChange =
-    selectedSlotIds.length > 0 &&
-    (tunnelTimeStatus !== (initialTunnelTimeStatus ?? "") ||
-      normalizedEmail(tunnelAccountEmail) !==
-        normalizedEmail(initialTunnelAccountEmail ?? ""));
-  const canSave =
-    hasPendingChanges || (hasTunnelTimeStatusChange && selectedSlotIds.length > 0);
+  const needsTunnelTimePrompt =
+    selectedSlotIds.length > 0 && !initialTunnelTimeStatus;
+  const canSave = hasPendingChanges;
   const selectedCount = selectedSlotIds.length;
   const totalMinutes = selectedSlots.reduce(
     (sum, slot) => sum + slot.durationMinutes,
@@ -113,7 +109,7 @@ export function SlotBookingSelector({
     setMessage("");
     setError("");
 
-    if (selectedSlotIds.length > 0) {
+    if (needsTunnelTimePrompt) {
       setIsTunnelTimeModalOpen(true);
       return;
     }
@@ -125,7 +121,7 @@ export function SlotBookingSelector({
     setMessage("");
     setError("");
 
-    if (selectedSlotIds.length > 0) {
+    if (needsTunnelTimePrompt) {
       const tunnelTimeError = getTunnelTimeError(
         tunnelTimeStatus,
         tunnelAccountEmail,
@@ -141,7 +137,7 @@ export function SlotBookingSelector({
       let statusResult: Awaited<ReturnType<typeof setCampTunnelTimeStatus>> | null =
         null;
 
-      if (selectedSlotIds.length > 0) {
+      if (needsTunnelTimePrompt) {
         statusResult = await setCampTunnelTimeStatus(opportunityId, {
           status: tunnelTimeStatus,
           accountEmail: tunnelAccountEmail,
@@ -165,8 +161,8 @@ export function SlotBookingSelector({
       const result =
         newSelectedSlotIds.length > 0
           ? await bookOpportunitySlots(opportunityId, newSelectedSlotIds, {
-              status: tunnelTimeStatus,
-              accountEmail: tunnelAccountEmail,
+              status: tunnelTimeStatus || initialTunnelTimeStatus || "",
+              accountEmail: tunnelAccountEmail || initialTunnelAccountEmail || "",
             })
           : statusResult ?? { ok: true as const, message: "Your slots were updated." };
 
