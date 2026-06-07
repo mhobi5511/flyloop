@@ -53,7 +53,6 @@ type OpportunityRow = {
           | {
               id: string;
               full_name: string | null;
-              email: string | null;
               phone: string | null;
               whatsapp_number: string | null;
               country: string | null;
@@ -62,7 +61,6 @@ type OpportunityRow = {
           | Array<{
               id: string;
               full_name: string | null;
-              email: string | null;
               phone: string | null;
               whatsapp_number: string | null;
               country: string | null;
@@ -122,8 +120,7 @@ export default async function CoachDashboardPage({
 
   const [
     { data: profile },
-    { data: opportunities },
-    { data: slots },
+    opportunitiesResult,
     { data: notifications },
     { data: tunnels },
   ] = await Promise.all([
@@ -134,14 +131,9 @@ export default async function CoachDashboardPage({
       .maybeSingle(),
     supabase
       .from("opportunities")
-      .select("id,title,type,booking_mode,status,start_date,end_date,registration_deadline,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,interest_type,profiles!opportunity_interests_athlete_id_fkey(id,full_name,email,phone,whatsapp_number,country,profile_image_url))")
+      .select("id,title,type,booking_mode,status,start_date,end_date,registration_deadline,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,interest_type,profiles!opportunity_interests_athlete_id_fkey(id,full_name,phone,whatsapp_number,country,profile_image_url))")
       .eq("created_by", user.id)
       .order("start_date", { ascending: true }),
-    supabase
-      .from("opportunity_time_slots")
-      .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
-      .order("slot_date", { ascending: true })
-      .order("start_time", { ascending: true }),
     supabase
       .from("notifications")
       .select("id,title,body,type,created_at,opportunity_id")
@@ -163,7 +155,26 @@ export default async function CoachDashboardPage({
     redirect("/app/dashboard");
   }
 
-  const opportunityRows = (opportunities ?? []) as OpportunityRow[];
+  if (opportunitiesResult.error) {
+    console.error("Coach dashboard opportunities lookup failed", opportunitiesResult.error);
+  }
+
+  const opportunityRows = (opportunitiesResult.data ?? []) as OpportunityRow[];
+  const opportunityIds = opportunityRows.map((opportunity) => opportunity.id);
+  const { data: slots, error: slotsError } =
+    opportunityIds.length > 0
+      ? await supabase
+          .from("opportunity_time_slots")
+          .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+          .in("opportunity_id", opportunityIds)
+          .order("slot_date", { ascending: true })
+          .order("start_time", { ascending: true })
+      : { data: [], error: null };
+
+  if (slotsError) {
+    console.error("Coach dashboard slots lookup failed", slotsError);
+  }
+
   const slotRows = (slots ?? []) as SlotRow[];
   const workspaceCamps = opportunityRows.map((opportunity) => {
     const tunnel = Array.isArray(opportunity.tunnel_profiles)
@@ -180,7 +191,7 @@ export default async function CoachDashboardPage({
           id: interest.id,
           userId: profileRow?.id ?? "",
           name: profileRow?.full_name ?? "Participant",
-          email: profileRow?.email ?? "",
+          email: "",
           phone: profileRow?.whatsapp_number ?? profileRow?.phone ?? "",
           country: profileRow?.country ?? "",
           profileImageUrl: profileRow?.profile_image_url ?? "",
@@ -253,10 +264,10 @@ export default async function CoachDashboardPage({
       timetableSlots,
       summary,
     };
-  });
+  }).sort(compareWorkspaceOpportunities);
   const selectedCampId =
     workspaceCamps.find((camp) => camp.id === selectedCampParam)?.id ??
-    workspaceCamps[0]?.id ??
+    getDefaultSelectedCampId(workspaceCamps) ??
     "";
 
   return (
@@ -274,4 +285,26 @@ export default async function CoachDashboardPage({
       }))}
     />
   );
+}
+
+function compareWorkspaceOpportunities(
+  a: { startDate: string; endDate: string },
+  b: { startDate: string; endDate: string },
+) {
+  const today = new Date().toISOString().slice(0, 10);
+  const aUpcoming = a.endDate >= today;
+  const bUpcoming = b.endDate >= today;
+
+  if (aUpcoming !== bUpcoming) {
+    return aUpcoming ? -1 : 1;
+  }
+
+  return aUpcoming
+    ? Date.parse(a.startDate) - Date.parse(b.startDate)
+    : Date.parse(b.endDate) - Date.parse(a.endDate);
+}
+
+function getDefaultSelectedCampId(camps: Array<{ id: string; endDate: string }>) {
+  const today = new Date().toISOString().slice(0, 10);
+  return camps.find((camp) => camp.endDate >= today)?.id ?? camps[0]?.id;
 }

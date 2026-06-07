@@ -259,7 +259,7 @@ export function CoachDashboardWorkspace({
             >
               {camps.map((camp) => (
                 <option key={camp.id} value={camp.id}>
-                  {camp.title}
+                  {camp.type === "huck_jam" ? "Huck Jam" : "Camp"} - {camp.title}
                 </option>
               ))}
             </select>
