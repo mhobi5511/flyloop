@@ -57,6 +57,16 @@ const interactedStatuses = new Set<InterestStatus>([
   "declined",
 ]);
 
+const heroMessages = [
+  "What can you fly next?",
+  "Ready for your next camp?",
+  "Time to fly?",
+  "Find your next tunnel session.",
+  "Discover your next opportunity.",
+  "Your next camp might already be waiting.",
+  "Where do you want to fly next?",
+];
+
 export default async function AppHomePage({
   searchParams,
 }: {
@@ -223,6 +233,7 @@ export default async function AppHomePage({
   );
   const countryOptions = getCountryOptions(futureRows);
   const monthOptions = getMonthOptions(futureRows);
+  const heroHeadline = getDailyHeroMessage();
 
   return (
     <AppShell active="home">
@@ -231,7 +242,7 @@ export default async function AppHomePage({
           Good to see you{homeProfile?.full_name ? `, ${homeProfile.full_name}` : ""}
         </p>
         <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
-          What can you fly next?
+          {heroHeadline}
         </h1>
       </div>
 
@@ -512,4 +523,19 @@ function getMonthOptions(rows: HomeFeedRow[]) {
       value,
       label: formatter.format(new Date(`${value}-01T00:00:00.000Z`)),
     }));
+}
+
+function getDailyHeroMessage(date = new Date()) {
+  return heroMessages[getDayOfYear(date) % heroMessages.length];
+}
+
+function getDayOfYear(date: Date) {
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const today = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+  );
+
+  return Math.floor((today - startOfYear) / 86_400_000);
 }
