@@ -207,7 +207,13 @@ export async function publishOpportunity(
   }
 
   if (!isValidDate(input.startDate)) {
-    return { ok: false, message: "Please select a start date." };
+    return {
+      ok: false,
+      message:
+        input.type === "huck_jam"
+          ? "Please select an event date."
+          : "Please select a start date.",
+    };
   }
 
   if (input.type === "camp" && !isValidDate(input.endDate)) {
@@ -231,7 +237,10 @@ export async function publishOpportunity(
   ) {
     return {
       ok: false,
-      message: "Registration deadline must be on or before the start date.",
+      message:
+        input.type === "huck_jam"
+          ? "Registration deadline must be on or before the event date."
+          : "Registration deadline must be on or before the start date.",
     };
   }
 
@@ -398,7 +407,10 @@ export async function updateOpportunity(
   ) {
     return {
       ok: false,
-      message: "Registration deadline must be on or before the start date.",
+      message:
+        input.type === "huck_jam"
+          ? "Registration deadline must be on or before the event date."
+          : "Registration deadline must be on or before the start date.",
     };
   }
 

@@ -3,7 +3,11 @@ import { Monitor, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
-import { formatOpportunityDate, formatOpportunityType } from "@/lib/opportunities";
+import {
+  formatOpportunityDate,
+  formatOpportunityType,
+  formatSessionTimeRange,
+} from "@/lib/opportunities";
 import {
   countUnreadByOpportunity,
   organizerActivityNotificationTypes,
@@ -24,6 +28,8 @@ type OrganizerOpportunityRow = {
   status: OpportunityStatus;
   start_date: string;
   end_date: string;
+  session_start: string | null;
+  session_end: string | null;
   registration_deadline: string | null;
   total_capacity: number;
   available_spots: number;
@@ -59,6 +65,8 @@ type OpportunityCardModel = {
   status: OpportunityStatus;
   startDate: string;
   endDate: string;
+  sessionStart: string | null;
+  sessionEnd: string | null;
   totalCapacity: number;
   availableSpots: number;
   bookedSpots: number;
@@ -134,7 +142,7 @@ export default async function OrganizerDashboardPage({
     supabase
       .from("opportunities")
       .select(
-        "id,title,type,status,start_date,end_date,registration_deadline,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,interest_type,created_at)",
+        "id,title,type,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(status,interest_type,created_at)",
       )
       .eq("created_by", user?.id)
       .order("start_date", { ascending: true }),
@@ -314,6 +322,8 @@ function toCardModel(
     status: opportunity.status,
     startDate: opportunity.start_date,
     endDate: opportunity.end_date,
+    sessionStart: opportunity.session_start,
+    sessionEnd: opportunity.session_end,
     totalCapacity: opportunity.total_capacity,
     availableSpots: opportunity.available_spots,
     bookedSpots,
@@ -496,6 +506,14 @@ function OpportunityCard({ opportunity }: { opportunity: OpportunityCardModel })
               opportunity.startDate,
               opportunity.endDate,
             )}
+            {opportunity.type === "huck_jam"
+              ? `, ${
+                  formatSessionTimeRange(
+                    opportunity.sessionStart,
+                    opportunity.sessionEnd,
+                  ) || "Time to be confirmed"
+                }`
+              : ""}
           </p>
         </div>
         <div className="shrink-0 pr-3 text-right">

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { CoachDashboardWorkspace } from "@/components/CoachDashboardWorkspace";
 import { organizerActivityNotificationTypes } from "@/lib/notifications";
-import { formatOpportunityDate } from "@/lib/opportunities";
+import {
+  formatOpportunityDate,
+  formatSessionTimeRange,
+} from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import {
@@ -326,11 +329,13 @@ export default async function CoachDashboardPage({
       tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
       tunnelLocation: [tunnel?.city, tunnel?.country].filter(Boolean).join(", "),
       tunnelDashboardUrl,
-      dateLabel: formatOpportunityDate(
-        opportunity.type,
-        opportunity.start_date,
-        opportunity.end_date,
-      ),
+      dateLabel: formatWorkspaceDateLabel({
+        type: opportunity.type,
+        startDate: opportunity.start_date,
+        endDate: opportunity.end_date,
+        sessionStart: opportunity.session_start,
+        sessionEnd: opportunity.session_end,
+      }),
       participants,
       timetableSlots,
       summary,
@@ -382,4 +387,24 @@ function compareWorkspaceOpportunities(
 function getDefaultSelectedCampId(camps: Array<{ id: string; endDate: string }>) {
   const today = new Date().toISOString().slice(0, 10);
   return camps.find((camp) => camp.endDate >= today)?.id ?? camps[0]?.id;
+}
+
+function formatWorkspaceDateLabel({
+  type,
+  startDate,
+  endDate,
+  sessionStart,
+  sessionEnd,
+}: {
+  type: "camp" | "huck_jam";
+  startDate: string;
+  endDate: string;
+  sessionStart: string | null;
+  sessionEnd: string | null;
+}) {
+  const dateLabel = formatOpportunityDate(type, startDate, endDate);
+  const sessionRange =
+    type === "huck_jam" ? formatSessionTimeRange(sessionStart, sessionEnd) : "";
+
+  return sessionRange ? `${dateLabel}, ${sessionRange}` : dateLabel;
 }

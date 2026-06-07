@@ -1299,7 +1299,9 @@ function AddSlotButton({
     ];
 
     startTransition(async () => {
-      const result = await saveCampTimetable(camp.id, nextSlots, false);
+      const result = await saveCampTimetable(camp.id, nextSlots, true, {
+        redirectOnPublish: false,
+      });
 
       if (!result.ok) {
         setError(result.message);

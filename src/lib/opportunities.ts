@@ -170,13 +170,17 @@ export function getOpportunityShareText(opportunity: Opportunity, url: string) {
     opportunity.startDate,
     opportunity.endDate,
   );
+  const sessionText =
+    opportunity.type === "huck_jam"
+      ? formatSessionTimeRange(opportunity.sessionStart, opportunity.sessionEnd)
+      : "";
   const tunnelName = opportunity.tunnelName ?? "the tunnel";
 
   return [
     `Join my ${typeLabel} on Flyloop`,
     "",
     opportunity.title,
-    dateText,
+    sessionText ? `${dateText}, ${sessionText}` : dateText,
     tunnelName,
     "",
     "Register now",

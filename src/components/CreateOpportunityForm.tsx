@@ -100,6 +100,10 @@ function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 }
 
+function isValidTime(value: string) {
+  return /^\d{2}:\d{2}$/.test(value);
+}
+
 function splitCsv(value: string) {
   return value
     .split(",")
@@ -154,6 +158,10 @@ function formatCurrency(amount: string, currency: string) {
   }).format(number);
 }
 
+function formatSessionTime(value: string) {
+  return value.slice(0, 5);
+}
+
 function fallbackOpportunityName(type: OpportunityType, organizerName?: string) {
   return `${type === "camp" ? "Camp" : "Huck Jam"} with ${
     organizerName?.trim() || "Flyloop organizer"
@@ -198,10 +206,10 @@ export function CreateOpportunityForm({
   const [registrationDeadline, setRegistrationDeadline] = useState(
     initialOpportunity?.registrationDeadline ?? "",
   );
-  const [sessionStart] = useState(
+  const [sessionStart, setSessionStart] = useState(
     initialOpportunity?.sessionStart?.slice(0, 5) ?? "18:00",
   );
-  const [sessionEnd] = useState(
+  const [sessionEnd, setSessionEnd] = useState(
     initialOpportunity?.sessionEnd?.slice(0, 5) ?? "20:00",
   );
   const [price, setPrice] = useState(
@@ -318,6 +326,16 @@ export function CreateOpportunityForm({
 
       if (type === "camp" && new Date(endDate) < new Date(startDate)) {
         return "End date must be the same as or after the start date.";
+      }
+
+      if (type === "huck_jam") {
+        if (!isValidTime(sessionStart) || !isValidTime(sessionEnd)) {
+          return "Enter the Huck Jam start and end time.";
+        }
+
+        if (sessionEnd <= sessionStart) {
+          return "End time must be after start time.";
+        }
       }
 
       if (
@@ -498,6 +516,8 @@ export function CreateOpportunityForm({
             startDate={startDate}
             endDate={endDate}
             registrationDeadline={registrationDeadline}
+            sessionStart={sessionStart}
+            sessionEnd={sessionEnd}
             showLastMinuteNotice={showLastMinuteNotice}
             onStartDateChange={updateStartDate}
             onEndDateChange={(value) => {
@@ -505,6 +525,8 @@ export function CreateOpportunityForm({
               setEndDate(value);
             }}
             onRegistrationDeadlineChange={setRegistrationDeadline}
+            onSessionStartChange={setSessionStart}
+            onSessionEndChange={setSessionEnd}
           />
         ) : null}
 
@@ -547,6 +569,8 @@ export function CreateOpportunityForm({
             selectedTunnel={selectedTunnel}
             startDate={startDate}
             endDate={endDate}
+            sessionStart={sessionStart}
+            sessionEnd={sessionEnd}
             registrationDeadline={registrationDeadline}
             totalCapacity={totalCapacity}
             bookingMode={bookingMode}
@@ -875,19 +899,27 @@ function ScheduleStep({
   startDate,
   endDate,
   registrationDeadline,
+  sessionStart,
+  sessionEnd,
   showLastMinuteNotice,
   onStartDateChange,
   onEndDateChange,
   onRegistrationDeadlineChange,
+  onSessionStartChange,
+  onSessionEndChange,
 }: {
   type: OpportunityType;
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  sessionStart: string;
+  sessionEnd: string;
   showLastMinuteNotice: boolean;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
   onRegistrationDeadlineChange: (value: string) => void;
+  onSessionStartChange: (value: string) => void;
+  onSessionEndChange: (value: string) => void;
 }) {
   const isHuckJam = type === "huck_jam";
   const [deadlineMode, setDeadlineMode] = useState<"start" | "custom">(
@@ -899,7 +931,7 @@ function ScheduleStep({
     <div className="grid gap-3">
       <StepHeader
         eyebrow={isHuckJam ? "Session" : "Schedule"}
-        title={isHuckJam ? "Set the event date" : "Set the camp dates"}
+        title={isHuckJam ? "Set the event date and time" : "Set the camp dates"}
         description="Set when this opportunity happens and when sign-up should close."
       />
       {showLastMinuteNotice ? (
@@ -930,6 +962,26 @@ function ScheduleStep({
           </Field>
         ) : null}
       </div>
+      {isHuckJam ? (
+        <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
+          <Field label="Start Time" required>
+            <input
+              type="time"
+              className={fieldClass}
+              value={sessionStart}
+              onChange={(event) => onSessionStartChange(event.target.value)}
+            />
+          </Field>
+          <Field label="End Time" required>
+            <input
+              type="time"
+              className={fieldClass}
+              value={sessionEnd}
+              onChange={(event) => onSessionEndChange(event.target.value)}
+            />
+          </Field>
+        </div>
+      ) : null}
       <div className="grid gap-2">
         <p className="text-sm font-black text-slate-800">Registration closes</p>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -1207,6 +1259,8 @@ function ReviewStep({
   selectedTunnel,
   startDate,
   endDate,
+  sessionStart,
+  sessionEnd,
   registrationDeadline,
   totalCapacity,
   bookingMode,
@@ -1221,6 +1275,8 @@ function ReviewStep({
   selectedTunnel?: TunnelOption;
   startDate: string;
   endDate: string;
+  sessionStart: string;
+  sessionEnd: string;
   registrationDeadline: string;
   totalCapacity: string;
   bookingMode: BookingMode;
@@ -1238,6 +1294,10 @@ function ReviewStep({
   const dateLabel = isHuckJam
     ? formatDate(startDate)
     : `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  const sessionLabel =
+    isHuckJam && sessionStart && sessionEnd
+      ? `${formatSessionTime(sessionStart)} - ${formatSessionTime(sessionEnd)}`
+      : "";
   const bookingLabel =
     isHuckJam || bookingMode === "approval_required"
       ? "Approval Required"
@@ -1271,7 +1331,7 @@ function ReviewStep({
           />
           <ReviewLine
             icon={<CalendarDays size={17} />}
-            value={dateLabel}
+            value={sessionLabel ? `${dateLabel}, ${sessionLabel}` : dateLabel}
             onEdit={() => onEdit("schedule")}
           />
           <ReviewLine

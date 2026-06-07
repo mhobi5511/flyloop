@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   formatOpportunityDate,
   formatOpportunityType,
+  formatSessionTimeRange,
   getPublicOpportunityPath,
   getPublicOpportunityUrl,
 } from "@/lib/opportunities";
@@ -30,11 +31,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const opportunity = mapOpportunity(row);
   const typeLabel = formatOpportunityType(opportunity.type);
-  const description = `${opportunity.title} at ${opportunity.tunnelName ?? "the tunnel"} on ${formatOpportunityDate(
+  const dateLabel = formatOpportunityDate(
     opportunity.type,
     opportunity.startDate,
     opportunity.endDate,
-  )}.`;
+  );
+  const sessionRange =
+    opportunity.type === "huck_jam"
+      ? formatSessionTimeRange(opportunity.sessionStart, opportunity.sessionEnd)
+      : "";
+  const description = `${opportunity.title} at ${
+    opportunity.tunnelName ?? "the tunnel"
+  } on ${sessionRange ? `${dateLabel}, ${sessionRange}` : dateLabel}.`;
   const url = getPublicOpportunityUrl(opportunity.id);
 
   return {

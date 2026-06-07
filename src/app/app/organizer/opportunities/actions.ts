@@ -347,10 +347,15 @@ export type TimetableSlotInput = {
   capacity: number;
 };
 
+type SaveCampTimetableOptions = {
+  redirectOnPublish?: boolean;
+};
+
 export async function saveCampTimetable(
   opportunityId: string,
   slots: TimetableSlotInput[],
   publish: boolean,
+  options: SaveCampTimetableOptions = {},
 ): Promise<ActionResult> {
   const normalizedSlots = normalizeTimetableSlots(slots);
 
@@ -521,11 +526,14 @@ export async function saveCampTimetable(
   revalidatePath("/app/dashboard");
   revalidatePath("/app/coach-dashboard");
 
-  if (publish) {
+  if (publish && options.redirectOnPublish !== false) {
     redirect(`/app/organizer/opportunities/${opportunityId}`);
   }
 
-  return { ok: true, message: "Timetable draft saved." };
+  return {
+    ok: true,
+    message: publish ? "Schedule published." : "Timetable draft saved.",
+  };
 }
 
 export async function sendTimetableBookingReminder(
