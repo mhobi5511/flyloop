@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, UserPlus, X } from "lucide-react";
+import { UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { assignParticipantSlotBooking } from "@/app/app/organizer/opportunities/actions";
 
@@ -24,49 +24,46 @@ export function AssignSlotButton({
 }: AssignSlotButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedParticipantId, setSelectedParticipantId] = useState(
-    participants[0]?.id ?? "",
-  );
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
+  const [pendingParticipantId, setPendingParticipantId] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function openModal() {
     setError("");
     setToast("");
-    setSelectedParticipantId(participants[0]?.id ?? "");
+    setPendingParticipantId("");
     setIsOpen(true);
   }
 
-  function assignSlot() {
+  function assignSlot(participantId: string) {
     setError("");
-
-    if (!selectedParticipantId) {
-      setError("Choose an accepted participant.");
-      return;
-    }
 
     startTransition(async () => {
       let result: Awaited<ReturnType<typeof assignParticipantSlotBooking>>;
 
       try {
+        setPendingParticipantId(participantId);
         result = await assignParticipantSlotBooking(
           opportunityId,
           slotId,
-          selectedParticipantId,
+          participantId,
         );
       } catch (assignError) {
         console.error("Assign slot action failed", assignError);
         setError("Could not assign slot.");
+        setPendingParticipantId("");
         return;
       }
 
       if (!result.ok) {
         setError(result.message);
+        setPendingParticipantId("");
         return;
       }
 
       setIsOpen(false);
+      setPendingParticipantId("");
       setToast(result.message);
       router.refresh();
       window.setTimeout(() => setToast(""), 2500);
@@ -86,7 +83,7 @@ export function AssignSlotButton({
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg font-black tracking-tight text-slate-950">
@@ -106,20 +103,40 @@ export function AssignSlotButton({
               </button>
             </div>
 
-            <label className="mt-4 grid gap-1.5 text-sm font-black text-slate-700">
-              Participant
-              <select
-                value={selectedParticipantId}
-                onChange={(event) => setSelectedParticipantId(event.target.value)}
-                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-emerald-400"
-              >
-                {participants.map((participant) => (
-                  <option key={participant.id} value={participant.id}>
-                    {participant.name} ({participant.bookedMinutes} min booked)
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="mt-4 grid gap-2">
+              {participants.map((participant) => {
+                const isAssigning = pendingParticipantId === participant.id;
+
+                return (
+                  <button
+                    key={participant.id}
+                    type="button"
+                    onClick={() => assignSlot(participant.id)}
+                    disabled={isPending}
+                    className="grid gap-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm font-black text-slate-950">
+                        {participant.name}
+                      </span>
+                      {isAssigning ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.68rem] font-black text-emerald-700">
+                          Assigning...
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-xs font-bold text-slate-500">
+                      {participant.bookedMinutes} min booked
+                    </span>
+                  </button>
+                );
+              })}
+              {participants.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm font-bold text-slate-500">
+                  No accepted participants available for this slot.
+                </p>
+              ) : null}
+            </div>
 
             {error ? (
               <p className="mt-3 rounded-lg bg-rose-50 p-2 text-sm font-semibold text-rose-700">
@@ -133,16 +150,7 @@ export function AssignSlotButton({
                 onClick={() => setIsOpen(false)}
                 className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={assignSlot}
-                disabled={isPending}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                <CheckCircle2 size={16} />
-                {isPending ? "Assigning..." : "Assign Slot"}
+                Close
               </button>
             </div>
           </div>

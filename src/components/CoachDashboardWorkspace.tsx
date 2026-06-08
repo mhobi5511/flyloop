@@ -561,44 +561,49 @@ export function CoachDashboardWorkspace({
           </aside>
 
           <div className="grid min-w-0 gap-4">
-          <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-baseline gap-3">
-                <h2 className="shrink-0 text-xl font-black tracking-tight">Schedule</h2>
-                <p className="truncate text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                  {visibleDays.length > desktopDays.length
-                    ? `${clampedDesktopDayStart + 1}-${clampedDesktopDayStart + desktopDays.length} days of ${visibleDays.length} days`
-                    : `${visibleDays.length} day${visibleDays.length === 1 ? "" : "s"}`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDesktopDayStart((current) => Math.max(current - 1, 0))
-                  }
-                  disabled={!canPageBack}
-                  className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                  aria-label="Previous day"
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDesktopDayStart((current) =>
-                      Math.min(current + 1, Math.max(visibleDays.length - desktopDayCount, 0)),
-                    )
-                  }
-                  disabled={!canPageForward}
-                  className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                  aria-label="Next day"
-                >
-                  <ChevronRight size={17} />
-                </button>
+          <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 bg-white px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-baseline gap-3">
+                  <h2 className="shrink-0 text-xl font-black tracking-tight">Schedule</h2>
+                  <p className="truncate text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                    {visibleDays.length > desktopDays.length
+                      ? `${clampedDesktopDayStart + 1}-${clampedDesktopDayStart + desktopDays.length} days of ${visibleDays.length} days`
+                      : `${visibleDays.length} day${visibleDays.length === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDesktopDayStart((current) => Math.max(current - 1, 0))
+                    }
+                    disabled={!canPageBack}
+                    className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                    aria-label="Previous day"
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDesktopDayStart((current) =>
+                        Math.min(
+                          current + 1,
+                          Math.max(visibleDays.length - desktopDayCount, 0),
+                        ),
+                      )
+                    }
+                    disabled={!canPageForward}
+                    className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                    aria-label="Next day"
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="mt-4 pb-2">
+            <div className="pb-2">
               <div
                 className="grid min-h-[34rem] gap-3"
                 style={{
