@@ -180,6 +180,7 @@ export function CoachDashboardWorkspace({
   const [desktopDayStart, setDesktopDayStart] = useState(0);
   const [activeBookingActionId, setActiveBookingActionId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [lastSeenActivityCount, setLastSeenActivityCount] = useState(0);
   const activeCamp = camps.find((camp) => camp.id === activeCampId) ?? camps[0];
   const participant =
     activeCamp?.participants.find((item) => item.id === selectedParticipantId) ??
@@ -228,6 +229,11 @@ export function CoachDashboardWorkspace({
     setSelectedParticipantId("");
     setIsSidebarCollapsed(false);
     setTabletPanel("participants");
+  }
+
+  function openActivityPanel() {
+    setLastSeenActivityCount(activityBadgeCount);
+    setHeaderPanel((current) => (current === "activity" ? null : "activity"));
   }
 
   function handleOpportunityCreated(opportunityId: string) {
@@ -309,6 +315,7 @@ export function CoachDashboardWorkspace({
   const participantColorMap = buildParticipantColorMap(activeCamp.participants);
   const attention = getAttentionItems(activeCamp);
   const activityBadgeCount = getActivityBadgeCount(attention);
+  const showActivityBadge = activityBadgeCount > lastSeenActivityCount;
   const assignableParticipants = getAssignableParticipants(activeCamp);
   const scopedActivity = activity
     .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id);
@@ -403,15 +410,11 @@ export function CoachDashboardWorkspace({
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      setHeaderPanel((current) =>
-                        current === "activity" ? null : "activity",
-                      )
-                    }
+                    onClick={openActivityPanel}
                     className="relative inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   >
                     <Activity size={17} /> Activity
-                    {headerPanel !== "activity" && activityBadgeCount > 0 ? (
+                    {headerPanel !== "activity" && showActivityBadge ? (
                       <NotificationCountBadge
                         count={activityBadgeCount}
                         className="right-0 top-0 translate-x-1/2 -translate-y-1/2"
@@ -483,15 +486,11 @@ export function CoachDashboardWorkspace({
           </button>
           <button
             type="button"
-            onClick={() =>
-              setHeaderPanel((current) =>
-                current === "activity" ? null : "activity",
-              )
-            }
+            onClick={openActivityPanel}
             className="relative inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
           >
             <Activity size={16} /> Activity
-            {headerPanel !== "activity" && activityBadgeCount > 0 ? (
+            {headerPanel !== "activity" && showActivityBadge ? (
               <NotificationCountBadge
                 count={activityBadgeCount}
                 className="right-0 top-0 translate-x-1/2 -translate-y-1/2"
