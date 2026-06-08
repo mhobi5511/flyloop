@@ -348,6 +348,7 @@ export default async function CoachDashboardPage({
 
   return (
     <CoachDashboardWorkspace
+      key={selectedCampId || "empty"}
       coachName={profile?.full_name ?? "Coach"}
       selectedCampId={selectedCampId}
       camps={workspaceCamps}

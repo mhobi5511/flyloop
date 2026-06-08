@@ -28,6 +28,7 @@ import {
   updateOpportunity,
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
+import { deleteOpportunity } from "@/app/app/opportunities/actions";
 import {
   sendCoachDashboardSlotReminder,
   saveCampTimetable,
@@ -44,6 +45,7 @@ import {
   type InheritedCoachProfile,
 } from "@/components/CreateOpportunityForm";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
+import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
   formatPrice,
@@ -135,7 +137,8 @@ type CreationType = OpportunityType | null;
 type AttentionItem = {
   label: string;
   tone: "amber" | "slate";
-  target: "participant" | "timetable";
+  target: "applicants" | "participant" | "timetable";
+  count: number;
   participantId?: string;
 };
 
@@ -221,6 +224,12 @@ export function CoachDashboardWorkspace({
     router.replace(`/app/coach-dashboard?camp=${campId}`, { scroll: false });
   }
 
+  function focusApplicants() {
+    setSelectedParticipantId("");
+    setIsSidebarCollapsed(false);
+    setTabletPanel("participants");
+  }
+
   function handleOpportunityCreated(opportunityId: string) {
     setCreationType(null);
     setActiveCampId(opportunityId);
@@ -233,6 +242,11 @@ export function CoachDashboardWorkspace({
   }
 
   function handleAttentionClick(item: AttentionItem) {
+    if (item.target === "applicants") {
+      focusApplicants();
+      return;
+    }
+
     if (item.target === "participant" && item.participantId) {
       setSelectedParticipantId(item.participantId);
       setIsSidebarCollapsed(false);
@@ -294,6 +308,7 @@ export function CoachDashboardWorkspace({
   const canPageForward = clampedDesktopDayStart + desktopDayCount < visibleDays.length;
   const participantColorMap = buildParticipantColorMap(activeCamp.participants);
   const attention = getAttentionItems(activeCamp);
+  const activityBadgeCount = getActivityBadgeCount(attention);
   const assignableParticipants = getAssignableParticipants(activeCamp);
   const scopedActivity = activity
     .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id);
@@ -393,9 +408,15 @@ export function CoachDashboardWorkspace({
                         current === "activity" ? null : "activity",
                       )
                     }
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                    className="relative inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   >
                     <Activity size={17} /> Activity
+                    {headerPanel !== "activity" && activityBadgeCount > 0 ? (
+                      <NotificationCountBadge
+                        count={activityBadgeCount}
+                        className="right-0 top-0 translate-x-1/2 -translate-y-1/2"
+                      />
+                    ) : null}
                   </button>
                   <button
                     type="button"
@@ -467,9 +488,15 @@ export function CoachDashboardWorkspace({
                 current === "activity" ? null : "activity",
               )
             }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
+            className="relative inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
           >
             <Activity size={16} /> Activity
+            {headerPanel !== "activity" && activityBadgeCount > 0 ? (
+              <NotificationCountBadge
+                count={activityBadgeCount}
+                className="right-0 top-0 translate-x-1/2 -translate-y-1/2"
+              />
+            ) : null}
           </button>
         </header>
 
@@ -513,6 +540,7 @@ export function CoachDashboardWorkspace({
                   participants={activeCamp.participants}
                   selectedParticipantId={selectedParticipantId}
                   onSelectParticipant={setSelectedParticipantId}
+                  onSelectApplicants={focusApplicants}
                   participantColorMap={participantColorMap}
                 />
                 {participant ? (
@@ -917,6 +945,7 @@ export function CoachDashboardWorkspace({
                   setSelectedParticipantId(id);
                   setTabletPanel("participant");
                 }}
+                onSelectApplicants={focusApplicants}
                 participantColorMap={participantColorMap}
               />
               <div className="grid grid-cols-2 gap-2">
@@ -994,6 +1023,7 @@ export function CoachDashboardWorkspace({
             key={`modal-${activeCamp.id}`}
             camp={activeCamp}
             tunnels={tunnels}
+            onDeleteComplete={() => setIsSettingsOpen(false)}
           />
         </CenteredModal>
       ) : null}
@@ -1181,11 +1211,13 @@ function ParticipantColumns({
   participants,
   selectedParticipantId,
   onSelectParticipant,
+  onSelectApplicants,
   participantColorMap,
 }: {
   participants: Participant[];
   selectedParticipantId: string;
   onSelectParticipant: (id: string) => void;
+  onSelectApplicants: () => void;
   participantColorMap: Map<string, (typeof participantColors)[number]>;
 }) {
   const pending = participants.filter((participant) => participant.status === "pending");
@@ -1197,7 +1229,13 @@ function ParticipantColumns({
     participants: Participant[];
   }> = [
     ...(pending.length > 0
-      ? [{ status: "pending" as InterestStatus, label: "Applicants", participants: pending }]
+      ? [
+          {
+            status: "pending" as InterestStatus,
+            label: `Applicants (${pending.length})`,
+            participants: pending,
+          },
+        ]
       : []),
     { status: "accepted", label: "Participants", participants: accepted },
     ...(waitlist.length > 0
@@ -1211,14 +1249,26 @@ function ParticipantColumns({
         {statusColumns.map((column) => {
           return (
             <div key={column.status}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                  {column.label}
-                </h2>
-                <span className="text-xs font-black text-slate-400">
-                  {column.participants.length}
-                </span>
-              </div>
+              {column.status === "pending" ? (
+                <button
+                  type="button"
+                  onClick={onSelectApplicants}
+                  className="flex w-full items-center justify-between text-left"
+                >
+                  <h2 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    {column.label}
+                  </h2>
+                </button>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    {column.label}
+                  </h2>
+                  <span className="text-xs font-black text-slate-400">
+                    {column.participants.length}
+                  </span>
+                </div>
+              )}
               <div className="mt-2 grid gap-1.5">
                 {column.participants.map((participant) => {
                   const colors = participantColorMap.get(participant.userId);
@@ -1396,13 +1446,17 @@ function AddSlotButton({
 function CampSettingsPanel({
   camp,
   tunnels,
+  onDeleteComplete,
 }: {
   camp: CampWorkspace;
   tunnels: TunnelOption[];
+  onDeleteComplete?: () => void;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState({
     title: camp.title,
@@ -1473,6 +1527,38 @@ function CampSettingsPanel({
       }
 
       setMessage("Camp published.");
+      router.refresh();
+    });
+  }
+
+  function openDeleteConfirm() {
+    setDeleteError("");
+    setIsDeleteConfirmOpen(true);
+  }
+
+  function closeDeleteConfirm() {
+    if (isPending) {
+      return;
+    }
+
+    setDeleteError("");
+    setIsDeleteConfirmOpen(false);
+  }
+
+  function deleteCamp() {
+    setDeleteError("");
+
+    startTransition(async () => {
+      const result = await deleteOpportunity(camp.id);
+
+      if (!result.ok) {
+        setDeleteError(result.message);
+        return;
+      }
+
+      setIsDeleteConfirmOpen(false);
+      onDeleteComplete?.();
+      router.replace("/app/coach-dashboard");
       router.refresh();
     });
   }
@@ -1621,14 +1707,24 @@ function CampSettingsPanel({
           </DashboardField>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={save}
-        disabled={isPending}
-        className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white disabled:bg-slate-300"
-      >
-        <Save size={16} /> {isPending ? "Saving..." : "Save immediately"}
-      </button>
+      <div className="mt-3 grid gap-2">
+        <button
+          type="button"
+          onClick={save}
+          disabled={isPending}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white disabled:bg-slate-300"
+        >
+          <Save size={16} /> {isPending ? "Saving..." : "Save immediately"}
+        </button>
+        <button
+          type="button"
+          onClick={openDeleteConfirm}
+          disabled={isPending}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-700 transition hover:bg-rose-100 disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+        >
+          Delete Camp
+        </button>
+      </div>
       {message ? (
         <p className="mt-2 rounded-xl bg-emerald-50 p-2 text-sm font-bold text-emerald-700">
           {message}
@@ -1638,6 +1734,38 @@ function CampSettingsPanel({
         <p className="mt-2 rounded-xl bg-rose-50 p-2 text-sm font-bold text-rose-700">
           {error}
         </p>
+      ) : null}
+      {isDeleteConfirmOpen ? (
+        <CenteredModal title="Delete Camp?" onClose={closeDeleteConfirm}>
+          <div className="grid gap-4">
+            <p className="text-sm font-semibold leading-6 text-slate-600">
+              This action cannot be undone.
+            </p>
+            {deleteError ? (
+              <p className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">
+                {deleteError}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteConfirm}
+                disabled={isPending}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:text-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={deleteCamp}
+                disabled={isPending}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-black text-white transition hover:bg-rose-700 disabled:bg-slate-300"
+              >
+                {isPending ? "Deleting..." : "Delete Camp"}
+              </button>
+            </div>
+          </div>
+        </CenteredModal>
       ) : null}
     </section>
   );
@@ -1998,7 +2126,8 @@ function getAttentionItems(camp: CampWorkspace) {
     items.push({
       label: `${pendingParticipants.length} new applicants`,
       tone: "amber",
-      target: "participant",
+      target: "applicants",
+      count: pendingParticipants.length,
       participantId: pendingParticipants[0]?.id,
     });
   }
@@ -2007,6 +2136,7 @@ function getAttentionItems(camp: CampWorkspace) {
       label: `${participantsMissingSlots.length} participants missing slots`,
       tone: "amber",
       target: "participant",
+      count: participantsMissingSlots.length,
       participantId: participantsMissingSlots[0]?.id,
     });
   }
@@ -2015,6 +2145,7 @@ function getAttentionItems(camp: CampWorkspace) {
       label: `${participantsMissingTunnelTime.length} participants missing tunnel time`,
       tone: "amber",
       target: "participant",
+      count: participantsMissingTunnelTime.length,
       participantId: participantsMissingTunnelTime[0]?.id,
     });
   }
@@ -2023,6 +2154,7 @@ function getAttentionItems(camp: CampWorkspace) {
       label: `${openSlots} open slots`,
       tone: "slate",
       target: "timetable",
+      count: openSlots,
     });
   }
   if (waitlistParticipants.length > 0) {
@@ -2030,11 +2162,16 @@ function getAttentionItems(camp: CampWorkspace) {
       label: `${waitlistParticipants.length} waitlist items`,
       tone: "slate",
       target: "participant",
+      count: waitlistParticipants.length,
       participantId: waitlistParticipants[0]?.id,
     });
   }
 
   return items;
+}
+
+function getActivityBadgeCount(attention: AttentionItem[]) {
+  return attention.reduce((total, item) => total + item.count, 0);
 }
 
 function getAssignableParticipants(camp: CampWorkspace): AssignSlotParticipant[] {
