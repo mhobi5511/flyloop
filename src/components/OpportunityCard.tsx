@@ -183,7 +183,7 @@ export function OpportunityCard({
 
         {dense ? (
           discoveryLayout ? (
-            <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+            <div className="mt-2.5 space-y-2 border-t border-slate-100 pt-2.5">
               <div className="flex items-start gap-2">
                 <CalendarDays size={15} className="mt-0.5 shrink-0 text-sky-600" />
                 <div className="min-w-0">
@@ -202,16 +202,15 @@ export function OpportunityCard({
                   <p className="text-sm leading-5 text-slate-600">{location}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
-                <UserRound size={15} className="mt-0.5 shrink-0 text-sky-600" />
-                <p className="text-sm font-semibold leading-5 text-slate-700">
-                  {view.coachDisplayName ?? "Organizer-led"}
-                </p>
-              </div>
-              <div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
-                <div className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-slate-700">
-                  <Users size={15} className="shrink-0 text-sky-600" />
-                  <span>{capacityLines[0]}</span>
+              <div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <UserRound size={15} className="shrink-0 text-sky-600" />
+                  <p className="min-w-0 truncate text-sm font-semibold leading-5 text-slate-700">
+                    {view.coachDisplayName ?? "Organizer-led"}
+                  </p>
+                </div>
+                <div className="shrink-0 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-700">
+                  {formatRemainingSpots(opportunity.availableSpots)}
                 </div>
                 {showViewCta ? (
                   <span className="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-xs font-black text-white">
@@ -279,7 +278,7 @@ function DateLine({
       <CalendarDays size={15} className="shrink-0 text-sky-700" />
       <span className="min-w-0 whitespace-normal break-words">
         {dateLabel}
-        {sessionRange ? ` - ${sessionRange}` : ""}
+                    {sessionRange ? ` · ${sessionRange}` : ""}
       </span>
     </div>
   );
@@ -338,4 +337,9 @@ function formatCompactPrice(opportunity: Opportunity) {
       : ` per ${formatPriceAppliesToMinutes(opportunity.minMinutesOrHours)} min`;
 
   return `${amount} ${currencyLabel}${suffix}`;
+}
+
+function formatRemainingSpots(availableSpots: number) {
+  const label = availableSpots === 1 ? "Platz frei" : "Plätze frei";
+  return `${availableSpots} ${label}`;
 }
