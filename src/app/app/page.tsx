@@ -308,6 +308,7 @@ export default async function AppHomePage({
                 key={item.opportunity.id}
                 opportunity={item.opportunity}
                 dense
+                discoveryLayout
                 currentUserId={user.id}
                 discoveryBadges={getDiscoveryBadges(item)}
               />

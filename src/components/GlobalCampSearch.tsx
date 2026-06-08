@@ -169,6 +169,7 @@ export function GlobalCampSearch({
                 key={opportunity.id}
                 opportunity={opportunity}
                 dense
+                discoveryLayout
                 currentUserId={currentUserId}
                 discoveryBadges={getOwnOpportunityBadges(
                   opportunity,
