@@ -340,6 +340,6 @@ function formatCompactPrice(opportunity: Opportunity) {
 }
 
 function formatRemainingSpots(availableSpots: number) {
-  const label = availableSpots === 1 ? "Platz frei" : "Plätze frei";
+  const label = availableSpots === 1 ? "spot left" : "spots left";
   return `${availableSpots} ${label}`;
 }
