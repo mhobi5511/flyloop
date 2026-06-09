@@ -322,7 +322,14 @@ export default async function CoachDashboardPage({
           };
         }),
       }));
-    const preferences = preferencesByOpportunity.get(opportunity.id) ?? [];
+    const preferences = (preferencesByOpportunity.get(opportunity.id) ?? []).map(
+      (preference) => ({
+        opportunityId: preference.opportunity_id,
+        participantId: preference.participant_id,
+        dayId: preference.day_id,
+        preferredMinutes: preference.preferred_minutes,
+      }),
+    );
     const summary = getTimetableSummary(
       timetableSlots,
       Number(opportunity.price),
