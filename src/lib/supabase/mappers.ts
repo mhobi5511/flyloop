@@ -44,12 +44,15 @@ export type HomeFeedRow = {
 };
 
 export function mapOpportunity(row: HomeFeedRow): Opportunity {
+  const bookingMode = row.booking_mode ?? "approval_required";
+  const isCampDirectBookingFallback =
+    row.type === "camp" && bookingMode === "direct_time_booking";
+
   return {
     id: row.id,
     type: row.type,
-    bookingMode:
-      row.booking_mode ??
-      "approval_required",
+    bookingMode: row.type === "camp" ? "approval_required" : bookingMode,
+    isCampDirectBookingFallback,
     title: row.title,
     coachId: row.coach_id ?? undefined,
     coachName: row.coach_name ?? undefined,

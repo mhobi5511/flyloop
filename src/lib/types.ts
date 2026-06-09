@@ -80,6 +80,7 @@ export type Opportunity = {
   hasPublishedTimetable?: boolean;
   remainingTimetableMinutes?: number;
   minMinutesOrHours?: string;
+  isCampDirectBookingFallback?: boolean;
   description: string;
   languages: string[];
   disciplines: string[];

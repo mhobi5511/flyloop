@@ -160,9 +160,12 @@ export default async function ApplicationsPage({
     acceptedOpportunityIds.length > 0 && user
       ? await supabase
           .from("opportunity_slot_bookings")
-          .select("id,opportunity_id,minutes,opportunity_time_slots(slot_date,start_time)")
+          .select(
+            "id,opportunity_id,minutes,is_final,opportunity_time_slots(slot_date,start_time)",
+          )
           .in("opportunity_id", acceptedOpportunityIds)
           .eq("user_id", user.id)
+          .eq("is_final", true)
       : { data: [] };
   const bookingsByOpportunity = groupBookingsByOpportunity(
     (bookingRows ?? []) as UserBookingRow[],

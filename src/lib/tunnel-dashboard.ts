@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 
 const tunnelDashboardOrigin =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://flyloop.one";

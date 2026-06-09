@@ -93,6 +93,8 @@ type SlotRow = {
         minutes: number;
         rotation_minutes: number | string | null;
         user_id: string;
+        is_final: boolean;
+        release_requested_at: string | null;
         profiles:
           | {
               full_name: string | null;
@@ -107,6 +109,13 @@ type SlotRow = {
           | null;
       }>
     | null;
+};
+
+type CampPreferenceRow = {
+  opportunity_id: string;
+  participant_id: string;
+  day_id: number;
+  preferred_minutes: number;
 };
 
 export default async function CoachDashboardPage({
@@ -175,11 +184,19 @@ export default async function CoachDashboardPage({
 
   const opportunityRows = (opportunitiesResult.data ?? []) as OpportunityRow[];
   const opportunityIds = opportunityRows.map((opportunity) => opportunity.id);
+  const { data: preferenceRows, error: preferenceRowsError } =
+    opportunityIds.length > 0
+      ? await supabase
+          .from("camp_day_preferences")
+          .select("opportunity_id,participant_id,day_id,preferred_minutes")
+          .in("opportunity_id", opportunityIds)
+          .order("day_id", { ascending: true })
+      : { data: [], error: null };
   const { data: slots, error: slotsError } =
     opportunityIds.length > 0
       ? await supabase
           .from("opportunity_time_slots")
-          .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+          .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
           .in("opportunity_id", opportunityIds)
           .order("slot_date", { ascending: true })
           .order("start_time", { ascending: true })
@@ -195,6 +212,9 @@ export default async function CoachDashboardPage({
   if (slotsError) {
     console.error("Coach dashboard slots lookup failed", slotsError);
   }
+  if (preferenceRowsError) {
+    console.error("Coach dashboard camp preferences lookup failed", preferenceRowsError);
+  }
   if (tunnelDashboardLinksError) {
     console.error(
       "Coach dashboard tunnel links lookup failed",
@@ -203,6 +223,9 @@ export default async function CoachDashboardPage({
   }
 
   const slotRows = (slots ?? []) as SlotRow[];
+  const preferencesByOpportunity = groupPreferencesByOpportunity(
+    (preferenceRows ?? []) as CampPreferenceRow[],
+  );
   const tunnelDashboardLinkByOpportunityId = new Map(
     ((tunnelDashboardLinks ?? []) as TunnelDashboardLinkRow[]).map((link) => [
       link.opportunity_id,
@@ -294,9 +317,12 @@ export default async function CoachDashboardPage({
             athleteName: bookingProfile?.full_name ?? "Participant",
             athletePhone:
               bookingProfile?.whatsapp_number ?? bookingProfile?.phone ?? "",
+            isFinal: booking.is_final,
+            releaseRequestedAt: booking.release_requested_at,
           };
         }),
       }));
+    const preferences = preferencesByOpportunity.get(opportunity.id) ?? [];
     const summary = getTimetableSummary(
       timetableSlots,
       Number(opportunity.price),
@@ -337,6 +363,7 @@ export default async function CoachDashboardPage({
         sessionEnd: opportunity.session_end,
       }),
       participants,
+      preferences,
       timetableSlots,
       summary,
     };
@@ -388,6 +415,18 @@ function compareWorkspaceOpportunities(
 function getDefaultSelectedCampId(camps: Array<{ id: string; endDate: string }>) {
   const today = new Date().toISOString().slice(0, 10);
   return camps.find((camp) => camp.endDate >= today)?.id ?? camps[0]?.id;
+}
+
+function groupPreferencesByOpportunity(rows: CampPreferenceRow[]) {
+  const groups = new Map<string, CampPreferenceRow[]>();
+
+  for (const row of rows) {
+    const dayRows = groups.get(row.opportunity_id) ?? [];
+    dayRows.push(row);
+    groups.set(row.opportunity_id, dayRows);
+  }
+
+  return groups;
 }
 
 function formatWorkspaceDateLabel({

@@ -196,7 +196,9 @@ export async function publishOpportunity(
   }
 
   const bookingMode: BookingMode =
-    input.type === "huck_jam" ? "approval_required" : input.bookingMode;
+    input.type === "camp" || input.type === "huck_jam"
+      ? "approval_required"
+      : input.bookingMode;
 
   if (!isBookingMode(bookingMode)) {
     return { ok: false, message: "Please choose a booking mode." };
@@ -373,7 +375,9 @@ export async function updateOpportunity(
   }
 
   const bookingMode: BookingMode =
-    input.type === "huck_jam" ? "approval_required" : input.bookingMode;
+    input.type === "camp" || input.type === "huck_jam"
+      ? "approval_required"
+      : input.bookingMode;
 
   if (!isBookingMode(bookingMode)) {
     return { ok: false, message: "Please choose a booking mode." };

@@ -16,6 +16,7 @@ export const organizerActivityNotificationTypes = [
   "new_time_booking",
   "timetable_reminder_interest",
   "participant_removal_requested",
+  "slot_release_requested",
 ] as const;
 
 type UnreadNotificationForBadge = {

@@ -164,7 +164,7 @@ export function SlotBookingSelector({
               status: tunnelTimeStatus || initialTunnelTimeStatus || "",
               accountEmail: tunnelAccountEmail || initialTunnelAccountEmail || "",
             })
-          : statusResult ?? { ok: true as const, message: "Your slots were updated." };
+          : statusResult ?? { ok: true as const, message: "Your slots were saved as draft." };
 
       if (!result.ok) {
         setError(result.message);
@@ -244,12 +244,14 @@ export function SlotBookingSelector({
                     </span>
                     <span className="mt-2 block text-[0.68rem] font-black uppercase text-slate-500">
                       {slot.userHasBooking && isSelected
-                        ? "Booked"
+                        ? "Draft"
                         : slot.userHasBooking
-                          ? "Will release"
-                        : isFull
-                          ? "Full"
-                          : `${slot.remainingCapacity} open`}
+                          ? "Draft"
+                          : isSelected
+                            ? "Selected"
+                            : isFull
+                              ? "Full"
+                              : `${slot.remainingCapacity} open`}
                     </span>
                   </button>
                 );
@@ -286,7 +288,7 @@ export function SlotBookingSelector({
           onClick={handleSaveRequest}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >
-          <Send size={17} /> {isPending ? "Saving..." : "Confirm Times"}
+          <Send size={17} /> {isPending ? "Saving..." : "Save Times"}
         </button>
         {message ? (
           <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
@@ -317,7 +319,7 @@ export function SlotBookingSelector({
                   Do you already have tunnel time at this tunnel?
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  This is needed before your selected times are booked.
+                  This is needed before your selected times are saved.
                 </p>
               </div>
               <button

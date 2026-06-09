@@ -1,45 +1,21 @@
-export function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+export function getSupabaseConfigOrThrow() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const hasValidUrl = Boolean(
-    url?.startsWith("https://"),
-  );
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+  console.log("SUPABASE URL:", url)
+  console.log("SUPABASE KEY:", anonKey)
+
+  if (!url || !anonKey) {
+    throw new Error(
+      "Supabase is not configured. NEXT_PUBLIC_SUPABASE_URL and KEY missing."
+    )
+  }
 
   return {
     url,
     anonKey,
-    serviceRoleKey,
-    isConfigured: Boolean(hasValidUrl && anonKey),
-  };
-}
-
-export function getSupabaseConfigOrThrow() {
-  const config = getSupabaseConfig();
-
-  if (!config.isConfigured || !config.url || !config.anonKey) {
-    throw new Error(
-      "Supabase is not configured. NEXT_PUBLIC_SUPABASE_URL must be a valid Supabase URL and either NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set.",
-    );
+    isConfigured: true,
   }
-
-  return {
-    url: config.url,
-    anonKey: config.anonKey,
-  };
-}
-
-export function getSupabaseServiceConfig() {
-  const config = getSupabaseConfig();
-
-  if (!config.url || !config.serviceRoleKey) {
-    return null;
-  }
-
-  return {
-    url: config.url,
-    serviceRoleKey: config.serviceRoleKey,
-  };
 }

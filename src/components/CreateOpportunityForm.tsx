@@ -285,9 +285,12 @@ export function CreateOpportunityForm({
       if (!initialOpportunity) {
         setPrice("50");
       }
-    } else if (!initialOpportunity) {
-      setPrice("550");
-      setMinMinutesOrHours("60");
+    } else {
+      setBookingMode("approval_required");
+      if (!initialOpportunity) {
+        setPrice("550");
+        setMinMinutesOrHours("60");
+      }
     }
 
     if (!endDateTouched && startDate) {
@@ -417,7 +420,7 @@ export function CreateOpportunityForm({
       const effectiveEndDate = type === "huck_jam" ? startDate : endDate;
       const values = {
         type,
-        bookingMode: type === "huck_jam" ? "approval_required" : bookingMode,
+        bookingMode: "approval_required",
         title,
         tunnelId,
         startDate,
@@ -532,6 +535,7 @@ export function CreateOpportunityForm({
 
         {currentStep.id === "capacity" ? (
           <CapacityStep
+            type={type}
             bookingMode={bookingMode}
             totalCapacity={totalCapacity}
             onBookingModeChange={setBookingMode}
@@ -1060,16 +1064,20 @@ function DateInput({
 }
 
 function CapacityStep({
+  type,
   bookingMode,
   totalCapacity,
   onBookingModeChange,
   onCapacityChange,
 }: {
+  type: OpportunityType;
   bookingMode: BookingMode;
   totalCapacity: string;
   onBookingModeChange: (value: BookingMode) => void;
   onCapacityChange: (value: string) => void;
 }) {
+  const isCamp = type === "camp";
+
   return (
     <div className="grid gap-3">
       <StepHeader
@@ -1077,22 +1085,28 @@ function CapacityStep({
         title="How should booking work?"
         description="Choose how athletes join, then set the maximum number of participants."
       />
-      <div className="grid gap-2 md:grid-cols-2">
-        <BookingModeOption
-          value="approval_required"
-          selectedValue={bookingMode}
-          title="Coach approves participants"
-          description="Recommended for Camps"
-          onChange={onBookingModeChange}
-        />
-        <BookingModeOption
-          value="direct_time_booking"
-          selectedValue={bookingMode}
-          title="Direct booking"
-          description="Recommended for Huck Jams"
-          onChange={onBookingModeChange}
-        />
-      </div>
+      {isCamp ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm font-bold text-sky-800">
+          Camps always use coach approval.
+        </div>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2">
+          <BookingModeOption
+            value="approval_required"
+            selectedValue={bookingMode}
+            title="Coach approves participants"
+            description="Recommended for Camps"
+            onChange={onBookingModeChange}
+          />
+          <BookingModeOption
+            value="direct_time_booking"
+            selectedValue={bookingMode}
+            title="Direct booking"
+            description="Recommended for Huck Jams"
+            onChange={onBookingModeChange}
+          />
+        </div>
+      )}
       <Field label="Maximum Participants" required>
         <input
           type="text"

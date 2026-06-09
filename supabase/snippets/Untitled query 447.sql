@@ -1,0 +1,1 @@
+SELECT name, is_admin_created, created_by FROM tunnel_profiles;

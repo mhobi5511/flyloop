@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
 import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
@@ -9,6 +9,11 @@ import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 type ActionResult =
   | { ok: true; message: string; status?: InterestStatus }
   | { ok: false; message: string };
+
+export type CampDayPreferenceInput = {
+  dayId: number;
+  preferredMinutes: number;
+};
 
 function debugSupabaseMessage(error: {
   message?: string;
@@ -46,6 +51,7 @@ async function sendServerPush(
 
 export async function sendOpportunityInterest(
   opportunityId: string,
+  campPreferences: CampDayPreferenceInput[] = [],
 ): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -81,7 +87,7 @@ export async function sendOpportunityInterest(
 
   if (
     opportunity.type !== "huck_jam" &&
-    opportunity.booking_mode !== "approval_required"
+    !(opportunity.type === "camp" || opportunity.booking_mode === "approval_required")
   ) {
     return {
       ok: false,
@@ -146,6 +152,32 @@ export async function sendOpportunityInterest(
     return { ok: false, message: "Could not send interest. Please try again." };
   }
 
+  if (opportunity.type === "camp" && campPreferences.length > 0) {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (!adminSupabase) {
+      console.error("Camp preference save failed: missing admin Supabase client");
+      return { ok: false, message: "Could not save your preferences. Please try again." };
+    }
+
+    const { error: preferenceError } = await adminSupabase
+      .from("camp_day_preferences")
+      .upsert(
+        campPreferences.map((preference) => ({
+          opportunity_id: opportunityId,
+          participant_id: user.id,
+          day_id: preference.dayId,
+          preferred_minutes: preference.preferredMinutes,
+        })),
+        { onConflict: "opportunity_id,participant_id,day_id" },
+      );
+
+    if (preferenceError) {
+      console.error("Camp preference save failed", preferenceError);
+      return { ok: false, message: "Could not save your preferences. Please try again." };
+    }
+  }
+
   await sendServerPush([opportunity.created_by], "new_interest", {
     opportunityId,
     types: ["new_interest"],
@@ -159,6 +191,8 @@ export async function sendOpportunityInterest(
     message:
       opportunity.type === "huck_jam"
         ? "Application received.\nThe organizer will review it and send an update."
+        : opportunity.type === "camp"
+          ? "Application received.\nYour preferences are visible to the coach."
         : [
             "Your interest was sent.",
             "The organizer has been notified.",
@@ -545,35 +579,13 @@ export async function bookOpportunitySlots(
     };
   }
 
-  const { data: opportunity, error: opportunityLookupError } = await supabase
-    .from("opportunities")
-    .select("created_by")
-    .eq("id", opportunityId)
-    .maybeSingle();
-
-  if (opportunityLookupError) {
-    console.error("Time booking organizer push lookup failed", {
-      opportunityId,
-      userId: user.id,
-      code: opportunityLookupError.code,
-      message: opportunityLookupError.message,
-      details: opportunityLookupError.details,
-      hint: opportunityLookupError.hint,
-    });
-  } else if (opportunity?.created_by) {
-    await sendServerPush([opportunity.created_by], "new_time_booking", {
-      opportunityId,
-      types: ["new_time_booking"],
-    });
-  }
-
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath("/app/applications");
   revalidatePath("/app/dashboard");
 
-  return { ok: true, message: "Your slots are booked." };
+  return { ok: true, message: "Your slots were saved as draft." };
 }
 
 export async function setCampTunnelTimeStatus(
@@ -627,13 +639,88 @@ export async function releaseOwnOpportunitySlot(
     return { ok: false, message: "Please log in again." };
   }
 
-  const { data: releasedCount, error } = await supabase.rpc(
-    "release_own_opportunity_slot_booking",
-    {
-      target_opportunity_id: opportunityId,
-      target_slot_id: slotId,
-    },
-  );
+  const { data: booking, error: bookingError } = await supabase
+    .from("opportunity_slot_bookings")
+    .select("id,is_final,opportunity_id,user_id")
+    .eq("opportunity_id", opportunityId)
+    .eq("slot_id", slotId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (bookingError) {
+    console.error("Own slot lookup failed", {
+      opportunityId,
+      slotId,
+      userId: user.id,
+      code: bookingError.code,
+      message: bookingError.message,
+      details: bookingError.details,
+      hint: bookingError.hint,
+    });
+    return { ok: false, message: "Could not release slot." };
+  }
+
+  if (!booking) {
+    return { ok: false, message: "No booked slot to release." };
+  }
+
+  if (booking.is_final) {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (!adminSupabase) {
+      return { ok: false, message: "Could not send release request." };
+    }
+
+    const { error } = await adminSupabase
+      .from("opportunity_slot_bookings")
+      .update({
+        release_requested_at: new Date().toISOString(),
+        release_requested_by: user.id,
+      })
+      .eq("id", booking.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Own slot release request failed", {
+        opportunityId,
+        slotId,
+        userId: user.id,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      return { ok: false, message: "Could not send release request." };
+    }
+
+    const { data: opportunity } = await supabase
+      .from("opportunities")
+      .select("created_by")
+      .eq("id", opportunityId)
+      .maybeSingle();
+
+    if (opportunity?.created_by) {
+      await sendServerPush([opportunity.created_by], "slot_release_requested", {
+        opportunityId,
+        types: ["slot_release_requested"],
+      });
+    }
+
+    revalidatePath(`/app/opportunities/${opportunityId}`);
+    revalidatePath(`/app/opportunities/${opportunityId}/times`);
+    revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+    revalidatePath("/app/dashboard");
+    revalidatePath("/app/coach-dashboard");
+    revalidatePath("/app/applications");
+
+    return { ok: true, message: "Release request sent." };
+  }
+
+  const { error } = await supabase
+    .from("opportunity_slot_bookings")
+    .delete()
+    .eq("id", booking.id)
+    .eq("user_id", user.id);
 
   if (error) {
     console.error("Own slot release failed", {
@@ -660,7 +747,7 @@ export async function releaseOwnOpportunitySlot(
 
   return {
     ok: true,
-    message: Number(releasedCount) > 0 ? "Slot released." : "No booked slot to release.",
+    message: "Slot released.",
   };
 }
 

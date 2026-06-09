@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
 import { sendPendingPushNotifications } from "@/lib/push";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";

@@ -5,6 +5,8 @@ export type TimetableBooking = {
   userId: string;
   athleteName: string;
   athletePhone: string;
+  isFinal?: boolean;
+  releaseRequestedAt?: string | null;
 };
 
 export type TimetableSlot = {

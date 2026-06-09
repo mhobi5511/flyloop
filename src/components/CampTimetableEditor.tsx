@@ -288,7 +288,7 @@ export function CampTimetableEditor({
           onClick={() => submit(true)}
           className="flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >
-          <Send size={17} /> {isPending ? "Publishing..." : "Publish Timetable"}
+          <Send size={17} /> {isPending ? "Publishing..." : "Publish Schedule"}
         </button>
       </div>
 

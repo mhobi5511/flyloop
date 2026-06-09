@@ -10,6 +10,7 @@ import { FollowGuidance } from "@/components/FollowGuidance";
 import { InterestButton } from "@/components/InterestButton";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { RequestCampRemovalButton } from "@/components/RequestCampRemovalButton";
+import { RequestSlotReleaseButton } from "@/components/RequestSlotReleaseButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TimetableReminderButton } from "@/components/TimetableReminderButton";
 import { participantActivityNotificationTypes } from "@/lib/notifications";
@@ -36,7 +37,9 @@ type OpportunityDetailRow = HomeFeedRow & {
 
 type BookingRow = {
   id: string;
+  slot_id: string;
   minutes: number;
+  is_final: boolean;
   opportunity_time_slots:
     | {
         slot_date: string;
@@ -73,6 +76,7 @@ export default async function OpportunityDetailPage({
   const opportunityRow = row as OpportunityDetailRow;
   const opportunity = mapOpportunity(opportunityRow);
   const isHuckJam = opportunity.type === "huck_jam";
+  const isCamp = opportunity.type === "camp";
   const { data: viewerInterest } =
     user && user.id !== opportunity.createdBy
       ? await supabase
@@ -121,9 +125,12 @@ export default async function OpportunityDetailPage({
             .eq("is_published", true),
           supabase
             .from("opportunity_slot_bookings")
-            .select("id,minutes,opportunity_time_slots(slot_date,start_time)")
+            .select(
+              "id,slot_id,minutes,is_final,opportunity_time_slots(slot_date,start_time)",
+            )
             .eq("opportunity_id", opportunity.id)
             .eq("user_id", user.id)
+            .eq("is_final", true)
             .order("created_at", { ascending: true }),
         ])
       : [{ count: 0 }, { data: [] }];
@@ -176,6 +183,7 @@ export default async function OpportunityDetailPage({
       viewerHasTimetableReminder);
   const canSelectTimes =
     !isHuckJam &&
+    !isCamp &&
     hasPublishedTimetable &&
     (isAccepted || (canDirectBook && !isUnavailable));
   const bookedTimes = ((bookingRows ?? []) as BookingRow[])
@@ -187,16 +195,25 @@ export default async function OpportunityDetailPage({
       return slot
         ? {
             id: booking.id,
+            slotId: booking.slot_id,
             date: slot.slot_date,
             time: slot.start_time,
             minutes: booking.minutes,
+            isFinal: booking.is_final,
           }
         : null;
     })
     .filter(
       (
         booking,
-      ): booking is { id: string; date: string; time: string; minutes: number } =>
+      ): booking is {
+        id: string;
+        slotId: string;
+        date: string;
+        time: string;
+        minutes: number;
+        isFinal: boolean;
+      } =>
         Boolean(booking),
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -311,7 +328,7 @@ export default async function OpportunityDetailPage({
                   </p>
                   <div className="mt-1.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-base font-black text-slate-950">
-                      Your flying times are booked.
+                      Your flying times are saved as draft.
                     </p>
                     <Link
                       href={`/app/opportunities/${opportunity.id}/times`}
@@ -325,6 +342,49 @@ export default async function OpportunityDetailPage({
             </div>
           ) : null}
 
+          {isCamp && isAccepted ? (
+            hasPublishedTimetable && hasBookedSlots ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 size={19} className="mt-0.5 shrink-0 text-emerald-700" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                      Your timetable is published
+                    </p>
+                    <p className="mt-1 text-base font-black text-slate-950">
+                      Your final flight times are below.
+                    </p>
+                    <div className="mt-3 grid gap-2">
+                      {bookedTimes.map((booking) => (
+                        <div
+                          key={booking.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-slate-950">
+                              {formatBookedTime(booking.date, booking.time)}
+                            </p>
+                            <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                              {booking.minutes} min
+                            </p>
+                          </div>
+                          <RequestSlotReleaseButton
+                            opportunityId={opportunity.id}
+                            slotId={booking.slotId}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : hasPublishedTimetable ? (
+              <StatusMessage message="Your timetable has been published, but no final flight times are assigned yet." />
+            ) : (
+              <StatusMessage message="You are accepted. The coach will publish your timetable when ready." />
+            )
+          ) : null}
+
           {!showAcceptedNextAction && !showBookedStatus ? (
             isDeclined ? (
               <StatusMessage message="Your application was declined." />
@@ -332,8 +392,17 @@ export default async function OpportunityDetailPage({
               <StatusMessage message="You are on the waitlist." />
             ) : isHuckJam && isAccepted ? (
               <StatusMessage message="You're in. Your spot is confirmed." />
-            ) : isAccepted && !hasPublishedTimetable ? (
+            ) : !isCamp && isAccepted && !hasPublishedTimetable ? (
               <StatusMessage message="You are accepted. The timetable is not available yet." />
+            ) : isCamp && !viewerApplicationStatus && !isUnavailable ? (
+              <div className="mt-4">
+                <Link
+                  href={`/app/opportunities/${opportunity.id}/times`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
+                >
+                  Apply
+                </Link>
+              </div>
             ) : opportunity.bookingMode === "approval_required" ? (
               <div className="mt-4">
                 <InterestButton
@@ -431,7 +500,7 @@ export default async function OpportunityDetailPage({
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
               <div>
                 <p className="text-xs font-black uppercase text-slate-500">
-                  Your booked times
+                  Your saved times
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
                   Modify your selections via &apos;Edit Times&apos;.
@@ -450,7 +519,7 @@ export default async function OpportunityDetailPage({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-xs font-black uppercase text-slate-500">
-                        Your booked time
+                        Your saved time
                       </p>
                       <p className="mt-1 text-lg font-black text-slate-950">
                         {bookedMinutes} min

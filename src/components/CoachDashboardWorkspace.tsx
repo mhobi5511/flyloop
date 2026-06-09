@@ -45,6 +45,7 @@ import {
   type InheritedCoachProfile,
 } from "@/components/CreateOpportunityForm";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
+import { SlotReleaseRequestActions } from "@/components/SlotReleaseRequestActions";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
@@ -104,6 +105,7 @@ type CampWorkspace = {
   tunnelDashboardUrl: string;
   dateLabel: string;
   participants: Participant[];
+  preferences: CampPreference[];
   timetableSlots: TimetableSlot[];
   summary: {
     totalSlots: number;
@@ -114,6 +116,13 @@ type CampWorkspace = {
     totalAvailableMinutes: number;
     estimatedRevenue: number;
   };
+};
+
+type CampPreference = {
+  opportunityId: string;
+  participantId: string;
+  dayId: number;
+  preferredMinutes: number;
 };
 
 type TunnelOption = {
@@ -667,10 +676,13 @@ export function CoachDashboardWorkspace({
                                 </span>
                               </div>
                               <div className="grid gap-1">
-                                {slot.bookings.map((booking) => {
+                              {slot.bookings.map((booking) => {
                                   const colors = participantColorMap.get(booking.userId);
                                   const matchingParticipant = activeCamp.participants.find(
                                     (item) => item.userId === booking.userId,
+                                  );
+                                  const releaseRequested = Boolean(
+                                    booking.releaseRequestedAt,
                                   );
 
                                   return (
@@ -692,8 +704,18 @@ export function CoachDashboardWorkspace({
                                         <span className="block truncate text-sm font-black">
                                           {booking.athleteName}
                                         </span>
-                                        <span className="text-xs font-bold opacity-80">
-                                          {booking.minutes} min
+                                        <span className="flex items-center gap-2 text-xs font-bold opacity-80">
+                                          <span>{booking.minutes} min</span>
+                                          {!booking.isFinal ? (
+                                            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[0.68rem] font-black uppercase">
+                                              Draft
+                                            </span>
+                                          ) : null}
+                                          {releaseRequested ? (
+                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-black uppercase text-amber-800">
+                                              Release requested
+                                            </span>
+                                          ) : null}
                                         </span>
                                       </button>
                                       {activeBookingActionId === booking.id ? (
@@ -722,10 +744,17 @@ export function CoachDashboardWorkspace({
                                               <UserRound size={15} className="text-sky-700" />
                                               Show Participant Info
                                             </button>
-                                            <ReleaseSlotBookingButton
-                                              opportunityId={activeCamp.id}
-                                              bookingId={booking.id}
-                                            />
+                                            {releaseRequested ? (
+                                              <SlotReleaseRequestActions
+                                                opportunityId={activeCamp.id}
+                                                bookingId={booking.id}
+                                              />
+                                            ) : (
+                                              <ReleaseSlotBookingButton
+                                                opportunityId={activeCamp.id}
+                                                bookingId={booking.id}
+                                              />
+                                            )}
                                           </div>
                                         </>
                                       ) : null}
@@ -1792,10 +1821,15 @@ function ParticipantPanel({
         date: slot.slotDate,
         time: slot.startTime,
         minutes: booking.minutes,
+        isFinal: booking.isFinal ?? false,
+        releaseRequestedAt: booking.releaseRequestedAt ?? null,
       })),
   );
   const bookedMinutes = bookedSlots.reduce((total, slot) => total + slot.minutes, 0);
   const bookedSlotsByDay = groupBookedSlotsByDay(bookedSlots);
+  const preferencesByDay = camp.preferences
+    .filter((preference) => preference.participantId === participant.userId)
+    .sort((a, b) => a.dayId - b.dayId);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -1836,6 +1870,29 @@ function ParticipantPanel({
         <p>{formatTunnelTimeAvailability(participant.tunnelTimeStatus)}</p>
       </div>
       <div className="mt-3">
+        {camp.type === "camp" ? (
+          <div className="mb-3">
+            <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+              Preferences
+            </h3>
+            <div className="mt-2 grid gap-1.5">
+              {preferencesByDay.length > 0 ? (
+                preferencesByDay.map((preference) => (
+                  <p
+                    key={`${preference.participantId}-${preference.dayId}`}
+                    className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    Day {preference.dayId}: {preference.preferredMinutes} min
+                  </p>
+                ))
+              ) : (
+                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+                  No preferences submitted.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
         <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
           Booked Slots
         </h3>

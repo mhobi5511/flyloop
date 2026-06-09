@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   sendPendingPushNotificationsForOpportunity,
@@ -405,13 +405,6 @@ export async function saveCampTimetable(
   const existingSlotRows = (existingSlots ??
     []) as ExistingTimetableSlotWithBookings[];
   const existingIds = new Set(existingSlotRows.map((slot) => slot.id));
-  const affectedParticipantIds = getAffectedTimetableParticipantIds(
-    existingSlotRows,
-    normalizedSlots,
-  );
-  const hasPublishedSlots = existingSlotRows.some((slot) => slot.is_published);
-  const shouldNotifyInitialPublish =
-    publish && !hasPublishedSlots && normalizedSlots.length > 0;
   const submittedIds = new Set(
     normalizedSlots
       .map((slot) => slot.id)
@@ -437,7 +430,7 @@ export async function saveCampTimetable(
     const existingSlot = slot.id
       ? existingSlotRows.find((existing) => existing.id === slot.id)
       : null;
-    const keepPublished = publish || existingSlot?.is_published === true;
+    const keepPublished = publish ? true : existingSlot?.is_published === true;
     const payload = {
       opportunity_id: opportunityId,
       slot_date: slot.slotDate,
@@ -473,51 +466,41 @@ export async function saveCampTimetable(
     }
   }
 
-  if (affectedParticipantIds.size > 0) {
-    const { error: affectedNotificationError } = await supabase.rpc(
-      "notify_timetable_bookings_changed",
-      {
-        target_opportunity_id: opportunityId,
-        affected_user_ids: [...affectedParticipantIds],
-      },
-    );
+  if (publish) {
+    const { error: finalizeError } = await supabase
+      .from("opportunity_slot_bookings")
+      .update({
+        is_final: true,
+        finalized_at: timestamp,
+      })
+      .eq("opportunity_id", opportunityId);
 
-    if (affectedNotificationError) {
-      console.error(
-        "Affected timetable notification RPC failed",
-        affectedNotificationError,
-      );
-      return { ok: false, message: "Timetable saved, but notifications failed." };
+    if (finalizeError) {
+      console.error("Timetable booking finalize failed", finalizeError);
+      return { ok: false, message: "Could not finalize booked times." };
     }
-
-    await sendServerPush([...affectedParticipantIds], "timetable_booking_changed", {
-      opportunityId,
-      types: ["timetable_booking_changed"],
-    });
   }
 
   if (publish) {
-    if (shouldNotifyInitialPublish) {
-      const { error: notificationError } = await supabase.rpc(
-        "notify_timetable_published",
-        { target_opportunity_id: opportunityId },
-      );
+    const { error: notificationError } = await supabase.rpc(
+      "notify_timetable_published",
+      { target_opportunity_id: opportunityId },
+    );
 
-      if (notificationError) {
-        console.error("Timetable notification RPC failed", notificationError);
-        return { ok: false, message: "Timetable saved, but notifications failed." };
-      }
-
-      const pushResult = await sendPendingPushNotificationsForOpportunity(
-        opportunityId,
-        ["timetable_published"],
-      );
-      console.log("Server push trigger completed", {
-        context: "timetable_published",
-        result: pushResult,
-        opportunityId,
-      });
+    if (notificationError) {
+      console.error("Timetable notification RPC failed", notificationError);
+      return { ok: false, message: "Timetable saved, but notifications failed." };
     }
+
+    const pushResult = await sendPendingPushNotificationsForOpportunity(
+      opportunityId,
+      ["timetable_published"],
+    );
+    console.log("Server push trigger completed", {
+      context: "timetable_published",
+      result: pushResult,
+      opportunityId,
+    });
   }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
@@ -874,6 +857,144 @@ export async function releaseParticipantSlotBooking(
   };
 }
 
+export async function approveSlotReleaseRequest(
+  opportunityId: string,
+  bookingId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: booking, error: lookupError } = await supabase
+    .from("opportunity_slot_bookings")
+    .select("id,user_id,opportunity_id,release_requested_at,opportunities(created_by)")
+    .eq("id", bookingId)
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("Approve release request lookup failed", lookupError);
+    return { ok: false, message: "Could not update release request." };
+  }
+
+  const bookingOpportunity = Array.isArray(booking?.opportunities)
+    ? booking?.opportunities[0]
+    : booking?.opportunities;
+
+  if (
+    !booking ||
+    bookingOpportunity?.created_by !== user.id ||
+    !booking.release_requested_at
+  ) {
+    return { ok: false, message: "Release request not found." };
+  }
+
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (!adminSupabase) {
+    return { ok: false, message: "Could not update release request." };
+  }
+
+  const { error } = await adminSupabase
+    .from("opportunity_slot_bookings")
+    .delete()
+    .eq("id", booking.id)
+    .eq("opportunity_id", opportunityId);
+
+  if (error) {
+    console.error("Approve release request failed", error);
+    return { ok: false, message: "Could not update release request." };
+  }
+
+  await sendServerPush([booking.user_id], "slot_bookings_released_by_organizer", {
+    opportunityId,
+    types: ["slot_bookings_released_by_organizer"],
+  });
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
+  revalidatePath("/app/applications");
+
+  return { ok: true, message: "Release request approved." };
+}
+
+export async function rejectSlotReleaseRequest(
+  opportunityId: string,
+  bookingId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: booking, error: lookupError } = await supabase
+    .from("opportunity_slot_bookings")
+    .select("id,opportunity_id,release_requested_at,opportunities(created_by)")
+    .eq("id", bookingId)
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("Reject release request lookup failed", lookupError);
+    return { ok: false, message: "Could not update release request." };
+  }
+
+  const bookingOpportunity = Array.isArray(booking?.opportunities)
+    ? booking?.opportunities[0]
+    : booking?.opportunities;
+
+  if (
+    !booking ||
+    bookingOpportunity?.created_by !== user.id ||
+    !booking.release_requested_at
+  ) {
+    return { ok: false, message: "Release request not found." };
+  }
+
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (!adminSupabase) {
+    return { ok: false, message: "Could not update release request." };
+  }
+
+  const { error } = await adminSupabase
+    .from("opportunity_slot_bookings")
+    .update({
+      release_requested_at: null,
+      release_requested_by: null,
+    })
+    .eq("id", booking.id)
+    .eq("opportunity_id", opportunityId);
+
+  if (error) {
+    console.error("Reject release request failed", error);
+    return { ok: false, message: "Could not update release request." };
+  }
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
+  revalidatePath("/app/applications");
+
+  return { ok: true, message: "Release request rejected." };
+}
+
 export async function assignParticipantSlotBooking(
   opportunityId: string,
   slotId: string,
@@ -971,11 +1092,6 @@ export async function assignParticipantSlotBooking(
     };
   }
 
-  await sendServerPush([participantId], "slot_booking_assigned_by_organizer", {
-    opportunityId,
-    types: ["slot_booking_assigned_by_organizer"],
-  });
-
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
@@ -983,7 +1099,7 @@ export async function assignParticipantSlotBooking(
   revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
-  return { ok: true, message: "Slot assigned." };
+  return { ok: true, message: "Slot saved as draft." };
 }
 
 function getAffectedTimetableParticipantIds(

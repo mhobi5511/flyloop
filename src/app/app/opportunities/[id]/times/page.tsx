@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { CampApplyPreferencesForm } from "@/components/CampApplyPreferencesForm";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { SlotBookingSelector } from "@/components/SlotBookingSelector";
 import { participantActivityNotificationTypes } from "@/lib/notifications";
@@ -58,10 +59,6 @@ export default async function SlotBookingPage({
   }
 
   const opportunity = mapOpportunity(row as HomeFeedRow);
-  if (opportunity.type === "huck_jam") {
-    notFound();
-  }
-  const isFull = isOpportunityFull(opportunity);
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
@@ -70,6 +67,67 @@ export default async function SlotBookingPage({
     viewerHasTimetableReminder || viewerInterestStatus === "withdrawn"
       ? undefined
       : viewerInterestStatus;
+
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", user.id)
+    .eq("opportunity_id", opportunity.id)
+    .in("type", [...participantActivityNotificationTypes])
+    .eq("read", false);
+
+  if (opportunity.type === "camp") {
+    const dayCount = getCampDayCount(opportunity.startDate, opportunity.endDate);
+
+    return (
+      <AppShell active="home">
+        <NotificationReadSignal />
+        <div className="mx-auto max-w-2xl">
+          <Link
+            href={`/app/opportunities/${opportunity.id}`}
+            className="text-sm font-bold text-sky-700"
+          >
+            Back to opportunity
+          </Link>
+
+          <header className="mt-4">
+            <div className="flex flex-wrap items-center gap-1.5 text-[0.68rem] font-black uppercase">
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">
+                {formatOpportunityType(opportunity.type)}
+              </span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+                {formatDateRange(opportunity.startDate, opportunity.endDate)}
+              </span>
+            </div>
+            <h1 className="mt-2 text-2xl font-black tracking-tight">Apply</h1>
+            <p className="mt-1 text-sm font-semibold text-slate-600">
+              {opportunity.title}
+            </p>
+          </header>
+
+          <div className="mt-4">
+            {viewerApplicationStatus ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-sm font-black text-slate-950">
+                  You already have an application.
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  Current status: {viewerApplicationStatus}.
+                </p>
+              </div>
+            ) : (
+              <CampApplyPreferencesForm
+                opportunityId={opportunity.id}
+                dayCount={dayCount}
+              />
+            )}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const isFull = isOpportunityFull(opportunity);
   const canBook =
     viewerApplicationStatus === "accepted" ||
     (opportunity.bookingMode === "direct_time_booking" &&
@@ -80,14 +138,6 @@ export default async function SlotBookingPage({
   if (!canBook) {
     notFound();
   }
-
-  await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("user_id", user.id)
-    .eq("opportunity_id", opportunity.id)
-    .in("type", [...participantActivityNotificationTypes])
-    .eq("read", false);
 
   const { data: slotRows, error: slotError } = await supabase.rpc(
     "get_published_opportunity_slots",
@@ -158,6 +208,20 @@ export default async function SlotBookingPage({
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function getCampDayCount(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate || startDate}T00:00:00`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 1;
+  }
+
+  return Math.max(
+    Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1,
+    1,
   );
 }
 
