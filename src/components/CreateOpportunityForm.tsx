@@ -420,7 +420,7 @@ export function CreateOpportunityForm({
       const effectiveEndDate = type === "huck_jam" ? startDate : endDate;
       const values = {
         type,
-        bookingMode: "approval_required",
+        bookingMode: "approval_required" as BookingMode,
         title,
         tunnelId,
         startDate,
