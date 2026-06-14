@@ -29,11 +29,18 @@ alter table public.opportunity_slot_bookings
   add column if not exists release_requested_at timestamptz,
   add column if not exists release_requested_by uuid references public.profiles(id) on delete set null;
 
+-- Backfill existing bookings without firing the row-level guard, which expects auth.uid().
+alter table public.opportunity_slot_bookings
+  disable trigger opportunity_slot_bookings_guard;
+
 update public.opportunity_slot_bookings
 set
   is_final = true,
   finalized_at = coalesce(finalized_at, created_at)
 where is_final is distinct from true;
+
+alter table public.opportunity_slot_bookings
+  enable trigger opportunity_slot_bookings_guard;
 
 create index if not exists opportunity_slot_bookings_opportunity_final_idx
 on public.opportunity_slot_bookings(opportunity_id, is_final);
