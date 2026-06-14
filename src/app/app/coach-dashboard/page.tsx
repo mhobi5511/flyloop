@@ -87,6 +87,7 @@ type SlotRow = {
   start_time: string;
   duration_minutes: number;
   capacity: number;
+  is_published: boolean;
   opportunity_slot_bookings:
     | Array<{
         id: string;
@@ -192,11 +193,11 @@ export default async function CoachDashboardPage({
           .in("opportunity_id", opportunityIds)
           .order("day_id", { ascending: true })
       : { data: [], error: null };
-  const { data: slots, error: slotsError } =
-    opportunityIds.length > 0
+    const { data: slots, error: slotsError } =
+      opportunityIds.length > 0
       ? await supabase
           .from("opportunity_time_slots")
-          .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+          .select("id,opportunity_id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
           .in("opportunity_id", opportunityIds)
           .order("slot_date", { ascending: true })
           .order("start_time", { ascending: true })

@@ -5,11 +5,7 @@ import { getSupabaseConfigOrThrow } from "./config";
 export function createSupabaseAdminClient() {
   const { url, anonKey } = getSupabaseConfigOrThrow();
 
-  if (!config) {
-    return null;
-  }
-
-  return createClient(config.url, config.serviceRoleKey, {
+  return createClient(url, anonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

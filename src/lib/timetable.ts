@@ -37,6 +37,7 @@ export type TimetableSlotGroup = {
   startTime: string;
   durationMinutes: number;
   capacity: number;
+  isPublished?: boolean;
   bookings: TimetableBooking[];
   openSpots: number;
 };

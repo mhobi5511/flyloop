@@ -437,20 +437,12 @@ export default async function OpportunityDetailPage({
                   <p className="text-sm font-black text-slate-950">
                     {viewerApplicationStatus === "accepted"
                       ? "Your spot is confirmed."
-                      : viewerApplicationStatus === "declined"
-                        ? "Your application was declined."
-                        : viewerApplicationStatus === "waitlist"
-                          ? "You are on the waitlist."
-                          : "Application sent"}
+                      : "Application sent"}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
                     {viewerApplicationStatus === "accepted"
                       ? "The timetable will be available later."
-                      : viewerApplicationStatus === "waitlist"
-                        ? "We will update you if a spot opens up."
-                        : viewerApplicationStatus === "declined"
-                          ? "The coach has reviewed your application."
-                          : "Your preferences were sent to the coach."}
+                      : "Your preferences were sent to the coach."}
                   </p>
                 </div>
                 <CampPreferencesSummary
