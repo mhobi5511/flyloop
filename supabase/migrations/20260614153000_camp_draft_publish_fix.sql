@@ -1,6 +1,9 @@
 drop policy if exists "Accepted participants manage own camp preferences" on public.camp_day_preferences;
 drop policy if exists "Accepted participants update own camp preferences" on public.camp_day_preferences;
 drop policy if exists "Accepted participants delete own camp preferences" on public.camp_day_preferences;
+drop policy if exists "Pending and accepted participants manage own camp preferences" on public.camp_day_preferences;
+drop policy if exists "Pending and accepted participants update own camp preferences" on public.camp_day_preferences;
+drop policy if exists "Pending and accepted participants delete own camp preferences" on public.camp_day_preferences;
 
 create policy "Pending and accepted participants manage own camp preferences"
 on public.camp_day_preferences for insert
@@ -217,7 +220,7 @@ begin
     target_opportunity_id,
     target_user_id,
     slot_record.duration_minutes,
-    slot_record.is_published
+    false
   )
   returning id into inserted_booking_id;
 

@@ -244,6 +244,8 @@ export default async function OpportunityDetailPage({
   const bookedTimesByDay = groupBookedTimesByDay(bookedTimes);
   const showAcceptedNextAction = canSelectTimes && isAccepted && !hasBookedSlots;
   const showBookedStatus = canSelectTimes && isAccepted && hasBookedSlots;
+  const canShowCampApply =
+    isCamp && !viewerApplicationStatus && !hasPublishedTimetable && !isUnavailable;
   const sessionRange = formatSessionTimeRange(
     opportunity.sessionStart,
     opportunity.sessionEnd,
@@ -454,14 +456,27 @@ export default async function OpportunityDetailPage({
                   }))}
                 />
               </div>
-            ) : isCamp && !isUnavailable ? (
-              <div className="mt-4">
-                <Link
-                  href={`/app/opportunities/${opportunity.id}/times`}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700"
-                >
-                  Apply
-                </Link>
+            ) : canShowCampApply ? (
+              <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm sm:p-5">
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+                      Apply to join
+                    </p>
+                    <p className="mt-1 text-base font-black text-slate-950">
+                      Choose your flying preferences and submit your application.
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">
+                      This camp still requires coach approval before any timetable is visible.
+                    </p>
+                  </div>
+                  <Link
+                    href={`/app/opportunities/${opportunity.id}/times`}
+                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 py-3 text-base font-black text-white transition hover:bg-sky-700 sm:text-lg"
+                  >
+                    Apply with preferences
+                  </Link>
+                </div>
               </div>
             ) : !isCamp && opportunity.bookingMode === "approval_required" ? (
               <div className="mt-4">
