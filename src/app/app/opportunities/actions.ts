@@ -108,8 +108,15 @@ export async function sendOpportunityInterest(
 
   if (existingError) {
     console.error("Interest duplicate lookup failed", existingError);
-    return { ok: false, message: "Could not send interest. Please try again." };
+    return {
+      ok: false,
+      message: `Could not send interest. Backend error: ${debugSupabaseMessage(existingError) || "Unknown error."}`,
+    };
   }
+
+  const hadExistingInterest = Boolean(existingInterest);
+  let currentInterest = existingInterest;
+  let createdInterestId: string | null = null;
 
   if (existingInterest?.status === "withdrawn") {
     const adminSupabase = createSupabaseAdminClient();
@@ -127,11 +134,68 @@ export async function sendOpportunityInterest(
 
     if (resetError) {
       console.error("Withdrawn interest reset failed", resetError);
-      return { ok: false, message: "Could not send interest. Please try again." };
+      return {
+        ok: false,
+        message: `Could not send interest. Backend error: ${debugSupabaseMessage(resetError) || "Unknown error."}`,
+      };
+    }
+
+    currentInterest = null;
+  }
+
+  const needsCampPreferences = opportunity.type === "camp" && campPreferences.length > 0;
+
+  if (needsCampPreferences && !currentInterest) {
+    const { data: createdInterest, error: createInterestError } = await supabase
+      .from("opportunity_interests")
+      .insert({
+        opportunity_id: opportunityId,
+        athlete_id: user.id,
+        status: "pending",
+      })
+      .select("id,status")
+      .maybeSingle();
+
+    if (createInterestError) {
+      if (createInterestError.code !== "23505") {
+        console.error("Camp interest creation failed", {
+          opportunityId,
+          athleteId: user.id,
+          error: createInterestError,
+        });
+        return {
+          ok: false,
+          message: `Could not create your application. Backend error: ${debugSupabaseMessage(createInterestError) || "Unknown error."}`,
+        };
+      }
+
+      const { data: retryInterest, error: retryError } = await supabase
+        .from("opportunity_interests")
+        .select("id,status")
+        .eq("opportunity_id", opportunityId)
+        .eq("athlete_id", user.id)
+        .maybeSingle();
+
+      if (retryError || !retryInterest) {
+        console.error("Camp interest retry lookup failed", {
+          opportunityId,
+          athleteId: user.id,
+          error: retryError ?? createInterestError,
+        });
+        return {
+          ok: false,
+          message: `Could not create your application. Backend error: ${debugSupabaseMessage(retryError ?? createInterestError) || "Unknown error."}`,
+        };
+      }
+
+      currentInterest = retryInterest;
+    } else {
+      currentInterest = createdInterest ?? null;
+      createdInterestId = createdInterest?.id ?? null;
     }
   }
 
-  if (opportunity.type === "camp" && campPreferences.length > 0) {
+  if (needsCampPreferences) {
     const { error: preferenceError } = await supabase
       .from("camp_day_preferences")
       .upsert(
@@ -146,37 +210,69 @@ export async function sendOpportunityInterest(
 
     if (preferenceError) {
       console.error("Camp preference save failed", preferenceError);
-      return { ok: false, message: "Could not save your preferences. Please try again." };
+      if (createdInterestId) {
+        const { error: cleanupError } = await supabase
+          .from("opportunity_interests")
+          .delete()
+          .eq("id", createdInterestId)
+          .eq("athlete_id", user.id);
+
+        if (cleanupError) {
+          console.error("Camp application cleanup failed after preference error", {
+            opportunityId,
+            athleteId: user.id,
+            createdInterestId,
+            error: cleanupError,
+          });
+        }
+      }
+
+      return {
+        ok: false,
+        message: `Could not save your preferences. Backend error: ${debugSupabaseMessage(preferenceError) || "Unknown error."}`,
+      };
     }
   }
 
-  if (existingInterest) {
+  if (hadExistingInterest && currentInterest) {
     return {
       ok: true,
-      message: `You already applied. Current status: ${formatInterestStatus(existingInterest.status)}.`,
-      status: existingInterest.status as InterestStatus,
+      message: `You already applied. Current status: ${formatInterestStatus(currentInterest.status)}.`,
+      status: currentInterest.status as InterestStatus,
     };
   }
 
-  const { error } = await supabase.from("opportunity_interests").insert({
-    opportunity_id: opportunityId,
-    athlete_id: user.id,
-    status: "pending",
-  });
+  if (!currentInterest) {
+    const { data: createdInterest, error } = await supabase
+      .from("opportunity_interests")
+      .insert({
+        opportunity_id: opportunityId,
+        athlete_id: user.id,
+        status: "pending",
+      })
+      .select("id,status")
+      .maybeSingle();
 
-  if (error) {
-    if (error.code === "23505") {
+    if (error) {
+      if (error.code === "23505") {
+        return {
+          ok: true,
+          message:
+            opportunity.type === "camp"
+              ? "Application sent.\nYour preferences are visible to the coach."
+              : "Your interest was already sent.",
+        };
+      }
+
+      console.error("Interest creation failed", error);
       return {
-        ok: true,
-        message:
-          opportunity.type === "camp"
-            ? "Application sent.\nYour preferences are visible to the coach."
-            : "Your interest was already sent.",
+        ok: false,
+        message: `Could not send interest. Backend error: ${debugSupabaseMessage(error) || "Unknown error."}`,
       };
     }
 
-    console.error("Interest creation failed", error);
-    return { ok: false, message: "Could not send interest. Please try again." };
+    currentInterest = createdInterest ?? null;
+    createdInterestId = createdInterest?.id ?? createdInterestId;
   }
 
   await sendServerPush([opportunity.created_by], "new_interest", {
