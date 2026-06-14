@@ -4,13 +4,13 @@ import { CalendarDays, CheckCircle2, Clock3, MapPin, Users } from "lucide-react"
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
+import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
 import { CampTunnelTimeSettings } from "@/components/CampTunnelTimeSettings";
 import { FollowButton } from "@/components/FollowButton";
 import { FollowGuidance } from "@/components/FollowGuidance";
 import { InterestButton } from "@/components/InterestButton";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { RequestCampRemovalButton } from "@/components/RequestCampRemovalButton";
-import { RequestSlotReleaseButton } from "@/components/RequestSlotReleaseButton";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TimetableReminderButton } from "@/components/TimetableReminderButton";
 import { participantActivityNotificationTypes } from "@/lib/notifications";
@@ -28,7 +28,11 @@ import {
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
-import { calculateEstimatedCost } from "@/lib/timetable";
+import {
+  calculateEstimatedCost,
+  formatTimetableDate,
+  formatTimetableTime,
+} from "@/lib/timetable";
 import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 
 type OpportunityDetailRow = HomeFeedRow & {
@@ -114,6 +118,16 @@ export default async function OpportunityDetailPage({
       .in("type", [...participantActivityNotificationTypes])
       .eq("read", false);
   }
+
+  const { data: campPreferenceRows } =
+    user && isCamp
+      ? await supabase
+          .from("camp_day_preferences")
+          .select("day_id,preferred_minutes")
+          .eq("opportunity_id", opportunity.id)
+          .eq("participant_id", user.id)
+          .order("day_id", { ascending: true })
+      : { data: [] };
 
   const [{ count: publishedSlotCount }, { data: bookingRows }] =
     user && !isHuckJam
@@ -227,6 +241,7 @@ export default async function OpportunityDetailPage({
     opportunity.minMinutesOrHours,
   );
   const hasBookedSlots = bookedTimes.length > 0;
+  const bookedTimesByDay = groupBookedTimesByDay(bookedTimes);
   const showAcceptedNextAction = canSelectTimes && isAccepted && !hasBookedSlots;
   const showBookedStatus = canSelectTimes && isAccepted && hasBookedSlots;
   const sessionRange = formatSessionTimeRange(
@@ -343,7 +358,7 @@ export default async function OpportunityDetailPage({
           ) : null}
 
           {isCamp && isAccepted ? (
-            hasPublishedTimetable && hasBookedSlots ? (
+            hasPublishedTimetable ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start gap-2">
                   <CheckCircle2 size={19} className="mt-0.5 shrink-0 text-emerald-700" />
@@ -354,34 +369,56 @@ export default async function OpportunityDetailPage({
                     <p className="mt-1 text-base font-black text-slate-950">
                       Your final flight times are below.
                     </p>
-                    <div className="mt-3 grid gap-2">
-                      {bookedTimes.map((booking) => (
-                        <div
-                          key={booking.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-slate-950">
-                              {formatBookedTime(booking.date, booking.time)}
-                            </p>
-                            <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                              {booking.minutes} min
-                            </p>
-                          </div>
-                          <RequestSlotReleaseButton
-                            opportunityId={opportunity.id}
-                            slotId={booking.slotId}
-                          />
-                        </div>
-                      ))}
-                    </div>
+                    {hasBookedSlots ? (
+                      <div className="mt-3 grid gap-3">
+                        {bookedTimesByDay.map((day) => (
+                          <section
+                            key={day.date}
+                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                          >
+                            <h4 className="text-sm font-black text-slate-950">
+                              {formatTimetableDate(day.date)}
+                            </h4>
+                            <div className="mt-2 grid gap-1.5">
+                              {day.bookings.map((booking) => (
+                                <div
+                                  key={booking.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"
+                                >
+                                  <p className="text-sm font-black text-slate-950">
+                                    {formatTimetableTime(booking.time)}
+                                  </p>
+                                  <p className="text-xs font-semibold text-slate-500">
+                                    {booking.minutes} min
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+                        No final flight times are assigned yet.
+                      </p>
+                    )}
+                    {isCamp ? (
+                      <div className="mt-4">
+                        <CampPreferencesSummary
+                          campStartDate={opportunity.startDate}
+                          campEndDate={opportunity.endDate}
+                          preferences={(campPreferenceRows ?? []).map((preference) => ({
+                            dayId: preference.day_id,
+                            preferredMinutes: preference.preferred_minutes,
+                          }))}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
-            ) : hasPublishedTimetable ? (
-              <StatusMessage message="Your timetable has been published, but no final flight times are assigned yet." />
             ) : (
-              <StatusMessage message="You are accepted. The coach will publish your timetable when ready." />
+              <StatusMessage message="Your spot is confirmed. The timetable will be available later." />
             )
           ) : null}
 
@@ -394,7 +431,38 @@ export default async function OpportunityDetailPage({
               <StatusMessage message="You're in. Your spot is confirmed." />
             ) : !isCamp && isAccepted && !hasPublishedTimetable ? (
               <StatusMessage message="You are accepted. The timetable is not available yet." />
-            ) : isCamp && !viewerApplicationStatus && !isUnavailable ? (
+            ) : isCamp && viewerApplicationStatus ? (
+              <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div>
+                  <p className="text-sm font-black text-slate-950">
+                    {viewerApplicationStatus === "accepted"
+                      ? "Your spot is confirmed."
+                      : viewerApplicationStatus === "declined"
+                        ? "Your application was declined."
+                        : viewerApplicationStatus === "waitlist"
+                          ? "You are on the waitlist."
+                          : "Application sent"}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    {viewerApplicationStatus === "accepted"
+                      ? "The timetable will be available later."
+                      : viewerApplicationStatus === "waitlist"
+                        ? "We will update you if a spot opens up."
+                        : viewerApplicationStatus === "declined"
+                          ? "The coach has reviewed your application."
+                          : "Your preferences were sent to the coach."}
+                  </p>
+                </div>
+                <CampPreferencesSummary
+                  campStartDate={opportunity.startDate}
+                  campEndDate={opportunity.endDate}
+                  preferences={(campPreferenceRows ?? []).map((preference) => ({
+                    dayId: preference.day_id,
+                    preferredMinutes: preference.preferred_minutes,
+                  }))}
+                />
+              </div>
+            ) : isCamp && !isUnavailable ? (
               <div className="mt-4">
                 <Link
                   href={`/app/opportunities/${opportunity.id}/times`}
@@ -403,7 +471,7 @@ export default async function OpportunityDetailPage({
                   Apply
                 </Link>
               </div>
-            ) : opportunity.bookingMode === "approval_required" ? (
+            ) : !isCamp && opportunity.bookingMode === "approval_required" ? (
               <div className="mt-4">
                 <InterestButton
                   opportunityId={opportunity.id}
@@ -412,7 +480,7 @@ export default async function OpportunityDetailPage({
                   compact
                 />
               </div>
-            ) : !hasPublishedTimetable && !isUnavailable ? (
+            ) : !isCamp && !hasPublishedTimetable && !isUnavailable ? (
               <div className="mt-4">
                 <TimetableReminderButton
                   opportunityId={opportunity.id}
@@ -638,6 +706,25 @@ function formatLocation(city?: string, country?: string) {
   return city ?? country ?? "Location to be confirmed";
 }
 
+function groupBookedTimesByDay(
+  bookings: Array<{ id: string; date: string; time: string; minutes: number }>,
+) {
+  const groups = new Map<string, typeof bookings>();
+
+  for (const booking of bookings) {
+    const dayBookings = groups.get(booking.date) ?? [];
+    dayBookings.push(booking);
+    groups.set(booking.date, dayBookings);
+  }
+
+  return [...groups.entries()]
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, dayBookings]) => ({
+      date,
+      bookings: dayBookings.sort((a, b) => a.time.localeCompare(b.time)),
+    }));
+}
+
 function StatusMessage({ message }: { message: string }) {
   return (
     <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700">
@@ -727,12 +814,7 @@ function formatRegistrationDeadline(value: string) {
 }
 
 function formatBookedTime(dateValue: string, timeValue: string) {
-  const date = new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(`${dateValue}T00:00:00`));
-
-  return `${date}, ${timeValue.slice(0, 5)}`;
+  return timeValue.slice(0, 5);
 }
 
 function formatEstimatedPrice(value: number, currency: string) {

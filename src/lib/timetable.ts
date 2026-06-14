@@ -15,6 +15,7 @@ export type TimetableSlot = {
   startTime: string;
   durationMinutes: number;
   capacity: number;
+  isPublished?: boolean;
   bookings: TimetableBooking[];
 };
 

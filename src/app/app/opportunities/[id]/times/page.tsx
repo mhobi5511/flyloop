@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { CampApplyPreferencesForm } from "@/components/CampApplyPreferencesForm";
+import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { SlotBookingSelector } from "@/components/SlotBookingSelector";
 import { participantActivityNotificationTypes } from "@/lib/notifications";
@@ -67,6 +68,15 @@ export default async function SlotBookingPage({
     viewerHasTimetableReminder || viewerInterestStatus === "withdrawn"
       ? undefined
       : viewerInterestStatus;
+  const { data: campPreferenceRows } =
+    opportunity.type === "camp" && user
+      ? await supabase
+          .from("camp_day_preferences")
+          .select("day_id,preferred_minutes")
+          .eq("opportunity_id", opportunity.id)
+          .eq("participant_id", user.id)
+          .order("day_id", { ascending: true })
+      : { data: [] };
 
   await supabase
     .from("notifications")
@@ -77,8 +87,6 @@ export default async function SlotBookingPage({
     .eq("read", false);
 
   if (opportunity.type === "camp") {
-    const dayCount = getCampDayCount(opportunity.startDate, opportunity.endDate);
-
     return (
       <AppShell active="home">
         <NotificationReadSignal />
@@ -99,26 +107,37 @@ export default async function SlotBookingPage({
                 {formatDateRange(opportunity.startDate, opportunity.endDate)}
               </span>
             </div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight">Apply</h1>
-            <p className="mt-1 text-sm font-semibold text-slate-600">
-              {opportunity.title}
-            </p>
           </header>
 
           <div className="mt-4">
             {viewerApplicationStatus ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm font-black text-slate-950">
-                  You already have an application.
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-600">
-                  Current status: {viewerApplicationStatus}.
-                </p>
+              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div>
+                  <p className="text-sm font-black text-slate-950">
+                    {viewerApplicationStatus === "accepted"
+                      ? "Your spot is confirmed."
+                      : "Application sent"}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    {viewerApplicationStatus === "accepted"
+                      ? "The timetable will be available later."
+                      : "Your preferences were sent to the coach."}
+                  </p>
+                </div>
+                <CampPreferencesSummary
+                  campStartDate={opportunity.startDate}
+                  campEndDate={opportunity.endDate}
+                  preferences={(campPreferenceRows ?? []).map((preference) => ({
+                    dayId: preference.day_id,
+                    preferredMinutes: preference.preferred_minutes,
+                  }))}
+                />
               </div>
             ) : (
               <CampApplyPreferencesForm
                 opportunityId={opportunity.id}
-                dayCount={dayCount}
+                campStartDate={opportunity.startDate}
+                campEndDate={opportunity.endDate}
               />
             )}
           </div>
@@ -208,20 +227,6 @@ export default async function SlotBookingPage({
         </div>
       </div>
     </AppShell>
-  );
-}
-
-function getCampDayCount(startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate || startDate}T00:00:00`);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return 1;
-  }
-
-  return Math.max(
-    Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1,
-    1,
   );
 }
 

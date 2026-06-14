@@ -220,6 +220,7 @@ export default async function OrganizerOpportunityPage({
       startTime: slot.start_time,
       durationMinutes: slot.duration_minutes,
       capacity: slot.capacity,
+      isPublished: slot.is_published,
       bookings: (slot.opportunity_slot_bookings ?? []).map((booking) => {
         const profile = Array.isArray(booking.profiles)
           ? booking.profiles[0]

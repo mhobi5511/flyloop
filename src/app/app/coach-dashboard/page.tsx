@@ -301,6 +301,7 @@ export default async function CoachDashboardPage({
         startTime: slot.start_time,
         durationMinutes: slot.duration_minutes,
         capacity: slot.capacity,
+        isPublished: slot.is_published,
         bookings: (slot.opportunity_slot_bookings ?? []).map((booking) => {
           const bookingProfile = Array.isArray(booking.profiles)
             ? booking.profiles[0]

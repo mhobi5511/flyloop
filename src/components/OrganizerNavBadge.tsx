@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { countBadgeNotifications } from "@/lib/notifications";
 import { NotificationCountBadge } from "./NotificationCountBadge";
@@ -21,8 +22,9 @@ export function OrganizerNavBadge({
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     let disposed = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: RealtimeChannel | null = null;
     let currentUserId: string | null = null;
+    let isSubscribed = false;
 
     async function loadCount() {
       if (!currentUserId) {
@@ -78,19 +80,26 @@ export function OrganizerNavBadge({
       currentUserId = userId;
       void loadCount();
 
-      channel = supabase
-        .channel(`organizer-notifications:${userId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${userId}`,
-          },
-          () => void loadCount(),
-        )
-        .subscribe();
+      const nextChannel = supabase.channel(`organizer-notifications:${userId}`);
+
+      nextChannel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => void loadCount(),
+      );
+
+      if (disposed) {
+        return;
+      }
+
+      channel = nextChannel;
+      isSubscribed = true;
+      void channel.subscribe();
     });
 
     const interval = window.setInterval(() => void loadCount(), 15_000);
@@ -99,7 +108,7 @@ export function OrganizerNavBadge({
       disposed = true;
       window.removeEventListener("flyloop-notifications-read", handleRead);
       window.clearInterval(interval);
-      if (channel) {
+      if (channel && isSubscribed) {
         void supabase.removeChannel(channel);
       }
     };

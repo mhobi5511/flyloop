@@ -7,28 +7,38 @@ import {
   sendOpportunityInterest,
   type CampDayPreferenceInput,
 } from "@/app/app/opportunities/actions";
+import {
+  formatCampPreferenceMinutes,
+  getCampDays,
+} from "@/lib/camp-days";
 
 type CampApplyPreferencesFormProps = {
   opportunityId: string;
-  dayCount: number;
+  campStartDate: string;
+  campEndDate: string;
 };
 
-const preferenceOptions = [30, 45, 60, 75, 90];
+const preferenceOptions = [
+  { value: 0, label: "No flying" },
+  { value: 30, label: formatCampPreferenceMinutes(30) },
+  { value: 45, label: formatCampPreferenceMinutes(45) },
+  { value: 60, label: formatCampPreferenceMinutes(60) },
+  { value: 75, label: formatCampPreferenceMinutes(75) },
+  { value: 90, label: formatCampPreferenceMinutes(90) },
+];
 
 export function CampApplyPreferencesForm({
   opportunityId,
-  dayCount,
+  campStartDate,
+  campEndDate,
 }: CampApplyPreferencesFormProps) {
   const router = useRouter();
-  const days = useMemo(
-    () =>
-      Array.from({ length: Math.max(dayCount, 1) }, (_, index) => ({
-        dayId: index + 1,
-      })),
-    [dayCount],
-  );
+  const days = useMemo(() => getCampDays(campStartDate, campEndDate), [
+    campStartDate,
+    campEndDate,
+  ]);
   const [preferences, setPreferences] = useState<number[]>(
-    () => Array.from({ length: Math.max(dayCount, 1) }, () => 60),
+    () => Array.from({ length: Math.max(days.length, 1) }, () => 60),
   );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -67,7 +77,7 @@ export function CampApplyPreferencesForm({
   return (
     <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div>
-        <h2 className="text-xl font-black tracking-tight text-slate-950">
+        <h2 className="text-2xl font-black tracking-tight text-slate-950">
           Apply with your preferences
         </h2>
         <p className="mt-1 text-sm font-semibold text-slate-600">
@@ -82,7 +92,7 @@ export function CampApplyPreferencesForm({
             className="grid gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-3"
           >
             <span className="text-sm font-black text-slate-950">
-              Day {day.dayId}
+              {day.label}
             </span>
             <select
               value={preferences[index] ?? 60}
@@ -91,9 +101,9 @@ export function CampApplyPreferencesForm({
               }
               className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-sky-400"
             >
-              {preferenceOptions.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {minutes} minutes
+              {preferenceOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -105,7 +115,7 @@ export function CampApplyPreferencesForm({
         type="button"
         disabled={isPending}
         onClick={submit}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-base font-black text-white shadow-sm transition hover:bg-sky-700 disabled:bg-slate-300"
       >
         <Send size={17} /> {isPending ? "Sending..." : "Apply"}
       </button>

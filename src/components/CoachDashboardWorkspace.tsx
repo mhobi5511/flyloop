@@ -19,6 +19,7 @@ import {
   Save,
   Settings,
   Share2,
+  Send,
   UserRound,
   WalletCards,
   X,
@@ -60,6 +61,10 @@ import {
   groupTimetableSlotsByDay,
   type TimetableSlot,
 } from "@/lib/timetable";
+import {
+  formatCampDayPreferenceLabel,
+  formatCampPreferenceMinutes,
+} from "@/lib/camp-days";
 import type {
   BookingMode,
   InterestStatus,
@@ -326,6 +331,12 @@ export function CoachDashboardWorkspace({
   const activityBadgeCount = getActivityBadgeCount(attention);
   const showActivityBadge = activityBadgeCount > lastSeenActivityCount;
   const assignableParticipants = getAssignableParticipants(activeCamp);
+  const unpublishedChangeCount = getUnpublishedChangeCount(activeCamp.timetableSlots);
+  const hasUnpublishedChanges = unpublishedChangeCount > 0;
+  const hasPublishedTimetable = activeCamp.timetableSlots.some(
+    (slot) => slot.isPublished === true,
+  );
+  const showTimetableStatus = hasPublishedTimetable || hasUnpublishedChanges;
   const scopedActivity = activity
     .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id);
 
@@ -581,6 +592,22 @@ export function CoachDashboardWorkspace({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {showTimetableStatus ? (
+                    <span
+                      className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-black ${
+                        hasUnpublishedChanges
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {hasUnpublishedChanges
+                        ? `Draft changes pending (${unpublishedChangeCount})`
+                        : "Timetable fully published"}
+                    </span>
+                  ) : null}
+                  {activeCamp.type === "camp" ? (
+                    <PublishTimetableButton camp={activeCamp} />
+                  ) : null}
                   <button
                     type="button"
                     onClick={() =>
@@ -648,19 +675,34 @@ export function CoachDashboardWorkspace({
                           const isSelectedSlot = slot.bookings.some(
                             (booking) => booking.id === activeBookingActionId,
                           );
+                          const isDraftSlot = slot.isPublished === false;
 
                           return (
                             <article
                               key={slot.id}
-                              className={`relative rounded-xl border bg-white p-2 shadow-sm transition ${
+                              className={`relative overflow-hidden rounded-xl border bg-white p-2 shadow-sm transition ${
                                 isSelectedSlot
                                   ? "border-sky-300 bg-sky-50/60 ring-2 ring-sky-100"
                                   : isFull
                                   ? "border-emerald-200"
                                   : "border-slate-200"
                               }`}
+                              style={
+                                isDraftSlot
+                                  ? {
+                                      backgroundColor: "#f59e0b",
+                                      backgroundImage:
+                                        "repeating-linear-gradient(135deg, rgba(255,255,255,0.82) 0 12px, rgba(255,255,255,0) 12px 24px)",
+                                      backgroundBlendMode: "screen",
+                                    }
+                                  : undefined
+                              }
                             >
-                              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
+                              <div
+                                className={`mb-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 ${
+                                  isDraftSlot ? "bg-white/85" : "bg-slate-50"
+                                }`}
+                              >
                                 <p className="inline-flex items-center gap-1.5 text-base font-black text-slate-950">
                                   <Clock3 size={15} className="text-sky-700" />
                                   {formatTimetableTime(slot.startTime)}
@@ -817,13 +859,31 @@ export function CoachDashboardWorkspace({
                 {activeCamp.dateLabel}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setTabletPanel("participants")}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
-            >
-              <Menu size={15} /> Participants
-            </button>
+            <div className="flex items-center gap-2">
+              {showTimetableStatus ? (
+                <span
+                  className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-black ${
+                    hasUnpublishedChanges
+                      ? "border-amber-200 bg-amber-50 text-amber-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {hasUnpublishedChanges
+                    ? `Draft changes pending (${unpublishedChangeCount})`
+                    : "Timetable fully published"}
+                </span>
+              ) : null}
+              {activeCamp.type === "camp" ? (
+                <PublishTimetableButton camp={activeCamp} compact />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setTabletPanel("participants")}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+              >
+                <Menu size={15} /> Participants
+              </button>
+            </div>
           </div>
           <div className="mt-3 overflow-x-auto pb-2">
             <div
@@ -1346,6 +1406,37 @@ function ParticipantColumns({
   );
 }
 
+function getUnpublishedChangeCount(slots: TimetableSlot[]) {
+  return slots.reduce((count, slot) => {
+    const draftBookings = slot.bookings.filter((booking) => booking.isFinal === false).length;
+    return count + (slot.isPublished === false ? 1 : 0) + draftBookings;
+  }, 0);
+}
+
+function roundTimeToHalfHour(value: string) {
+  if (!/^\d{2}:\d{2}/.test(value)) {
+    return "15:00";
+  }
+
+  const [hourPart, minutePart] = value.split(":");
+  const hours = Number(hourPart);
+  const minutes = Number(minutePart);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return "15:00";
+  }
+
+  const totalMinutes = hours * 60 + minutes;
+  const roundedMinutes = Math.ceil(totalMinutes / 30) * 30;
+  const normalizedMinutes = ((roundedMinutes % 1440) + 1440) % 1440;
+  const roundedHours = Math.floor(normalizedMinutes / 60);
+  const roundedMinutePart = normalizedMinutes % 60;
+
+  return `${String(roundedHours).padStart(2, "0")}:${String(
+    roundedMinutePart,
+  ).padStart(2, "0")}`;
+}
+
 function AddSlotButton({
   camp,
   date,
@@ -1375,14 +1466,14 @@ function AddSlotButton({
       ...existingSlots,
       {
         slotDate: date,
-        startTime,
+        startTime: roundTimeToHalfHour(startTime),
         durationMinutes,
         capacity,
       },
     ];
 
     startTransition(async () => {
-      const result = await saveCampTimetable(camp.id, nextSlots, true, {
+      const result = await saveCampTimetable(camp.id, nextSlots, false, {
         redirectOnPublish: false,
       });
 
@@ -1421,8 +1512,10 @@ function AddSlotButton({
               <DashboardField label="Time">
                 <input
                   type="time"
+                  step="1800"
                   value={startTime}
-                  onChange={(event) => setStartTime(event.target.value)}
+                  onChange={(event) => setStartTime(roundTimeToHalfHour(event.target.value))}
+                  onBlur={(event) => setStartTime(roundTimeToHalfHour(event.target.value))}
                   className={dashboardInputClass}
                 />
               </DashboardField>
@@ -1464,7 +1557,7 @@ function AddSlotButton({
                 disabled={isPending}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white disabled:bg-slate-300"
               >
-                <Save size={16} /> {isPending ? "Saving..." : "Save Slot"}
+                <Save size={16} /> {isPending ? "Saving..." : "Save Draft"}
               </button>
             </div>
           </div>
@@ -1473,6 +1566,67 @@ function AddSlotButton({
       )
         : null}
     </>
+  );
+}
+
+function PublishTimetableButton({
+  camp,
+  compact = false,
+}: {
+  camp: CampWorkspace;
+  compact?: boolean;
+}) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function publish() {
+    setMessage("");
+    setError("");
+
+    const nextSlots: TimetableSlotInput[] = camp.timetableSlots.map((slot) => ({
+      id: slot.id,
+      slotDate: slot.slotDate,
+      startTime: slot.startTime.slice(0, 5),
+      durationMinutes: slot.durationMinutes,
+      capacity: slot.capacity,
+    }));
+
+    startTransition(async () => {
+      const result = await saveCampTimetable(camp.id, nextSlots, true, {
+        redirectOnPublish: false,
+      });
+
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      setMessage(result.message);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="grid gap-1">
+      <button
+        type="button"
+        onClick={publish}
+        disabled={isPending}
+        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-black text-white transition hover:bg-emerald-700 disabled:bg-slate-300 ${
+          compact ? "whitespace-nowrap" : ""
+        }`}
+      >
+        <Send size={15} /> {isPending ? "Publishing..." : "Publish Timetable"}
+      </button>
+      {error ? (
+        <p className="max-w-52 text-xs font-semibold text-rose-700">{error}</p>
+      ) : null}
+      {message ? (
+        <p className="max-w-52 text-xs font-semibold text-emerald-700">{message}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1878,12 +2032,17 @@ function ParticipantPanel({
             <div className="mt-2 grid gap-1.5">
               {preferencesByDay.length > 0 ? (
                 preferencesByDay.map((preference) => (
-                  <p
-                    key={`${preference.participantId}-${preference.dayId}`}
-                    className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
-                  >
-                    Day {preference.dayId}: {preference.preferredMinutes} min
-                  </p>
+                    <p
+                      key={`${preference.participantId}-${preference.dayId}`}
+                      className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                    >
+                      {formatCampDayPreferenceLabel(
+                        camp.startDate,
+                        camp.endDate,
+                        preference.dayId,
+                      )}
+                    : {formatCampPreferenceMinutes(preference.preferredMinutes)}
+                    </p>
                 ))
               ) : (
                 <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">

@@ -1016,7 +1016,7 @@ export async function assignParticipantSlotBooking(
 
   const { data: slot, error: slotLookupError } = await supabase
     .from("opportunity_time_slots")
-    .select("id,opportunity_id,is_published,opportunities(created_by)")
+    .select("id,opportunity_id,opportunities(created_by)")
     .eq("id", slotId)
     .eq("opportunity_id", opportunityId)
     .maybeSingle();
@@ -1041,31 +1041,6 @@ export async function assignParticipantSlotBooking(
 
   if (!slot || slotOpportunity?.created_by !== user.id) {
     return { ok: false, message: "Slot is no longer available" };
-  }
-
-  if (!slot.is_published) {
-    const { error: publishSlotError } = await supabase
-      .from("opportunity_time_slots")
-      .update({
-        is_published: true,
-        published_at: new Date().toISOString(),
-      })
-      .eq("id", slotId)
-      .eq("opportunity_id", opportunityId);
-
-    if (publishSlotError) {
-      console.error("Coach slot publish before assignment failed", {
-        opportunityId,
-        slotId,
-        participantId,
-        organizerId: user.id,
-        code: publishSlotError.code,
-        message: publishSlotError.message,
-        details: publishSlotError.details,
-        hint: publishSlotError.hint,
-      });
-      return { ok: false, message: "Could not assign slot." };
-    }
   }
 
   const { error } = await supabase.rpc("assign_opportunity_slot_booking", {
@@ -1099,49 +1074,7 @@ export async function assignParticipantSlotBooking(
   revalidatePath("/app/coach-dashboard");
   revalidatePath("/app/applications");
 
-  return { ok: true, message: "Slot saved as draft." };
-}
-
-function getAffectedTimetableParticipantIds(
-  existingSlots: ExistingTimetableSlotWithBookings[],
-  normalizedSlots: ReturnType<typeof normalizeTimetableSlots>,
-) {
-  const affectedParticipantIds = new Set<string>();
-  const submittedSlotsById = new Map(
-    normalizedSlots
-      .filter((slot) => slot.id)
-      .map((slot) => [slot.id as string, slot]),
-  );
-
-  for (const existingSlot of existingSlots) {
-    const bookings = Array.isArray(existingSlot.opportunity_slot_bookings)
-      ? existingSlot.opportunity_slot_bookings
-      : existingSlot.opportunity_slot_bookings
-        ? [existingSlot.opportunity_slot_bookings]
-        : [];
-
-    if (bookings.length === 0) {
-      continue;
-    }
-
-    const submittedSlot = submittedSlotsById.get(existingSlot.id);
-    const wasRemoved = !submittedSlot;
-    const wasChanged = submittedSlot
-      ? existingSlot.slot_date !== submittedSlot.slotDate ||
-        normalizeTime(existingSlot.start_time) !== submittedSlot.startTime ||
-        existingSlot.duration_minutes !== submittedSlot.durationMinutes
-      : false;
-
-    if (!wasRemoved && !wasChanged) {
-      continue;
-    }
-
-    for (const booking of bookings) {
-      affectedParticipantIds.add(booking.user_id);
-    }
-  }
-
-  return affectedParticipantIds;
+  return { ok: true, message: "Slot assigned." };
 }
 
 function normalizeTimetableSlots(slots: TimetableSlotInput[]) {

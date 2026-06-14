@@ -129,38 +129,10 @@ export async function sendOpportunityInterest(
       console.error("Withdrawn interest reset failed", resetError);
       return { ok: false, message: "Could not send interest. Please try again." };
     }
-  } else if (existingInterest) {
-    return {
-      ok: true,
-      message: `You already applied. Current status: ${formatInterestStatus(existingInterest.status)}.`,
-      status: existingInterest.status as InterestStatus,
-    };
-  }
-
-  const { error } = await supabase.from("opportunity_interests").insert({
-    opportunity_id: opportunityId,
-    athlete_id: user.id,
-    status: "pending",
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      return { ok: true, message: "Your interest was already sent." };
-    }
-
-    console.error("Interest creation failed", error);
-    return { ok: false, message: "Could not send interest. Please try again." };
   }
 
   if (opportunity.type === "camp" && campPreferences.length > 0) {
-    const adminSupabase = createSupabaseAdminClient();
-
-    if (!adminSupabase) {
-      console.error("Camp preference save failed: missing admin Supabase client");
-      return { ok: false, message: "Could not save your preferences. Please try again." };
-    }
-
-    const { error: preferenceError } = await adminSupabase
+    const { error: preferenceError } = await supabase
       .from("camp_day_preferences")
       .upsert(
         campPreferences.map((preference) => ({
@@ -178,6 +150,35 @@ export async function sendOpportunityInterest(
     }
   }
 
+  if (existingInterest) {
+    return {
+      ok: true,
+      message: `You already applied. Current status: ${formatInterestStatus(existingInterest.status)}.`,
+      status: existingInterest.status as InterestStatus,
+    };
+  }
+
+  const { error } = await supabase.from("opportunity_interests").insert({
+    opportunity_id: opportunityId,
+    athlete_id: user.id,
+    status: "pending",
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        ok: true,
+        message:
+          opportunity.type === "camp"
+            ? "Application sent.\nYour preferences are visible to the coach."
+            : "Your interest was already sent.",
+      };
+    }
+
+    console.error("Interest creation failed", error);
+    return { ok: false, message: "Could not send interest. Please try again." };
+  }
+
   await sendServerPush([opportunity.created_by], "new_interest", {
     opportunityId,
     types: ["new_interest"],
@@ -189,10 +190,10 @@ export async function sendOpportunityInterest(
   return {
     ok: true,
     message:
-      opportunity.type === "huck_jam"
-        ? "Application received.\nThe organizer will review it and send an update."
-        : opportunity.type === "camp"
-          ? "Application received.\nYour preferences are visible to the coach."
+    opportunity.type === "huck_jam"
+      ? "Application received.\nThe organizer will review it and send an update."
+      : opportunity.type === "camp"
+        ? "Application sent.\nYour preferences are visible to the coach."
         : [
             "Your interest was sent.",
             "The organizer has been notified.",

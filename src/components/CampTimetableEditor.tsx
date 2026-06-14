@@ -383,7 +383,7 @@ function roundTimeToHalfHour(value: string) {
   }
 
   const totalMinutes = hours * 60 + minutes;
-  const roundedMinutes = Math.round(totalMinutes / 30) * 30;
+  const roundedMinutes = Math.ceil(totalMinutes / 30) * 30;
   const normalizedMinutes = ((roundedMinutes % 1440) + 1440) % 1440;
   const roundedHours = Math.floor(normalizedMinutes / 60);
   const roundedMinutePart = normalizedMinutes % 60;
