@@ -9,6 +9,11 @@ export type AssignSlotParticipant = {
   id: string;
   name: string;
   bookedMinutes: number;
+  dayLabel?: string;
+  dayAssignedMinutes?: number;
+  dayPreferredMinutes?: number | null;
+  dayRemainingMinutes?: number | null;
+  dayStatus?: "complete" | "needs_time" | "no_flying" | "no_preference";
 };
 
 type AssignSlotButtonProps = {
@@ -128,6 +133,42 @@ export function AssignSlotButton({
                     <span className="text-xs font-bold text-slate-500">
                       {participant.bookedMinutes} min booked
                     </span>
+                    {participant.dayStatus ? (
+                      <span className="mt-1 grid gap-1 rounded-lg bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-600">
+                        {participant.dayLabel ? (
+                          <span className="font-black text-slate-950">
+                            {participant.dayLabel}
+                          </span>
+                        ) : null}
+                        {participant.dayStatus === "no_flying" ? (
+                          <span className="font-black text-amber-700">
+                            No flying requested
+                          </span>
+                        ) : participant.dayStatus === "no_preference" ? (
+                          <span className="font-black text-slate-500">
+                            No preference submitted
+                          </span>
+                        ) : (
+                          <>
+                            <span>
+                              Preferred: {participant.dayPreferredMinutes ?? 0} min
+                            </span>
+                            <span>
+                              Assigned: {participant.dayAssignedMinutes ?? 0} min
+                            </span>
+                            {participant.dayStatus === "complete" ? (
+                              <span className="font-black text-emerald-700">
+                                Complete
+                              </span>
+                            ) : (
+                              <span>
+                                Remaining: {participant.dayRemainingMinutes ?? 0} min
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}

@@ -1,5 +1,6 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
@@ -351,6 +352,188 @@ type SaveCampTimetableOptions = {
   redirectOnPublish?: boolean;
 };
 
+type TimetablePublishClient =
+  | Awaited<ReturnType<typeof createSupabaseServerClient>>
+  | SupabaseClient;
+
+type TimetablePublishResult = ActionResult & {
+  notificationsAlreadyAttempted?: boolean;
+};
+
+async function publishTimetableStateWithClient(
+  client: TimetablePublishClient,
+  opportunityId: string,
+  timestamp: string,
+  context: string,
+): Promise<ActionResult> {
+  const { data: opportunitySlots, error: slotLookupError } = await client
+    .from("opportunity_time_slots")
+    .select("id")
+    .eq("opportunity_id", opportunityId);
+
+  if (slotLookupError) {
+    console.error(`Timetable ${context} slot lookup failed`, slotLookupError);
+    return { ok: false, message: "Could not publish timetable bookings." };
+  }
+
+  const slotIds = ((opportunitySlots ?? []) as Array<{ id: string }>).map(
+    (slot) => slot.id,
+  );
+
+  const { error: bookingByOpportunityError } = await client
+    .from("opportunity_slot_bookings")
+    .update({
+      is_final: true,
+      finalized_at: timestamp,
+    })
+    .eq("opportunity_id", opportunityId);
+
+  if (bookingByOpportunityError) {
+    console.error(
+      `Timetable ${context} booking publish by opportunity failed`,
+      bookingByOpportunityError,
+    );
+    return { ok: false, message: "Could not publish timetable bookings." };
+  }
+
+  if (slotIds.length > 0) {
+    const { error: bookingBySlotError } = await client
+      .from("opportunity_slot_bookings")
+      .update({
+        is_final: true,
+        finalized_at: timestamp,
+      })
+      .in("slot_id", slotIds);
+
+    if (bookingBySlotError) {
+      console.error(
+        `Timetable ${context} booking publish by slot failed`,
+        bookingBySlotError,
+      );
+      return { ok: false, message: "Could not publish timetable bookings." };
+    }
+  }
+
+  const { count: draftBookingCount, error: draftBookingCountError } = await client
+    .from("opportunity_slot_bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("opportunity_id", opportunityId)
+    .eq("is_final", false);
+
+  if (draftBookingCountError) {
+    console.error(
+      `Timetable ${context} draft booking verification failed`,
+      draftBookingCountError,
+    );
+    return { ok: false, message: "Could not verify timetable bookings." };
+  }
+
+  if ((draftBookingCount ?? 0) > 0) {
+    console.error("Timetable publish left draft bookings", {
+      opportunityId,
+      context,
+      draftBookingCount,
+    });
+    return { ok: false, message: "Could not publish timetable bookings." };
+  }
+
+  const { error: slotPublishError } = await client
+    .from("opportunity_time_slots")
+    .update({
+      is_published: true,
+      published_at: timestamp,
+    })
+    .eq("opportunity_id", opportunityId);
+
+  if (slotPublishError) {
+    console.error(`Timetable ${context} slot publish failed`, slotPublishError);
+    return { ok: false, message: "Could not publish timetable slots." };
+  }
+
+  return { ok: true, message: "Timetable state published." };
+}
+
+async function publishTimetableState(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+  timestamp: string,
+): Promise<TimetablePublishResult> {
+  const { error: publishStateError } = await supabase.rpc(
+    "publish_opportunity_timetable_state",
+    { target_opportunity_id: opportunityId },
+  );
+
+  if (!publishStateError) {
+    return { ok: true, message: "Timetable state published." };
+  }
+
+  console.error("Timetable state RPC failed; using fallback publisher", {
+    opportunityId,
+    code: publishStateError.code,
+    message: publishStateError.message,
+    details: publishStateError.details,
+    hint: publishStateError.hint,
+  });
+
+  const { error: legacyPublishError } = await supabase.rpc(
+    "notify_timetable_published",
+    { target_opportunity_id: opportunityId },
+  );
+
+  if (!legacyPublishError) {
+    const { error: slotPublishError } = await supabase
+      .from("opportunity_time_slots")
+      .update({
+        is_published: true,
+        published_at: timestamp,
+      })
+      .eq("opportunity_id", opportunityId);
+
+    if (slotPublishError) {
+      console.error("Timetable legacy fallback slot publish failed", slotPublishError);
+      return { ok: false, message: "Could not publish timetable slots." };
+    }
+
+    return {
+      ok: true,
+      message: "Timetable state published.",
+      notificationsAlreadyAttempted: true,
+    };
+  }
+
+  console.error("Timetable legacy publish RPC failed", {
+    opportunityId,
+    code: legacyPublishError.code,
+    message: legacyPublishError.message,
+    details: legacyPublishError.details,
+    hint: legacyPublishError.hint,
+  });
+
+  const directPublishResult = await publishTimetableStateWithClient(
+    supabase,
+    opportunityId,
+    timestamp,
+    "direct",
+  );
+
+  if (directPublishResult.ok) {
+    return directPublishResult;
+  }
+
+  const adminSupabase = createSupabaseAdminClient();
+
+  if (!adminSupabase) {
+    return directPublishResult;
+  }
+
+  return publishTimetableStateWithClient(
+    adminSupabase,
+    opportunityId,
+    timestamp,
+    "service-role fallback",
+  );
+}
+
 export async function saveCampTimetable(
   opportunityId: string,
   slots: TimetableSlotInput[],
@@ -412,6 +595,7 @@ export async function saveCampTimetable(
   );
   const idsToDelete = [...existingIds].filter((slotId) => !submittedIds.has(slotId));
   const timestamp = new Date().toISOString();
+  let notificationsAlreadyAttempted = false;
 
   if (idsToDelete.length > 0) {
     const { error } = await supabase
@@ -430,7 +614,7 @@ export async function saveCampTimetable(
     const existingSlot = slot.id
       ? existingSlotRows.find((existing) => existing.id === slot.id)
       : null;
-    const keepPublished = publish ? true : existingSlot?.is_published === true;
+    const keepPublished = existingSlot?.is_published === true;
     const payload = {
       opportunity_id: opportunityId,
       slot_date: slot.slotDate,
@@ -467,40 +651,18 @@ export async function saveCampTimetable(
   }
 
   if (publish) {
-    const { error: finalizeError } = await supabase
-      .from("opportunity_slot_bookings")
-      .update({
-        is_final: true,
-        finalized_at: timestamp,
-      })
-      .eq("opportunity_id", opportunityId);
-
-    if (finalizeError) {
-      console.error("Timetable booking finalize failed", finalizeError);
-      return { ok: false, message: "Could not finalize booked times." };
-    }
-  }
-
-  if (publish) {
-    const { error: notificationError } = await supabase.rpc(
-      "notify_timetable_published",
-      { target_opportunity_id: opportunityId },
+    const publishStateResult = await publishTimetableState(
+      supabase,
+      opportunityId,
+      timestamp,
     );
 
-    if (notificationError) {
-      console.error("Timetable notification RPC failed", notificationError);
-      return { ok: false, message: "Timetable saved, but notifications failed." };
+    if (!publishStateResult.ok) {
+      return publishStateResult;
     }
 
-    const pushResult = await sendPendingPushNotificationsForOpportunity(
-      opportunityId,
-      ["timetable_published"],
-    );
-    console.log("Server push trigger completed", {
-      context: "timetable_published",
-      result: pushResult,
-      opportunityId,
-    });
+    notificationsAlreadyAttempted =
+      publishStateResult.notificationsAlreadyAttempted === true;
   }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
@@ -509,13 +671,58 @@ export async function saveCampTimetable(
   revalidatePath("/app/dashboard");
   revalidatePath("/app/coach-dashboard");
 
+  let notificationWarning = false;
+
+  if (publish && !notificationsAlreadyAttempted) {
+    const { error: notificationError } = await supabase.rpc(
+      "notify_timetable_published",
+      { target_opportunity_id: opportunityId },
+    );
+
+    if (notificationError) {
+      console.error("Timetable notification RPC failed", notificationError);
+      notificationWarning = true;
+    } else {
+      try {
+        const pushResult = await sendPendingPushNotificationsForOpportunity(
+          opportunityId,
+          ["timetable_published"],
+        );
+        console.log("Server push trigger completed", {
+          context: "timetable_published",
+          result: pushResult,
+          opportunityId,
+        });
+
+        if ("error" in pushResult && pushResult.error) {
+          notificationWarning = true;
+        }
+      } catch (pushError) {
+        console.error("Timetable push notification delivery failed", pushError);
+        notificationWarning = true;
+      }
+    }
+  }
+
   if (publish && options.redirectOnPublish !== false) {
-    redirect(`/app/organizer/opportunities/${opportunityId}`);
+    const searchParams = new URLSearchParams({ timetablePublished: "1" });
+
+    if (notificationWarning) {
+      searchParams.set("notificationWarning", "1");
+    }
+
+    redirect(
+      `/app/organizer/opportunities/${opportunityId}?${searchParams.toString()}`,
+    );
   }
 
   return {
     ok: true,
-    message: publish ? "Schedule published." : "Timetable draft saved.",
+    message: publish
+      ? notificationWarning
+        ? "Timetable published successfully. Some notifications could not be delivered."
+        : "Schedule published."
+      : "Timetable draft saved.",
   };
 }
 

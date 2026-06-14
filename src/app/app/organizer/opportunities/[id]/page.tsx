@@ -146,7 +146,11 @@ export default async function OrganizerOpportunityPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ published?: string }>;
+  searchParams?: Promise<{
+    notificationWarning?: string;
+    published?: string;
+    timetablePublished?: string;
+  }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -295,6 +299,10 @@ export default async function OrganizerOpportunityPage({
   const shareLabel = `Share ${formatOpportunityType(currentOpportunity.type)}`;
   const typeLabel = formatOpportunityType(currentOpportunity.type);
   const showPublishedSuccess = resolvedSearchParams.published === "1";
+  const showTimetablePublishedSuccess =
+    resolvedSearchParams.timetablePublished === "1";
+  const showNotificationWarning =
+    resolvedSearchParams.notificationWarning === "1";
   const tunnel = Array.isArray(currentOpportunity.tunnel_profiles)
     ? currentOpportunity.tunnel_profiles[0]
     : currentOpportunity.tunnel_profiles;
@@ -368,6 +376,28 @@ export default async function OrganizerOpportunityPage({
           </p>
           <p className="mt-0.5 text-sm font-bold text-slate-700">
             Your {typeLabel} is now live.
+          </p>
+        </section>
+      ) : null}
+      {showTimetablePublishedSuccess ? (
+        <section
+          className={`mb-3 rounded-xl border px-3 py-2 shadow-sm ${
+            showNotificationWarning
+              ? "border-amber-200 bg-amber-50"
+              : "border-emerald-200 bg-emerald-50"
+          }`}
+        >
+          <p
+            className={`text-sm font-black ${
+              showNotificationWarning ? "text-amber-800" : "text-emerald-800"
+            }`}
+          >
+            {showNotificationWarning
+              ? "Timetable published successfully. Some notifications could not be delivered."
+              : "Timetable published successfully."}
+          </p>
+          <p className="mt-0.5 text-sm font-bold text-slate-700">
+            Participants can see the published times.
           </p>
         </section>
       ) : null}

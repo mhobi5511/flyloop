@@ -356,7 +356,6 @@ export function CoachDashboardWorkspace({
   const attention = getAttentionItems(activeCamp);
   const activityBadgeCount = getActivityBadgeCount(attention);
   const showActivityBadge = activityBadgeCount > lastSeenActivityCount;
-  const assignableParticipants = getAssignableParticipants(activeCamp);
   const unpublishedChangeCount = getUnpublishedChangeCount(activeCamp.timetableSlots);
   const hasUnpublishedChanges = unpublishedChangeCount > 0;
   const hasPublishedTimetable = activeCamp.timetableSlots.some(
@@ -758,46 +757,49 @@ export function CoachDashboardWorkspace({
                                       <button
                                         type="button"
                                         onClick={(event) => {
+                                          const rect =
+                                            event.currentTarget.getBoundingClientRect();
+                                          const viewportWidth = window.innerWidth;
+                                          const viewportHeight = window.innerHeight;
+                                          const popoverWidth = Math.min(
+                                            288,
+                                            viewportWidth - 24,
+                                          );
+                                          const popoverEstimatedHeight = 180;
+                                          const gap = 8;
+                                          const horizontalMargin = 8;
+                                          const preferredLeft = rect.left;
+                                          const clampedLeft = Math.min(
+                                            Math.max(preferredLeft, horizontalMargin),
+                                            Math.max(
+                                              horizontalMargin,
+                                              viewportWidth - horizontalMargin - popoverWidth,
+                                            ),
+                                          );
+                                          const openBelow =
+                                            rect.bottom + gap + popoverEstimatedHeight;
+                                          const placement: "bottom" | "top" =
+                                            openBelow <= viewportHeight - horizontalMargin
+                                              ? "bottom"
+                                              : "top";
+                                          const preferredTop =
+                                            placement === "bottom"
+                                              ? rect.bottom + gap
+                                              : rect.top - gap - popoverEstimatedHeight;
+                                          const clampedTop = Math.min(
+                                            Math.max(preferredTop, horizontalMargin),
+                                            Math.max(
+                                              horizontalMargin,
+                                              viewportHeight -
+                                                horizontalMargin -
+                                                popoverEstimatedHeight,
+                                            ),
+                                          );
+
                                           setActiveBookingAction((current) => {
                                             if (current?.bookingId === booking.id) {
                                               return null;
                                             }
-
-                                            const rect =
-                                              event.currentTarget.getBoundingClientRect();
-                                            const viewportWidth = window.innerWidth;
-                                            const viewportHeight = window.innerHeight;
-                                            const popoverWidth = Math.min(
-                                              288,
-                                              viewportWidth - 24,
-                                            );
-                                            const popoverEstimatedHeight = 180;
-                                            const gap = 8;
-                                            const horizontalMargin = 8;
-                                            const preferredLeft = rect.left;
-                                            const clampedLeft = Math.min(
-                                              Math.max(preferredLeft, horizontalMargin),
-                                              Math.max(
-                                                horizontalMargin,
-                                                viewportWidth - horizontalMargin - popoverWidth,
-                                              ),
-                                            );
-                                            const openBelow = rect.bottom + gap + popoverEstimatedHeight;
-                                            const placement: "bottom" | "top" =
-                                              openBelow <= viewportHeight - horizontalMargin
-                                                ? "bottom"
-                                                : "top";
-                                            const preferredTop =
-                                              placement === "bottom"
-                                                ? rect.bottom + gap
-                                                : rect.top - gap - popoverEstimatedHeight;
-                                            const clampedTop = Math.min(
-                                              Math.max(preferredTop, horizontalMargin),
-                                              Math.max(
-                                                horizontalMargin,
-                                                viewportHeight - horizontalMargin - popoverEstimatedHeight,
-                                              ),
-                                            );
 
                                             return {
                                               bookingId: booking.id,
@@ -903,7 +905,10 @@ export function CoachDashboardWorkspace({
                                     <AssignSlotButton
                                       opportunityId={activeCamp.id}
                                       slotId={slot.id}
-                                      participants={assignableParticipants.filter(
+                                      participants={getAssignableParticipantsForDay(
+                                        activeCamp,
+                                        slot.slotDate,
+                                      ).filter(
                                         (item) =>
                                           !slot.bookings.some(
                                             (booking) => booking.userId === item.id,
@@ -1065,7 +1070,10 @@ export function CoachDashboardWorkspace({
                                   <AssignSlotButton
                                     opportunityId={activeCamp.id}
                                     slotId={slot.id}
-                                    participants={assignableParticipants.filter(
+                                    participants={getAssignableParticipantsForDay(
+                                      activeCamp,
+                                      slot.slotDate,
+                                    ).filter(
                                       (item) =>
                                         !slot.bookings.some(
                                           (booking) => booking.userId === item.id,
@@ -2834,8 +2842,17 @@ function getActivityBadgeCount(attention: AttentionItem[]) {
   return attention.reduce((total, item) => total + item.count, 0);
 }
 
-function getAssignableParticipants(camp: CampWorkspace): AssignSlotParticipant[] {
+function getAssignableParticipantsForDay(
+  camp: CampWorkspace,
+  slotDate: string,
+): AssignSlotParticipant[] {
   const bookedMinutesByUserId = new Map<string, number>();
+  const dayBookedMinutesByUserId = new Map<string, number>();
+  const dayId = getDateRange(camp.startDate, camp.endDate).indexOf(slotDate) + 1;
+  const dayLabel =
+    dayId > 0
+      ? formatCampDayPreferenceLabel(camp.startDate, camp.endDate, dayId)
+      : formatTimetableDate(slotDate);
 
   for (const slot of camp.timetableSlots) {
     for (const booking of slot.bookings) {
@@ -2843,16 +2860,55 @@ function getAssignableParticipants(camp: CampWorkspace): AssignSlotParticipant[]
         booking.userId,
         (bookedMinutesByUserId.get(booking.userId) ?? 0) + booking.minutes,
       );
+
+      if (slot.slotDate === slotDate) {
+        dayBookedMinutesByUserId.set(
+          booking.userId,
+          (dayBookedMinutesByUserId.get(booking.userId) ?? 0) + booking.minutes,
+        );
+      }
     }
   }
 
   return camp.participants
     .filter((participant) => participant.status === "accepted" && participant.userId)
-    .map((participant) => ({
-      id: participant.userId,
-      name: participant.name,
-      bookedMinutes: bookedMinutesByUserId.get(participant.userId) ?? 0,
-    }))
+    .map((participant) => {
+      const preference =
+        dayId > 0
+          ? camp.preferences.find(
+              (item) =>
+                item.participantId === participant.userId &&
+                item.dayId === dayId,
+            )
+          : undefined;
+      const preferredMinutes = preference?.preferredMinutes;
+      const assignedMinutes =
+        dayBookedMinutesByUserId.get(participant.userId) ?? 0;
+      const remainingMinutes =
+        typeof preferredMinutes === "number"
+          ? Math.max(preferredMinutes - assignedMinutes, 0)
+          : null;
+      const dayStatus: AssignSlotParticipant["dayStatus"] =
+        typeof preferredMinutes !== "number"
+          ? "no_preference"
+          : preferredMinutes <= 0
+            ? "no_flying"
+            : remainingMinutes === 0
+              ? "complete"
+              : "needs_time";
+
+      return {
+        id: participant.userId,
+        name: participant.name,
+        bookedMinutes: bookedMinutesByUserId.get(participant.userId) ?? 0,
+        dayLabel,
+        dayAssignedMinutes: assignedMinutes,
+        dayPreferredMinutes:
+          typeof preferredMinutes === "number" ? preferredMinutes : null,
+        dayRemainingMinutes: remainingMinutes,
+        dayStatus,
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
