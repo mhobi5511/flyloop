@@ -48,44 +48,31 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
     return { ok: false, message: "This application cannot be withdrawn." };
   }
 
-  const adminSupabase = createSupabaseAdminClient();
-
-  if (!adminSupabase) {
-    console.error("Application withdrawal failed: missing admin Supabase client");
-    return { ok: false, message: "Could not withdraw application. Please try again." };
-  }
-
-  if (interest.status === "accepted") {
-    const { error: bookingDeleteError } = await adminSupabase
-      .from("opportunity_slot_bookings")
-      .delete()
-      .eq("opportunity_id", interest.opportunity_id)
-      .eq("user_id", user.id);
-
-    if (bookingDeleteError) {
-      console.error("Application withdrawal booking cleanup failed", {
-        interestId,
-        opportunityId: interest.opportunity_id,
-        error: bookingDeleteError,
-      });
-      return { ok: false, message: "Could not withdraw application. Please try again." };
-    }
-  }
-
-  const { error } = await adminSupabase
-    .from("opportunity_interests")
-    .delete()
-    .eq("id", interestId)
-    .eq("athlete_id", user.id);
+  const { data: withdrawnOpportunityId, error } = await supabase.rpc(
+    "withdraw_opportunity_interest",
+    { target_interest_id: interestId },
+  );
 
   if (error) {
-    console.error("Application withdrawal failed", error);
-    return { ok: false, message: "Could not withdraw application. Please try again." };
+    console.error("Application withdrawal failed", {
+      interestId,
+      opportunityId: interest.opportunity_id,
+      athleteId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return {
+      ok: false,
+      message: error.message || "Could not withdraw application. Please try again.",
+    };
   }
 
   revalidatePath("/app/applications");
   revalidatePath("/app/dashboard");
-  revalidatePath(`/app/opportunities/${interest.opportunity_id}`);
+  revalidatePath(`/app/opportunities/${withdrawnOpportunityId ?? interest.opportunity_id}`);
+  revalidatePath(`/app/opportunities/${withdrawnOpportunityId ?? interest.opportunity_id}/times`);
 
   return { ok: true, message: "Application withdrawn." };
 }

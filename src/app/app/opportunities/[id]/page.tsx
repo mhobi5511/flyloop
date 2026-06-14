@@ -244,8 +244,7 @@ export default async function OpportunityDetailPage({
   const bookedTimesByDay = groupBookedTimesByDay(bookedTimes);
   const showAcceptedNextAction = canSelectTimes && isAccepted && !hasBookedSlots;
   const showBookedStatus = canSelectTimes && isAccepted && hasBookedSlots;
-  const canShowCampApply =
-    isCamp && !viewerApplicationStatus && !hasPublishedTimetable && !isUnavailable;
+  const canShowCampApply = isCamp && !viewerApplicationStatus && !isUnavailable;
   const sessionRange = formatSessionTimeRange(
     opportunity.sessionStart,
     opportunity.sessionEnd,

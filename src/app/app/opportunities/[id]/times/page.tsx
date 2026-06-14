@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { CampApplyPreferencesForm } from "@/components/CampApplyPreferencesForm";
 import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
@@ -68,12 +68,6 @@ export default async function SlotBookingPage({
     viewerHasTimetableReminder || viewerInterestStatus === "withdrawn"
       ? undefined
       : viewerInterestStatus;
-  const { count: publishedSlotCount } = await supabase
-    .from("opportunity_time_slots")
-    .select("id", { count: "exact", head: true })
-    .eq("opportunity_id", opportunity.id)
-    .eq("is_published", true);
-  const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
   const { data: campPreferenceRows } =
     opportunity.type === "camp" && user
       ? await supabase
@@ -93,10 +87,6 @@ export default async function SlotBookingPage({
     .eq("read", false);
 
   if (opportunity.type === "camp") {
-    if (!viewerApplicationStatus && hasPublishedTimetable) {
-      redirect(`/app/opportunities/${opportunity.id}`);
-    }
-
     return (
       <AppShell active="home">
         <NotificationReadSignal />
