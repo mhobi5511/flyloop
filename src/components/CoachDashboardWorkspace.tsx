@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -156,6 +156,13 @@ type AttentionItem = {
   participantId?: string;
 };
 
+type SlotActionPopoverState = {
+  bookingId: string;
+  top: number;
+  left: number;
+  placement: "bottom" | "top";
+};
+
 type CoachDashboardWorkspaceProps = {
   coachName: string;
   selectedCampId: string;
@@ -192,7 +199,8 @@ export function CoachDashboardWorkspace({
   const [creationType, setCreationType] = useState<CreationType>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [desktopDayStart, setDesktopDayStart] = useState(0);
-  const [activeBookingActionId, setActiveBookingActionId] = useState("");
+  const [activeBookingAction, setActiveBookingAction] =
+    useState<SlotActionPopoverState | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [lastSeenActivityCount, setLastSeenActivityCount] = useState(0);
   const activeCamp = camps.find((camp) => camp.id === activeCampId) ?? camps[0];
@@ -279,6 +287,24 @@ export function CoachDashboardWorkspace({
       .getElementById("coach-live-timetable")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  useEffect(() => {
+    if (!activeBookingAction) {
+      return;
+    }
+
+    function handleViewportChange() {
+      setActiveBookingAction(null);
+    }
+
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [activeBookingAction]);
 
   if (!activeCamp) {
     return (
@@ -661,7 +687,7 @@ export function CoachDashboardWorkspace({
                           </p>
                         </div>
                         {activeCamp.type === "camp" ? (
-                          <AddSlotButton
+                          <EditDayButton
                             camp={activeCamp}
                             date={day.date}
                           />
@@ -673,7 +699,7 @@ export function CoachDashboardWorkspace({
                         day.slots.map((slot) => {
                           const isFull = slot.bookings.length >= slot.capacity;
                           const isSelectedSlot = slot.bookings.some(
-                            (booking) => booking.id === activeBookingActionId,
+                            (booking) => booking.id === activeBookingAction?.bookingId,
                           );
                           const isDraftSlot = slot.isPublished === false;
 
@@ -731,11 +757,56 @@ export function CoachDashboardWorkspace({
                                     <div key={booking.id} className="relative">
                                       <button
                                         type="button"
-                                        onClick={() =>
-                                          setActiveBookingActionId((current) =>
-                                            current === booking.id ? "" : booking.id,
-                                          )
-                                        }
+                                        onClick={(event) => {
+                                          setActiveBookingAction((current) => {
+                                            if (current?.bookingId === booking.id) {
+                                              return null;
+                                            }
+
+                                            const rect =
+                                              event.currentTarget.getBoundingClientRect();
+                                            const viewportWidth = window.innerWidth;
+                                            const viewportHeight = window.innerHeight;
+                                            const popoverWidth = Math.min(
+                                              288,
+                                              viewportWidth - 24,
+                                            );
+                                            const popoverEstimatedHeight = 180;
+                                            const gap = 8;
+                                            const horizontalMargin = 8;
+                                            const preferredLeft = rect.left;
+                                            const clampedLeft = Math.min(
+                                              Math.max(preferredLeft, horizontalMargin),
+                                              Math.max(
+                                                horizontalMargin,
+                                                viewportWidth - horizontalMargin - popoverWidth,
+                                              ),
+                                            );
+                                            const openBelow = rect.bottom + gap + popoverEstimatedHeight;
+                                            const placement: "bottom" | "top" =
+                                              openBelow <= viewportHeight - horizontalMargin
+                                                ? "bottom"
+                                                : "top";
+                                            const preferredTop =
+                                              placement === "bottom"
+                                                ? rect.bottom + gap
+                                                : rect.top - gap - popoverEstimatedHeight;
+                                            const clampedTop = Math.min(
+                                              Math.max(preferredTop, horizontalMargin),
+                                              Math.max(
+                                                horizontalMargin,
+                                                viewportHeight - horizontalMargin - popoverEstimatedHeight,
+                                              ),
+                                            );
+
+                                            return {
+                                              bookingId: booking.id,
+                                              top: clampedTop,
+                                              left: clampedLeft,
+                                              placement,
+                                            };
+                                          });
+                                        }}
                                         className="grid w-full rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm"
                                         style={{
                                           backgroundColor: colors?.soft,
@@ -760,44 +831,57 @@ export function CoachDashboardWorkspace({
                                           ) : null}
                                         </span>
                                       </button>
-                                      {activeBookingActionId === booking.id ? (
+                                      {activeBookingAction?.bookingId === booking.id ? (
                                         <>
                                           <button
                                             type="button"
-                                            className="fixed inset-0 z-10 cursor-default"
+                                            className="fixed inset-0 z-40 cursor-default"
                                             aria-label="Close slot actions"
-                                            onClick={() => setActiveBookingActionId("")}
+                                            onClick={() => setActiveBookingAction(null)}
                                           />
-                                          <div className="absolute left-0 top-[calc(100%+0.25rem)] z-20 grid w-56 gap-1 rounded-xl border border-slate-200 bg-white p-2 text-slate-950 shadow-xl">
-                                            <p className="px-2 pb-1 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-400">
-                                              Slot actions
-                                            </p>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                if (matchingParticipant) {
-                                                  setSelectedParticipantId(matchingParticipant.id);
-                                                  setIsSidebarCollapsed(false);
-                                                }
-                                                setActiveBookingActionId("");
-                                              }}
-                                              className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-left text-xs font-black text-slate-700 hover:bg-slate-50"
-                                            >
-                                              <UserRound size={15} className="text-sky-700" />
-                                              Show Participant Info
-                                            </button>
-                                            {releaseRequested ? (
-                                              <SlotReleaseRequestActions
-                                                opportunityId={activeCamp.id}
-                                                bookingId={booking.id}
-                                              />
-                                            ) : (
-                                              <ReleaseSlotBookingButton
-                                                opportunityId={activeCamp.id}
-                                                bookingId={booking.id}
-                                              />
-                                            )}
-                                          </div>
+                                          {typeof document !== "undefined"
+                                            ? createPortal(
+                                                <div
+                                                  className="fixed z-50 grid w-[min(18rem,calc(100vw-1rem))] gap-1 rounded-xl border border-slate-200 bg-white p-2 text-slate-950 shadow-2xl"
+                                                  style={{
+                                                    top: activeBookingAction.top,
+                                                    left: activeBookingAction.left,
+                                                    maxHeight: "calc(100vh - 1rem)",
+                                                    overflowY: "auto",
+                                                  }}
+                                                >
+                                                  <p className="px-2 pb-1 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-400">
+                                                    Slot actions
+                                                  </p>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      if (matchingParticipant) {
+                                                        setSelectedParticipantId(matchingParticipant.id);
+                                                        setIsSidebarCollapsed(false);
+                                                      }
+                                                      setActiveBookingAction(null);
+                                                    }}
+                                                    className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-left text-xs font-black text-slate-700 hover:bg-slate-50"
+                                                  >
+                                                    <UserRound size={15} className="text-sky-700" />
+                                                    Show Participant Info
+                                                  </button>
+                                                  {releaseRequested ? (
+                                                    <SlotReleaseRequestActions
+                                                      opportunityId={activeCamp.id}
+                                                      bookingId={booking.id}
+                                                    />
+                                                  ) : (
+                                                    <ReleaseSlotBookingButton
+                                                      opportunityId={activeCamp.id}
+                                                      bookingId={booking.id}
+                                                    />
+                                                  )}
+                                                </div>,
+                                                document.body,
+                                              )
+                                            : null}
                                         </>
                                       ) : null}
                                     </div>
@@ -908,7 +992,7 @@ export function CoachDashboardWorkspace({
                         </p>
                       </div>
                       {activeCamp.type === "camp" ? (
-                        <AddSlotButton camp={activeCamp} date={day.date} />
+                        <EditDayButton camp={activeCamp} date={day.date} />
                       ) : null}
                     </div>
                   </div>
@@ -1437,7 +1521,121 @@ function roundTimeToHalfHour(value: string) {
   ).padStart(2, "0")}`;
 }
 
-function AddSlotButton({
+function roundHoursToHalfHour(value: string) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return Math.round(parsed * 2) / 2;
+}
+
+function buildCampBuilderPreview({
+  date,
+  startTime,
+  rotationLength,
+  middayBreakHours,
+  maxTunnelHours,
+}: {
+  date: string;
+  startTime: string;
+  rotationLength: number;
+  middayBreakHours: string;
+  maxTunnelHours: string;
+}): CampBuilderPreviewSlot[] {
+  const capacity = getSlotCapacity(rotationLength);
+  const totalBlocks = Math.max(0, Math.round(roundHoursToHalfHour(maxTunnelHours) * 2));
+  const morningBlocks = Math.ceil(totalBlocks / 2);
+  const afternoonBlocks = totalBlocks - morningBlocks;
+  const middayBreakMinutes = Math.round(roundHoursToHalfHour(middayBreakHours) * 60);
+  const morning = buildCampBuilderSection({
+    date,
+    startMinutes: timeToMinutes(roundTimeToHalfHour(startTime)),
+    blockCount: morningBlocks,
+    durationMinutes: rotationLength,
+    capacity,
+  });
+  const lastMorningStart =
+    morning.length > 0 ? morning[morning.length - 1].startTime : undefined;
+  const afternoonStartMinutes =
+    lastMorningStart === undefined
+      ? timeToMinutes(roundTimeToHalfHour(startTime)) + middayBreakMinutes
+      : timeToMinutes(lastMorningStart) + 30 + middayBreakMinutes;
+  const afternoon = buildCampBuilderSection({
+    date,
+    startMinutes: afternoonStartMinutes,
+    blockCount: afternoonBlocks,
+    durationMinutes: rotationLength,
+    capacity,
+  });
+
+  return [...morning, ...afternoon];
+}
+
+function buildCampBuilderSection({
+  date,
+  startMinutes,
+  blockCount,
+  durationMinutes,
+  capacity,
+}: {
+  date: string;
+  startMinutes: number;
+  blockCount: number;
+  durationMinutes: number;
+  capacity: number;
+}) {
+  const slots: CampBuilderPreviewSlot[] = [];
+  let currentMinutes = startMinutes;
+
+  for (let index = 0; index < blockCount; index += 1) {
+    slots.push({
+      slotDate: date,
+      startTime: minutesToTime(currentMinutes),
+      durationMinutes,
+      capacity,
+    });
+
+    if (index < blockCount - 1) {
+      currentMinutes += index % 2 === 0 ? 30 : 90;
+    }
+  }
+
+  return slots;
+}
+
+function timeToMinutes(value: string) {
+  const normalized = value.slice(0, 5);
+  const [hourPart, minutePart] = normalized.split(":");
+  const hours = Number(hourPart);
+  const minutes = Number(minutePart);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return 0;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(value: number) {
+  const normalizedMinutes = ((value % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalizedMinutes / 60);
+  const minutes = normalizedMinutes % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+type EditDayTab = "manual" | "camp-builder";
+
+type CampBuilderPreviewSlot = {
+  slotDate: string;
+  startTime: string;
+  durationMinutes: number;
+  capacity: number;
+};
+
+function EditDayButton({
   camp,
   date,
 }: {
@@ -1446,22 +1644,55 @@ function AddSlotButton({
 }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<EditDayTab>("manual");
   const [startTime, setStartTime] = useState("15:00");
   const [durationMinutes, setDurationMinutes] = useState(15);
+  const [builderStartTime, setBuilderStartTime] = useState("09:00");
+  const [builderRotationLength, setBuilderRotationLength] = useState(15);
+  const [builderMiddayBreak, setBuilderMiddayBreak] = useState("2");
+  const [builderMaxTunnelHours, setBuilderMaxTunnelHours] = useState("4");
+  const [builderPreview, setBuilderPreview] =
+    useState<CampBuilderPreviewSlot[] | null>(null);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const capacity = getSlotCapacity(durationMinutes);
 
-  function save() {
-    setError("");
-
-    const existingSlots: TimetableSlotInput[] = camp.timetableSlots.map((slot) => ({
+  function getExistingSlots(): TimetableSlotInput[] {
+    return camp.timetableSlots.map((slot) => ({
       id: slot.id,
       slotDate: slot.slotDate,
       startTime: slot.startTime.slice(0, 5),
       durationMinutes: slot.durationMinutes,
       capacity: slot.capacity,
     }));
+  }
+
+  function getExistingSlotsOutsideDay(): TimetableSlotInput[] {
+    return getExistingSlots().filter((slot) => slot.slotDate !== date);
+  }
+
+  function generateCampBuilderSlots() {
+    const generatedSlots = buildCampBuilderPreview({
+      date,
+      startTime: builderStartTime,
+      rotationLength: builderRotationLength,
+      middayBreakHours: builderMiddayBreak,
+      maxTunnelHours: builderMaxTunnelHours,
+    });
+
+    if (generatedSlots.length === 0) {
+      setError("Add at least 30 minutes of tunnel time.");
+      setBuilderPreview(null);
+      return null;
+    }
+
+    return generatedSlots;
+  }
+
+  function save() {
+    setError("");
+
+    const existingSlots = getExistingSlots();
     const nextSlots: TimetableSlotInput[] = [
       ...existingSlots,
       {
@@ -1487,6 +1718,50 @@ function AddSlotButton({
     });
   }
 
+  function previewCampBuilder() {
+    setError("");
+
+    const preview = generateCampBuilderSlots();
+
+    if (!preview) {
+      return;
+    }
+
+    setBuilderPreview(preview);
+  }
+
+  function createCampBuilderDay() {
+    setError("");
+
+    const generatedSlots = generateCampBuilderSlots();
+
+    if (!generatedSlots) {
+      return;
+    }
+
+    setBuilderPreview(generatedSlots);
+
+    const nextSlots: TimetableSlotInput[] = [
+      ...getExistingSlotsOutsideDay(),
+      ...generatedSlots,
+    ];
+
+    startTransition(async () => {
+      const result = await saveCampTimetable(camp.id, nextSlots, false, {
+        redirectOnPublish: false,
+      });
+
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      setIsOpen(false);
+      setBuilderPreview(null);
+      router.refresh();
+    });
+  }
+
   return (
     <>
       <button
@@ -1494,50 +1769,194 @@ function AddSlotButton({
         onClick={() => setIsOpen(true)}
         className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sky-600 px-2.5 text-xs font-black text-white transition hover:bg-sky-700"
       >
-        <Plus size={14} /> Add Slot
+        <Plus size={14} /> Edit Day
       </button>
       {isOpen && typeof document !== "undefined"
         ? createPortal(
         <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
                 {formatLongDay(date)}
               </p>
               <h3 className="mt-1 text-lg font-black tracking-tight">
-                Add Slot
+                Edit Day
               </h3>
             </div>
-            <div className="mt-4 grid gap-3">
-              <DashboardField label="Time">
-                <input
-                  type="time"
-                  step="1800"
-                  value={startTime}
-                  onChange={(event) => setStartTime(roundTimeToHalfHour(event.target.value))}
-                  onBlur={(event) => setStartTime(roundTimeToHalfHour(event.target.value))}
-                  className={dashboardInputClass}
-                />
-              </DashboardField>
-              <DashboardField label="Duration">
-                <select
-                  value={durationMinutes}
-                  onChange={(event) => setDurationMinutes(Number(event.target.value))}
-                  className={dashboardInputClass}
-                >
-                  <option value={10}>10 minutes</option>
-                  <option value={15}>15 minutes</option>
-                </select>
-              </DashboardField>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                  Capacity
-                </p>
-                <p className="mt-1 text-sm font-black text-slate-950">
-                  {capacity} athletes
-                </p>
-              </div>
+
+            <div className="mt-4 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("manual");
+                  setError("");
+                }}
+                className={`h-10 rounded-lg text-sm font-black transition ${
+                  activeTab === "manual"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Manual Slots
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("camp-builder");
+                  setError("");
+                }}
+                className={`h-10 rounded-lg text-sm font-black transition ${
+                  activeTab === "camp-builder"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Camp Builder
+              </button>
             </div>
+
+            {activeTab === "manual" ? (
+              <div className="mt-4 grid gap-3">
+                <DashboardField label="Time">
+                  <input
+                    type="time"
+                    step="1800"
+                    value={startTime}
+                    onChange={(event) =>
+                      setStartTime(roundTimeToHalfHour(event.target.value))
+                    }
+                    onBlur={(event) =>
+                      setStartTime(roundTimeToHalfHour(event.target.value))
+                    }
+                    className={dashboardInputClass}
+                  />
+                </DashboardField>
+                <DashboardField label="Duration">
+                  <select
+                    value={durationMinutes}
+                    onChange={(event) => setDurationMinutes(Number(event.target.value))}
+                    className={dashboardInputClass}
+                  >
+                    <option value={10}>10 minutes</option>
+                    <option value={15}>15 minutes</option>
+                  </select>
+                </DashboardField>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                    Capacity
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-950">
+                    {capacity} athletes
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DashboardField label="Start Time">
+                    <input
+                      type="time"
+                      step="1800"
+                      value={builderStartTime}
+                      onChange={(event) => {
+                        setBuilderStartTime(roundTimeToHalfHour(event.target.value));
+                        setBuilderPreview(null);
+                      }}
+                      onBlur={(event) => {
+                        setBuilderStartTime(roundTimeToHalfHour(event.target.value));
+                        setBuilderPreview(null);
+                      }}
+                      className={dashboardInputClass}
+                    />
+                  </DashboardField>
+                  <DashboardField label="Rotation Length">
+                    <select
+                      value={builderRotationLength}
+                      onChange={(event) => {
+                        setBuilderRotationLength(Number(event.target.value));
+                        setBuilderPreview(null);
+                      }}
+                      className={dashboardInputClass}
+                    >
+                      <option value={10}>10 minutes</option>
+                      <option value={15}>15 minutes</option>
+                    </select>
+                  </DashboardField>
+                  <DashboardField label="Midday Break Duration (hours)">
+                    <input
+                      type="number"
+                      min="0"
+                      max="3"
+                      step="0.5"
+                      value={builderMiddayBreak}
+                      onChange={(event) => {
+                        setBuilderMiddayBreak(event.target.value);
+                        setBuilderPreview(null);
+                      }}
+                      onBlur={(event) =>
+                        setBuilderMiddayBreak(
+                          String(roundHoursToHalfHour(event.target.value)),
+                        )
+                      }
+                      className={dashboardInputClass}
+                    />
+                  </DashboardField>
+                  <DashboardField label="Maximum Tunnel Time (hours)">
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="12"
+                      step="0.5"
+                      value={builderMaxTunnelHours}
+                      onChange={(event) => {
+                        setBuilderMaxTunnelHours(event.target.value);
+                        setBuilderPreview(null);
+                      }}
+                      onBlur={(event) =>
+                        setBuilderMaxTunnelHours(
+                          String(roundHoursToHalfHour(event.target.value)),
+                        )
+                      }
+                      className={dashboardInputClass}
+                    />
+                  </DashboardField>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                        Day Generator
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-600">
+                        Maximum tunnel time is the total operating hours for this day.
+                        Create Day replaces the existing schedule for this day with draft
+                        slots.
+                      </p>
+                    </div>
+                  </div>
+                  {builderPreview ? (
+                    <div className="mt-3 grid gap-2">
+                      <div className="grid max-h-56 gap-1 overflow-y-auto rounded-lg bg-white p-2">
+                        {builderPreview.map((slot) => (
+                          <div
+                            key={`${slot.slotDate}-${slot.startTime}`}
+                            className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm"
+                          >
+                            <span className="font-black text-slate-950">
+                              {formatTimetableTime(slot.startTime)}
+                            </span>
+                            <span className="font-bold text-slate-500">
+                              {slot.capacity} slots
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
             {error ? (
               <p className="mt-3 rounded-xl bg-rose-50 p-2 text-sm font-bold text-rose-700">
                 {error}
@@ -1551,14 +1970,35 @@ function AddSlotButton({
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={save}
-                disabled={isPending}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white disabled:bg-slate-300"
-              >
-                <Save size={16} /> {isPending ? "Saving..." : "Save Draft"}
-              </button>
+              {activeTab === "manual" ? (
+                <button
+                  type="button"
+                  onClick={save}
+                  disabled={isPending}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white disabled:bg-slate-300"
+                >
+                  <Save size={16} /> {isPending ? "Saving..." : "Save Draft"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={previewCampBuilder}
+                    disabled={isPending}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 disabled:text-slate-300"
+                  >
+                    <Clock3 size={16} /> Preview Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={createCampBuilderDay}
+                    disabled={isPending}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white disabled:bg-slate-300"
+                  >
+                    <Save size={16} /> {isPending ? "Creating..." : "Create Day"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>,
