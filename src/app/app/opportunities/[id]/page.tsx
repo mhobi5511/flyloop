@@ -431,7 +431,7 @@ export default async function OpportunityDetailPage({
               <StatusMessage message="You're in. Your spot is confirmed." />
             ) : !isCamp && isAccepted && !hasPublishedTimetable ? (
               <StatusMessage message="You are accepted. The timetable is not available yet." />
-            ) : isCamp && viewerApplicationStatus ? (
+            ) : isCamp && viewerApplicationStatus && !hasPublishedTimetable ? (
               <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div>
                   <p className="text-sm font-black text-slate-950">
