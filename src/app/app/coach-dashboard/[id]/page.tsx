@@ -1,0 +1,470 @@
+import type { Metadata } from "next";
+import { notFound, redirect } from "next/navigation";
+import {
+  CoachDashboardWorkspace,
+} from "@/components/CoachDashboardWorkspace";
+import { organizerActivityNotificationTypes, participantActivityNotificationTypes } from "@/lib/notifications";
+import {
+  formatOpportunityDate,
+  formatPriceAppliesToMinutes,
+} from "@/lib/opportunities";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getTimetableSummary } from "@/lib/timetable";
+import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
+import type {
+  BookingMode,
+  InterestStatus,
+  OpportunityStatus,
+  OpportunityType,
+} from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "Coach Operations Dashboard",
+};
+
+type CoachProfileRow = {
+  full_name: string | null;
+  is_organizer: boolean | null;
+  wants_to_create_opportunities: boolean | null;
+};
+
+type CoachProfileDetailsRow = {
+  languages: string[] | null;
+  disciplines: string[] | null;
+};
+
+type CoachOpportunityRow = {
+  id: string;
+  title: string;
+  type: OpportunityType;
+  booking_mode: BookingMode;
+  status: OpportunityStatus;
+  start_date: string;
+  end_date: string;
+  session_start: string | null;
+  session_end: string | null;
+  registration_deadline: string | null;
+  total_capacity: number;
+  available_spots: number;
+  price: number | string;
+  currency: string;
+  min_minutes_or_hours: string | null;
+  description: string | null;
+  tunnel_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  tunnel_profiles:
+    | { name: string; city: string | null; country: string | null }
+    | Array<{ name: string; city: string | null; country: string | null }>
+    | null;
+  opportunity_interests:
+    | Array<{
+        id: string;
+        status: InterestStatus;
+        created_at: string | null;
+        removal_requested_at: string | null;
+        tunnel_time_status: string | null;
+        tunnel_account_email: string | null;
+        profiles:
+          | {
+              id: string;
+              full_name: string | null;
+              country: string | null;
+              phone: string | null;
+              whatsapp_number: string | null;
+              instagram_handle: string | null;
+              profile_image_url: string | null;
+            }
+          | Array<{
+              id: string;
+              full_name: string | null;
+              country: string | null;
+              phone: string | null;
+              whatsapp_number: string | null;
+              instagram_handle: string | null;
+              profile_image_url: string | null;
+            }>
+          | null;
+      }>
+    | null;
+  opportunity_time_slots:
+    | Array<{
+        id: string;
+        slot_date: string;
+        start_time: string;
+        duration_minutes: number;
+        capacity: number;
+        is_published: boolean;
+        opportunity_slot_bookings:
+          | Array<{
+              id: string;
+              minutes: number;
+              rotation_minutes: number | string | null;
+              user_id: string;
+              is_final: boolean;
+              finalized_at: string | null;
+              profiles:
+                | {
+                    full_name: string;
+                    phone: string | null;
+                    whatsapp_number: string | null;
+                  }
+                | Array<{
+                    full_name: string;
+                    phone: string | null;
+                    whatsapp_number: string | null;
+                  }>
+                | null;
+            }>
+          | null;
+      }>
+    | null;
+};
+
+type PreferenceRow = {
+  opportunity_id: string;
+  participant_id: string;
+  day_id: number;
+  preferred_minutes: number;
+};
+
+type NotificationRow = {
+  id: string;
+  title: string | null;
+  body: string | null;
+  created_at: string;
+  opportunity_id: string | null;
+  type: string;
+};
+
+const notificationTypes = [
+  ...organizerActivityNotificationTypes,
+  ...participantActivityNotificationTypes,
+];
+
+type CoachDashboardWorkspaceProps = Parameters<typeof CoachDashboardWorkspace>[0];
+type CampWorkspace = CoachDashboardWorkspaceProps["camps"][number];
+type CoachWorkspaceActivityItem = CoachDashboardWorkspaceProps["activity"][number];
+
+export default async function CoachWorkspaceCampPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/app/coach-dashboard");
+  }
+
+  const [profileResult, coachProfileResult, opportunityResult, notificationResult, tunnelResult] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("full_name,is_organizer,wants_to_create_opportunities")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("coach_profiles")
+        .select("languages,disciplines")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("opportunities")
+        .select(
+          "id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
+        )
+        .eq("id", id)
+        .eq("created_by", user.id)
+        .maybeSingle(),
+      supabase
+        .from("notifications")
+        .select("id,title,body,created_at,opportunity_id,type")
+        .eq("user_id", user.id)
+        .eq("opportunity_id", id)
+        .in("type", notificationTypes)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      supabase
+        .from("tunnel_profiles")
+        .select("id,name,city,country")
+        .order("name", { ascending: true }),
+    ]);
+
+  if (profileResult.error) {
+    console.error("Coach workspace profile lookup failed", profileResult.error);
+  }
+
+  if (coachProfileResult.error) {
+    console.error("Coach workspace coach profile lookup failed", coachProfileResult.error);
+  }
+
+  if (opportunityResult.error) {
+    console.error("Coach workspace opportunity lookup failed", opportunityResult.error);
+  }
+
+  if (notificationResult.error) {
+    console.error("Coach workspace activity lookup failed", notificationResult.error);
+  }
+
+  if (tunnelResult.error) {
+    console.error("Coach workspace tunnel lookup failed", tunnelResult.error);
+  }
+
+  const profile = (profileResult.data ?? null) as CoachProfileRow | null;
+  const canCreate =
+    profile?.is_organizer === true ||
+    profile?.wants_to_create_opportunities === true;
+
+  if (!canCreate) {
+    redirect("/app/dashboard");
+  }
+
+  const opportunity = (opportunityResult.data ?? null) as CoachOpportunityRow | null;
+
+  if (!opportunity) {
+    notFound();
+  }
+
+  const selectedCamp = await toCampWorkspace(
+    opportunity,
+    id,
+    supabase,
+  );
+
+  const camps = [selectedCamp];
+  const tunnels = ((tunnelResult.data ?? []) as TunnelRow[]).map((tunnel) => ({
+    id: tunnel.id,
+    name: tunnel.name,
+    city: tunnel.city ?? "",
+    country: tunnel.country ?? "",
+  }));
+  const inheritedCoachProfile = {
+    languages: (coachProfileResult.data as CoachProfileDetailsRow | null)?.languages ?? [],
+    disciplines:
+      (coachProfileResult.data as CoachProfileDetailsRow | null)?.disciplines ?? [],
+  };
+  const activity = buildActivityItems(
+    (notificationResult.data ?? []) as NotificationRow[],
+    profile?.full_name?.trim() || "Coach",
+    opportunity.id,
+    opportunity.title,
+    opportunity.created_at,
+  );
+
+  return (
+    <CoachDashboardWorkspace
+      coachName={profile?.full_name?.trim() || "Coach"}
+      selectedCampId={id}
+      camps={camps}
+      tunnels={tunnels}
+      inheritedCoachProfile={inheritedCoachProfile}
+      activity={activity}
+    />
+  );
+}
+
+type TunnelRow = {
+  id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+};
+
+async function toCampWorkspace(
+  row: CoachOpportunityRow,
+  selectedCampId: string,
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+): Promise<CampWorkspace> {
+  const tunnel = firstRelation(row.tunnel_profiles);
+  const interests = (row.opportunity_interests ?? []).filter(
+    (interest) => interest.status !== "withdrawn",
+  );
+  const participants = interests
+    .map((interest) => {
+      const profile = firstRelation(interest.profiles);
+      return {
+        id: profile?.id ?? interest.id,
+        interestId: interest.id,
+        userId: profile?.id ?? interest.id,
+        name: profile?.full_name?.trim() || "Participant",
+        email: "",
+        phone: profile?.whatsapp_number ?? profile?.phone ?? "",
+        country: profile?.country ?? "",
+        profileImageUrl: profile?.profile_image_url ?? "",
+        status: interest.status,
+        createdAt: interest.created_at ?? new Date().toISOString(),
+        removalRequestedAt: interest.removal_requested_at,
+        tunnelTimeStatus: interest.tunnel_time_status,
+        tunnelAccountEmail: interest.tunnel_account_email,
+      };
+    })
+    .sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name));
+
+  const preferenceRows = (await supabase
+    .from("camp_day_preferences")
+    .select("opportunity_id,participant_id,day_id,preferred_minutes")
+    .eq("opportunity_id", row.id)
+    .order("day_id", { ascending: true })).data ?? [];
+
+  const timetableSource = row.opportunity_time_slots ?? [];
+  const timetableSlots = timetableSource.map((slot) => ({
+    id: slot.id,
+    slotDate: slot.slot_date,
+    startTime: slot.start_time,
+    durationMinutes: slot.duration_minutes,
+    capacity: slot.capacity,
+    isPublished: slot.is_published,
+    bookings: (slot.opportunity_slot_bookings ?? []).map((booking) => {
+      const bookingProfile = firstRelation(booking.profiles);
+
+      return {
+        id: booking.id,
+        minutes: booking.minutes,
+        rotationMinutes:
+          booking.rotation_minutes === null ? null : Number(booking.rotation_minutes),
+        userId: booking.user_id,
+        athleteName: bookingProfile?.full_name ?? "Participant",
+        athletePhone: bookingProfile?.whatsapp_number ?? bookingProfile?.phone ?? "",
+        isFinal: booking.is_final,
+        finalizedAt: booking.finalized_at,
+      };
+    }),
+  }));
+
+  const summary = getTimetableSummary(
+    timetableSlots,
+    Number(row.price),
+    row.min_minutes_or_hours,
+  );
+  const tunnelDashboardUrl =
+    row.id === selectedCampId ? await getOrCreateTunnelDashboardUrl(supabase, row.id) : "";
+
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    bookingMode: row.booking_mode,
+    status: row.status,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    registrationDeadline: row.registration_deadline,
+    sessionStart: row.session_start,
+    sessionEnd: row.session_end,
+    totalCapacity: row.total_capacity,
+    availableSpots: row.available_spots,
+    price: Number(row.price),
+    currency: row.currency,
+    priceAppliesToMinutes: formatPriceAppliesToMinutes(row.min_minutes_or_hours),
+    description: row.description ?? "",
+    tunnelId: row.tunnel_id ?? "",
+    tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
+    tunnelLocation: formatLocation(tunnel?.city, tunnel?.country),
+    tunnelDashboardUrl,
+    dateLabel: formatOpportunityDate(row.type, row.start_date, row.end_date),
+    participants,
+    preferences: preferenceRows.map((preference: PreferenceRow) => ({
+      opportunityId: preference.opportunity_id,
+      participantId: preference.participant_id,
+      dayId: preference.day_id,
+      preferredMinutes: preference.preferred_minutes,
+    })),
+    timetableSlots,
+    summary: {
+      totalSlots: summary.totalSlots,
+      bookedSlots: summary.bookedSlots,
+      openSlots: summary.openSlots,
+      totalTimetableMinutes: summary.totalTimetableMinutes,
+      totalBookedMinutes: summary.totalBookedMinutes,
+      totalAvailableMinutes: summary.totalAvailableMinutes,
+      estimatedRevenue: summary.estimatedRevenue,
+    },
+  };
+}
+
+function buildActivityItems(
+  rows: NotificationRow[],
+  coachName: string,
+  opportunityId: string,
+  opportunityTitle: string,
+  createdAt: string | null,
+): CoachWorkspaceActivityItem[] {
+  const items: CoachWorkspaceActivityItem[] = rows.map((row) => ({
+    id: row.id,
+    title: row.title?.trim() || "Activity update",
+    body: row.body?.trim() || "",
+    opportunityId: row.opportunity_id ?? opportunityId,
+    createdAt: row.created_at,
+  }));
+
+  if (createdAt) {
+    items.push({
+      id: `created-${opportunityId}`,
+      title: `${coachName} created ${opportunityTitle}`,
+      body: `${opportunityTitle} is now open in the operations workspace.`,
+      opportunityId,
+      createdAt,
+    });
+  }
+
+  return items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 8);
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function statusRank(status: InterestStatus) {
+  if (status === "pending") {
+    return 0;
+  }
+
+  if (status === "accepted") {
+    return 1;
+  }
+
+  if (status === "waitlist") {
+    return 2;
+  }
+
+  return 3;
+}
+
+function formatLocation(city?: string | null, country?: string | null) {
+  return [city, country].filter(Boolean).join(", ");
+}
+
+async function getOrCreateTunnelDashboardUrl(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+) {
+  const { data: existingLink } = await supabase
+    .from("opportunity_tunnel_dashboard_links")
+    .select("secret")
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
+  if (existingLink?.secret) {
+    return getTunnelDashboardUrl(existingLink.secret);
+  }
+
+  const { data: createdLink, error } = await supabase
+    .from("opportunity_tunnel_dashboard_links")
+    .insert({ opportunity_id: opportunityId })
+    .select("secret")
+    .single();
+
+  if (error || !createdLink?.secret) {
+    console.error("Tunnel dashboard link creation failed", {
+      opportunityId,
+      error,
+    });
+    return "";
+  }
+
+  return getTunnelDashboardUrl(createdLink.secret);
+}

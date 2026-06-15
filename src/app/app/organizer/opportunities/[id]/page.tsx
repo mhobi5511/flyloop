@@ -401,8 +401,8 @@ export default async function OrganizerOpportunityPage({
           </p>
         </section>
       ) : null}
-      <Link href="/app/dashboard" className="text-sm font-bold text-sky-700">
-        Back to Coachings
+      <Link href="/app/coach-dashboard" className="text-sm font-bold text-sky-700">
+        ← Back to Coach Command Center
       </Link>
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="grid gap-3 lg:grid-cols-[1fr_200px] lg:items-start">

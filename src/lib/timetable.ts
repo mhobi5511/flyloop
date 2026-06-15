@@ -6,6 +6,7 @@ export type TimetableBooking = {
   athleteName: string;
   athletePhone: string;
   isFinal?: boolean;
+  finalizedAt?: string | null;
   releaseRequestedAt?: string | null;
 };
 

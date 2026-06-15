@@ -7,10 +7,12 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Activity,
+  CalendarClock,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  CircleDollarSign,
   MapPin,
   Menu,
   PanelLeftClose,
@@ -20,6 +22,7 @@ import {
   Settings,
   Share2,
   Send,
+  Users,
   UserRound,
   WalletCards,
   X,
@@ -74,6 +77,7 @@ import type {
 
 type Participant = {
   id: string;
+  interestId: string;
   userId: string;
   name: string;
   email: string;
@@ -154,6 +158,15 @@ type AttentionItem = {
   target: "applicants" | "participant" | "timetable";
   count: number;
   participantId?: string;
+};
+
+type HuckjamRegistration = {
+  id: string;
+  name: string;
+  profileImageUrl: string;
+  createdAt: string;
+  relativeTime: string;
+  status: InterestStatus;
 };
 
 type SlotActionPopoverState = {
@@ -238,15 +251,6 @@ export function CoachDashboardWorkspace({
       )
     : "";
 
-  function selectCamp(campId: string) {
-    setActiveCampId(campId);
-    setSelectedParticipantId("");
-    setHeaderPanel(null);
-    setTabletPanel(null);
-    setDesktopDayStart(0);
-    router.replace(`/app/coach-dashboard?camp=${campId}`, { scroll: false });
-  }
-
   function focusApplicants() {
     setSelectedParticipantId("");
     setIsSidebarCollapsed(false);
@@ -265,7 +269,7 @@ export function CoachDashboardWorkspace({
     setHeaderPanel(null);
     setTabletPanel(null);
     setDesktopDayStart(0);
-    router.replace(`/app/coach-dashboard?camp=${opportunityId}`, { scroll: false });
+    router.replace(`/app/coach-dashboard/${opportunityId}`, { scroll: false });
     router.refresh();
   }
 
@@ -362,6 +366,7 @@ export function CoachDashboardWorkspace({
     (slot) => slot.isPublished === true,
   );
   const showTimetableStatus = hasPublishedTimetable || hasUnpublishedChanges;
+  const isHuckJam = activeCamp.type === "huck_jam";
   const scopedActivity = activity
     .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id);
 
@@ -408,33 +413,27 @@ export function CoachDashboardWorkspace({
                     </span>
                   </div>
                 </div>
-                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700">
-                  Active workspace
-                  <select
-                    value={activeCamp.id}
-                    onChange={(event) => selectCamp(event.target.value)}
-                    className="h-11 rounded-xl border border-sky-200 bg-sky-50 px-3 text-sm font-black normal-case tracking-normal text-slate-950 outline-none focus:border-sky-400"
-                  >
-                    {camps.map((camp) => (
-                      <option key={camp.id} value={camp.id}>
-                        {camp.type === "huck_jam" ? "Huck Jam" : "Camp"} - {camp.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
-              <div className="mt-3 grid gap-2 md:grid-cols-4">
-                <StatCard label="Booked minutes" value={`${activeCamp.summary.totalBookedMinutes} min`} />
-                <StatCard label="Open minutes" value={`${activeCamp.summary.totalAvailableMinutes} min`} />
-                <StatCard label="Open slots" value={activeCamp.summary.openSlots} />
-                <StatCard
-                  label="Estimated total"
-                  value={formatTimetableMoney(
-                    activeCamp.summary.estimatedRevenue,
-                    activeCamp.currency,
-                  )}
-                />
-              </div>
+              {!isHuckJam ? (
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  <StatCard
+                    label="Booked minutes"
+                    value={`${activeCamp.summary.totalBookedMinutes} min`}
+                  />
+                  <StatCard
+                    label="Open minutes"
+                    value={`${activeCamp.summary.totalAvailableMinutes} min`}
+                  />
+                  <StatCard label="Open slots" value={activeCamp.summary.openSlots} />
+                  <StatCard
+                    label="Estimated total"
+                    value={formatTimetableMoney(
+                      activeCamp.summary.estimatedRevenue,
+                      activeCamp.currency,
+                    )}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="relative grid h-full content-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950">
               <div className="grid gap-1.5">
@@ -509,17 +508,6 @@ export function CoachDashboardWorkspace({
           >
             <Menu size={19} />
           </button>
-          <select
-            value={activeCamp.id}
-            onChange={(event) => selectCamp(event.target.value)}
-            className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none focus:border-sky-400"
-          >
-            {camps.map((camp) => (
-              <option key={camp.id} value={camp.id}>
-                {camp.type === "huck_jam" ? "Huck Jam" : "Camp"} - {camp.title}
-              </option>
-            ))}
-          </select>
           <button
             type="button"
             onClick={() =>
@@ -543,6 +531,15 @@ export function CoachDashboardWorkspace({
             ) : null}
           </button>
         </header>
+
+        <nav className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-sm">
+          <Link
+            href="/app/coach-dashboard"
+            className="inline-flex items-center gap-2 text-lg font-black text-sky-800 transition hover:text-sky-900"
+          >
+            <ChevronLeft size={19} /> Back to Coach Command Center
+          </Link>
+        </nav>
 
       <div id="coach-live-timetable" className="hidden md:block" />
       <main className="hidden gap-4 xl:grid">
@@ -580,6 +577,7 @@ export function CoachDashboardWorkspace({
               </div>
             ) : (
               <>
+                {isHuckJam ? <HuckjamSidebarSummary camp={activeCamp} /> : null}
                 <ParticipantColumns
                   participants={activeCamp.participants}
                   selectedParticipantId={selectedParticipantId}
@@ -605,6 +603,9 @@ export function CoachDashboardWorkspace({
           </aside>
 
           <div className="grid min-w-0 gap-4">
+            {isHuckJam ? (
+              <HuckjamOverviewPanel camp={activeCamp} />
+            ) : (
           <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 bg-white px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -814,9 +815,10 @@ export function CoachDashboardWorkspace({
                                         className="grid w-full rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm"
                                         style={{
                                           backgroundColor: colors?.soft,
-                                          borderColor: booking.isFinal
-                                            ? colors?.bg
-                                            : "#f97316",
+                                          borderColor:
+                                            booking.isFinal === false
+                                              ? "#f97316"
+                                              : colors?.bg,
                                           color: colors?.text,
                                         }}
                                       >
@@ -825,7 +827,7 @@ export function CoachDashboardWorkspace({
                                         </span>
                                         <span className="flex items-center gap-2 text-xs font-bold opacity-80">
                                           <span>{booking.minutes} min</span>
-                                          {!booking.isFinal ? (
+                                          {booking.isFinal === false ? (
                                             <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
                                               Draft
                                             </span>
@@ -938,12 +940,16 @@ export function CoachDashboardWorkspace({
               </div>
             </div>
           </section>
-
+            )}
           </div>
         </section>
       </main>
 
       <main className="hidden gap-3 md:grid xl:hidden">
+        {isHuckJam ? (
+          <HuckjamOverviewPanel camp={activeCamp} compact />
+        ) : (
+          <>
         <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1067,9 +1073,10 @@ export function CoachDashboardWorkspace({
                                     className="grid rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm"
                                     style={{
                                       backgroundColor: colors?.bg,
-                                      borderColor: booking.isFinal
-                                        ? colors?.bg
-                                        : "#f97316",
+                                      borderColor:
+                                        booking.isFinal === false
+                                          ? "#f97316"
+                                          : colors?.bg,
                                     }}
                                   >
                                     <span className="block truncate text-sm font-black">
@@ -1077,7 +1084,7 @@ export function CoachDashboardWorkspace({
                                     </span>
                                     <span className="flex items-center gap-2 text-xs font-bold text-white/80">
                                       <span>{booking.minutes} min</span>
-                                      {!booking.isFinal ? (
+                                      {booking.isFinal === false ? (
                                         <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
                                           Draft
                                         </span>
@@ -1133,6 +1140,8 @@ export function CoachDashboardWorkspace({
           camp={activeCamp}
           tunnels={tunnels}
         />
+          </>
+        )}
       </main>
 
       {tabletPanel ? (
@@ -1151,7 +1160,11 @@ export function CoachDashboardWorkspace({
             />
           ) : (
             <div className="grid gap-3">
-              <AttentionPanel items={attention} onAction={handleAttentionClick} />
+              {isHuckJam ? (
+                <HuckjamSidebarSummary camp={activeCamp} />
+              ) : (
+                <AttentionPanel items={attention} onAction={handleAttentionClick} />
+              )}
               <ParticipantColumns
                 participants={activeCamp.participants}
                 selectedParticipantId={selectedParticipantId}
@@ -1200,10 +1213,10 @@ export function CoachDashboardWorkspace({
             Your mobile coaching pages stay available as usual.
           </p>
           <Link
-            href="/app/dashboard"
-            className="mt-4 inline-flex h-10 items-center rounded-xl bg-sky-600 px-3 text-sm font-black text-white"
+            href="/app/coach-dashboard"
+            className="mt-4 inline-flex h-11 items-center rounded-2xl bg-sky-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-sky-700"
           >
-            Back to Coaching
+            Back to Coach Command Center
           </Link>
         </div>
       </main>
@@ -1535,7 +1548,7 @@ function ParticipantColumns({
                           {formatInterestStatusLabel(participant.status)}
                         </span>
                         <ApplicantStatusActions
-                          interestId={participant.id}
+                          interestId={participant.interestId}
                           currentStatus={participant.status}
                           compact
                         />
@@ -2482,7 +2495,7 @@ function ParticipantPanel({
         date: slot.slotDate,
         time: slot.startTime,
         minutes: booking.minutes,
-        isFinal: booking.isFinal ?? false,
+        isFinal: booking.isFinal === true,
         releaseRequestedAt: booking.releaseRequestedAt ?? null,
       })),
   );
@@ -2557,6 +2570,30 @@ function ParticipantPanel({
           value={participant.country || "Not provided"}
         />
       </div>
+      {participant.status !== "accepted" ? (
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
+                Application Actions
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                Restore the applicant to any workflow state.
+              </p>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500">
+              {formatInterestStatusLabel(participant.status)}
+            </span>
+          </div>
+          <div className="mt-3">
+            <ApplicantStatusActions
+              key={`${participant.id}-${participant.status}`}
+              interestId={participant.interestId}
+              currentStatus={participant.status}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="mt-3">
         <details className="group rounded-2xl border border-slate-200 bg-slate-50">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-slate-700 [&::-webkit-details-marker]:hidden">
@@ -2616,48 +2653,45 @@ function ParticipantPanel({
             </div>
           </details>
         ) : null}
-        <details className="group rounded-2xl border border-slate-200 bg-slate-50">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-slate-700 [&::-webkit-details-marker]:hidden">
-            <span>Booked Slots ({bookedSlots.length})</span>
-            <ChevronRight
-              size={16}
-              className="shrink-0 text-slate-400 transition group-open:rotate-90"
-            />
-          </summary>
-          <div className="grid gap-1.5 border-t border-slate-200 px-3 py-2.5">
-            {bookedSlotsByDay.length > 0 ? (
-              bookedSlotsByDay.map((day) => (
-                <section key={day.date} className="grid gap-1.5 rounded-xl bg-white p-2.5">
-                  <h4 className="text-sm font-black text-slate-950">
-                    {formatTimetableDate(day.date)}
-                  </h4>
-                  <div className="grid gap-0.5">
-                    {day.slots.map((slot) => (
-                      <p
-                        key={slot.id}
-                        className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-700"
-                      >
-                        {formatTimetableTime(slot.time)} - {slot.minutes} min
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              ))
-            ) : (
-              <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-amber-700">
-                No slots assigned
-              </p>
-            )}
-          </div>
-        </details>
+        {camp.type === "camp" ? (
+          <details className="group rounded-2xl border border-slate-200 bg-slate-50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-slate-700 [&::-webkit-details-marker]:hidden">
+              <span>Booked Slots ({bookedSlots.length})</span>
+              <ChevronRight
+                size={16}
+                className="shrink-0 text-slate-400 transition group-open:rotate-90"
+              />
+            </summary>
+            <div className="grid gap-1.5 border-t border-slate-200 px-3 py-2.5">
+              {bookedSlotsByDay.length > 0 ? (
+                bookedSlotsByDay.map((day) => (
+                  <section key={day.date} className="grid gap-1.5 rounded-xl bg-white p-2.5">
+                    <h4 className="text-sm font-black text-slate-950">
+                      {formatTimetableDate(day.date)}
+                    </h4>
+                    <div className="grid gap-0.5">
+                      {day.slots.map((slot) => (
+                        <p
+                          key={slot.id}
+                          className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-700"
+                        >
+                          {formatTimetableTime(slot.time)} - {slot.minutes} min
+                        </p>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              ) : (
+                <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-amber-700">
+                  No slots assigned
+                </p>
+              )}
+            </div>
+          </details>
+        ) : null}
       </div>
-      <div className="mt-3">
-        <ApplicantStatusActions
-          interestId={participant.id}
-          currentStatus={participant.status}
-        />
-      </div>
-      {participant.status === "accepted" &&
+      {camp.type === "camp" &&
+      participant.status === "accepted" &&
       bookedSlots.length === 0 &&
       participant.userId ? (
         <div className="mt-2">
@@ -2777,6 +2811,239 @@ function ActivityPanel({ activity }: { activity: ActivityItem[] }) {
         )}
       </div>
     </section>
+  );
+}
+
+function HuckjamOverviewPanel({
+  camp,
+  compact = false,
+}: {
+  camp: CampWorkspace;
+  compact?: boolean;
+}) {
+  const overview = getHuckjamOverview(camp);
+
+  return (
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className={`grid gap-4 ${compact ? "p-3" : "p-4 sm:p-5"}`}>
+        <div className="rounded-[1.75rem] border border-sky-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_42%,#ecfeff_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-sky-700">
+                Huckjam Overview
+              </p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">
+                How full is the event?
+              </h2>
+              <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-slate-600">
+                Keep an eye on registrations, revenue, and remaining capacity
+                without any timetable noise.
+              </p>
+            </div>
+            <div className="grid min-w-[12rem] gap-1.5 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 text-slate-950 shadow-sm backdrop-blur">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
+                Start countdown
+              </p>
+              <p className="text-2xl font-black tracking-tight">
+                {overview.daysRemaining} days
+              </p>
+              <div className="inline-flex items-center gap-2 text-sm font-bold text-sky-700">
+                <CalendarClock size={16} />
+                Until Huckjam starts
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`mt-5 grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-4"}`}
+          >
+            <HuckjamMetricCard
+              label="Registered Participants"
+              value={`${overview.confirmedCount} / ${camp.totalCapacity}`}
+              icon={<Users size={18} />}
+              detail={`${overview.capacityPercent}% of capacity`}
+            />
+            <HuckjamMetricCard
+              label="Revenue"
+              value={formatPrice(overview.revenue, camp.currency)}
+              icon={<CircleDollarSign size={18} />}
+              detail="Confirmed participants x participation fee"
+            />
+            <HuckjamMetricCard
+              label="Available Spots"
+              value={overview.availableSpots}
+              icon={<CalendarDays size={18} />}
+              detail="Remaining places to fill"
+            />
+            <HuckjamMetricCard
+              label="Days Remaining"
+              value={overview.daysRemaining}
+              icon={<CalendarClock size={18} />}
+              detail="Until the Huckjam begins"
+            />
+          </div>
+        </div>
+
+        <div className={`grid gap-4 ${compact ? "" : "xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]"}`}>
+          <section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-400">
+                  Capacity Progress
+                </p>
+                <h3 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+                  {overview.confirmedCount} of {camp.totalCapacity} spots filled
+                </h3>
+              </div>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-black text-emerald-700">
+                {overview.capacityPercent}% Full
+              </span>
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3 text-sm font-bold text-slate-500">
+                <span>{overview.confirmedCount} registered participants</span>
+                <span>{overview.availableSpots} spots left</span>
+              </div>
+              <div className="mt-3 h-5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500 transition-[width] duration-500"
+                  style={{ width: `${overview.capacityPercent}%` }}
+                  aria-hidden="true"
+                />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-sm font-black text-slate-700">
+                  {overview.capacityPercent}% Full
+                </p>
+                <p className="text-sm font-semibold text-slate-500">
+                  Capacity is the story here
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-400">
+                  Recent Registrations
+                </p>
+                <h3 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+                  Who just signed up?
+                </h3>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-700">
+                {overview.recentRegistrations.length}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {overview.recentRegistrations.length > 0 ? (
+                overview.recentRegistrations.map((registration) => (
+                  <article
+                    key={`${registration.id}-${registration.createdAt}`}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                  >
+                    <Avatar
+                      name={registration.name}
+                      imageUrl={registration.profileImageUrl}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-slate-950">
+                        {registration.name}
+                      </p>
+                      <p className="text-xs font-semibold text-slate-500">
+                        {registration.relativeTime}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">
+                      {formatInterestStatusLabel(registration.status)}
+                    </span>
+                  </article>
+                ))
+              ) : (
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm font-semibold text-slate-500">
+                  No recent registrations yet.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HuckjamSidebarSummary({ camp }: { camp: CampWorkspace }) {
+  const overview = getHuckjamOverview(camp);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-400">
+        Huckjam Summary
+      </p>
+      <div className="mt-3 grid gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <HuckjamSidebarMetric label="Confirmed" value={overview.confirmedCount} />
+          <HuckjamSidebarMetric label="Waitlist" value={overview.waitlistCount} />
+          <HuckjamSidebarMetric label="Declined" value={overview.declinedCount} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HuckjamMetricCard({
+  label,
+  value,
+  detail,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-28 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-400">
+            {label}
+          </p>
+          <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+            {value}
+          </p>
+        </div>
+        <div className="grid size-10 place-items-center rounded-2xl bg-slate-100 text-sky-700">
+          {icon}
+        </div>
+      </div>
+      <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function HuckjamSidebarMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+      <p className="text-[0.64rem] font-black uppercase tracking-[0.14em] text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-black tracking-tight text-slate-950">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -2914,6 +3181,46 @@ function getAttentionItems(camp: CampWorkspace) {
     (item) => item.status === "pending",
   );
   const accepted = camp.participants.filter((item) => item.status === "accepted");
+  const waitlistParticipants = camp.participants.filter(
+    (item) => item.status === "waitlist",
+  );
+
+  if (camp.type === "huck_jam") {
+    const declinedParticipants = camp.participants.filter(
+      (item) => item.status === "declined",
+    );
+
+    if (pendingParticipants.length > 0) {
+      items.push({
+        label: `${pendingParticipants.length} new applicants`,
+        tone: "amber",
+        target: "applicants",
+        count: pendingParticipants.length,
+        participantId: pendingParticipants[0]?.id,
+      });
+    }
+    if (waitlistParticipants.length > 0) {
+      items.push({
+        label: `${waitlistParticipants.length} waitlist registrations`,
+        tone: "slate",
+        target: "participant",
+        count: waitlistParticipants.length,
+        participantId: waitlistParticipants[0]?.id,
+      });
+    }
+    if (declinedParticipants.length > 0) {
+      items.push({
+        label: `${declinedParticipants.length} declined registrations`,
+        tone: "slate",
+        target: "participant",
+        count: declinedParticipants.length,
+        participantId: declinedParticipants[0]?.id,
+      });
+    }
+
+    return items;
+  }
+
   const participantsWithSlots = new Set(
     camp.timetableSlots.flatMap((slot) =>
       slot.bookings.map((booking) => booking.userId),
@@ -2924,9 +3231,6 @@ function getAttentionItems(camp: CampWorkspace) {
   );
   const participantsMissingTunnelTime = accepted.filter(
     (item) => !item.tunnelTimeStatus,
-  );
-  const waitlistParticipants = camp.participants.filter(
-    (item) => item.status === "waitlist",
   );
   const openSlots = camp.summary.openSlots;
 
@@ -2980,6 +3284,114 @@ function getAttentionItems(camp: CampWorkspace) {
 
 function getActivityBadgeCount(attention: AttentionItem[]) {
   return attention.reduce((total, item) => total + item.count, 0);
+}
+
+function getHuckjamOverview(camp: CampWorkspace) {
+  const confirmedParticipants = camp.participants.filter(
+    (participant) => participant.status === "accepted",
+  );
+  const waitlistCount = camp.participants.filter(
+    (participant) => participant.status === "waitlist",
+  ).length;
+  const declinedCount = camp.participants.filter(
+    (participant) => participant.status === "declined",
+  ).length;
+  const confirmedCount = confirmedParticipants.length;
+  const availableSpots = Math.max(camp.totalCapacity - confirmedCount, 0);
+  const revenue = confirmedCount * camp.price;
+  const capacityPercent =
+    camp.totalCapacity > 0
+      ? Math.min(Math.round((confirmedCount / camp.totalCapacity) * 100), 100)
+      : 0;
+
+  return {
+    confirmedCount,
+    waitlistCount,
+    declinedCount,
+    availableSpots,
+    revenue,
+    capacityPercent,
+    daysRemaining: getDaysRemainingUntil(camp.startDate),
+    recentRegistrations: getRecentRegistrations(camp.participants),
+  };
+}
+
+function getRecentRegistrations(participants: Participant[]): HuckjamRegistration[] {
+  const activeRegistrations = participants.filter(
+    (participant) =>
+      participant.status !== "declined" && participant.status !== "withdrawn",
+  );
+  const source = activeRegistrations.length > 0 ? activeRegistrations : participants;
+
+  return [...source]
+    .sort((a, b) => {
+      const left = new Date(b.createdAt).getTime();
+      const right = new Date(a.createdAt).getTime();
+      return left - right;
+    })
+    .slice(0, 3)
+    .map((participant) => ({
+      id: participant.id,
+      name: participant.name,
+      profileImageUrl: participant.profileImageUrl,
+      createdAt: participant.createdAt,
+      relativeTime: formatRelativeTime(participant.createdAt),
+      status: participant.status,
+    }));
+}
+
+function getDaysRemainingUntil(dateValue: string, now = new Date()) {
+  const target = new Date(`${dateValue}T00:00:00`);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+
+  if (Number.isNaN(target.getTime())) {
+    return 0;
+  }
+
+  return Math.max(
+    Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+    0,
+  );
+}
+
+function formatRelativeTime(value: string, now = new Date()) {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return "Recently";
+  }
+
+  const deltaMs = timestamp - now.getTime();
+  const absMinutes = Math.abs(deltaMs) / (1000 * 60);
+
+  if (absMinutes < 60) {
+    const rounded = Math.max(1, Math.round(absMinutes));
+    return `${rounded} minute${rounded === 1 ? "" : "s"} ${
+      deltaMs < 0 ? "ago" : "from now"
+    }`;
+  }
+
+  const absHours = absMinutes / 60;
+  if (absHours < 24) {
+    const rounded = Math.max(1, Math.round(absHours));
+    return `${rounded} hour${rounded === 1 ? "" : "s"} ${
+      deltaMs < 0 ? "ago" : "from now"
+    }`;
+  }
+
+  const absDays = absHours / 24;
+  if (absDays < 7) {
+    const rounded = Math.max(1, Math.round(absDays));
+    return `${rounded} day${rounded === 1 ? "" : "s"} ${
+      deltaMs < 0 ? "ago" : "from now"
+    }`;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 }
 
 function getAssignableParticipantsForDay(

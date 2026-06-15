@@ -37,7 +37,7 @@ const baseNavItems = [
 
 const organizerNavItems = [
   { href: "/app/create", label: "Create", id: "create", icon: CalendarPlus },
-  { href: "/app/dashboard", label: "Coaching", id: "dashboard", icon: LayoutDashboard },
+  { href: "/app/coach-dashboard", label: "Coaching", id: "dashboard", icon: LayoutDashboard },
 ] as const;
 
 const applicationNavItem = {
