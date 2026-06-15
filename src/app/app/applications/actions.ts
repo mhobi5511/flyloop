@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
 
@@ -22,7 +23,7 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
 
   const { data: interest, error: lookupError } = await supabase
     .from("opportunity_interests")
-    .select("id,status,athlete_id,opportunity_id")
+    .select("id,status,athlete_id,opportunity_id,opportunities(id,title,created_by)")
     .eq("id", interestId)
     .maybeSingle();
 
@@ -67,6 +68,46 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
       ok: false,
       message: error.message || "Could not withdraw application. Please try again.",
     };
+  }
+
+  const opportunity = Array.isArray(interest?.opportunities)
+    ? interest?.opportunities[0]
+    : interest?.opportunities;
+
+  if (opportunity?.created_by) {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (adminSupabase) {
+      const shouldPush = !(await hasUnreadNotification(adminSupabase, {
+        userId: opportunity.created_by,
+        type: "application_withdrawn",
+        opportunityId: opportunity.id,
+      }));
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      const userName = profile?.full_name?.trim() || "A participant";
+      const { error: notificationError } = await adminSupabase
+        .from("notifications")
+        .insert({
+          user_id: opportunity.created_by,
+          title: "Application withdrawn",
+          body: `${userName} withdrew their application from ${opportunity.title}.`,
+          type: "application_withdrawn",
+          opportunity_id: opportunity.id,
+        });
+
+      if (notificationError) {
+        console.error("Application withdrawal notification failed", notificationError);
+      } else if (shouldPush) {
+        await sendPendingPushNotificationsForUsers([opportunity.created_by], {
+          opportunityId: opportunity.id,
+          types: ["application_withdrawn"],
+        });
+      }
+    }
   }
 
   revalidatePath("/app/applications");
@@ -154,6 +195,12 @@ export async function requestCampRemoval(
     .eq("id", user.id)
     .maybeSingle();
   const userName = profile?.full_name?.trim() || "A participant";
+  const shouldPush =
+    !(await hasUnreadNotification(adminSupabase, {
+      userId: opportunity.created_by,
+      type: "participant_removal_requested",
+      opportunityId: opportunity.id,
+    }));
 
   const { error: notificationError } = await adminSupabase.from("notifications").insert({
     user_id: opportunity.created_by,
@@ -165,7 +212,7 @@ export async function requestCampRemoval(
 
   if (notificationError) {
     console.error("Camp removal organizer notification failed", notificationError);
-  } else {
+  } else if (shouldPush) {
     await sendPendingPushNotificationsForUsers([opportunity.created_by], {
       opportunityId: opportunity.id,
       types: ["participant_removal_requested"],

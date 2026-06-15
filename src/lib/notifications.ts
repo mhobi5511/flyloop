@@ -1,23 +1,63 @@
-export const participantActivityNotificationTypes = [
+export const coachNotificationTypes = [
+  "new_interest",
+  "application_withdrawn",
+  "participant_removal_requested",
+] as const;
+
+export const athleteNotificationTypes = [
   "application_status",
   "timetable_published",
-  "timetable_booking_reminder",
-  "timetable_booking_changed",
   "slot_bookings_released",
   "slot_bookings_released_by_organizer",
   "slot_booking_released_by_organizer",
   "slot_booking_assigned_by_organizer",
   "participant_removed_from_camp",
   "participant_removal_kept",
+  "new_opportunity",
 ] as const;
 
-export const organizerActivityNotificationTypes = [
+export const bellNotificationTypes = [
+  ...coachNotificationTypes,
+  ...athleteNotificationTypes,
+] as const;
+
+export const activityFeedTypes = [
   "new_interest",
+  "application_withdrawn",
+  "application_status",
+  "timetable_published",
+  "slot_bookings_released",
+  "slot_bookings_released_by_organizer",
+  "slot_booking_released_by_organizer",
+  "slot_booking_assigned_by_organizer",
+  "participant_removed_from_camp",
+  "participant_removal_kept",
+  "participant_removal_requested",
+  "new_opportunity",
   "new_time_booking",
   "timetable_reminder_interest",
-  "participant_removal_requested",
-  "slot_release_requested",
+  "timetable_booking_changed",
+  "opportunity_deleted",
 ] as const;
+
+export const participantActivityNotificationTypes = athleteNotificationTypes;
+export const organizerActivityNotificationTypes = coachNotificationTypes;
+
+export function isCoachNotificationType(type: string | null | undefined) {
+  return coachNotificationTypes.includes(type as (typeof coachNotificationTypes)[number]);
+}
+
+export function isAthleteNotificationType(type: string | null | undefined) {
+  return athleteNotificationTypes.includes(type as (typeof athleteNotificationTypes)[number]);
+}
+
+export function isBellNotificationType(type: string | null | undefined) {
+  return bellNotificationTypes.includes(type as (typeof bellNotificationTypes)[number]);
+}
+
+export function isActivityFeedType(type: string | null | undefined) {
+  return activityFeedTypes.includes(type as (typeof activityFeedTypes)[number]);
+}
 
 type UnreadNotificationForBadge = {
   opportunity_id: string | null;

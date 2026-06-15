@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
+import {
+  bellNotificationTypes,
+  isCoachNotificationType,
+} from "@/lib/notifications";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Notification = {
@@ -38,6 +42,7 @@ export function NotificationBell() {
           .select("id,title,body,type,opportunity_id,read,created_at")
           .eq("user_id", currentUserId)
           .eq("read", false)
+          .in("type", [...bellNotificationTypes])
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -204,14 +209,8 @@ export function NotificationBell() {
 }
 
 function notificationHref(notification: Notification) {
-  if (
-    notification.opportunity_id &&
-    (notification.type === "new_interest" ||
-      notification.type === "new_time_booking" ||
-      notification.type === "timetable_reminder_interest" ||
-      notification.type === "participant_removal_requested")
-  ) {
-    return `/app/organizer/opportunities/${notification.opportunity_id}`;
+  if (isCoachNotificationType(notification.type)) {
+    return "/app/coach-dashboard";
   }
 
   return notification.opportunity_id

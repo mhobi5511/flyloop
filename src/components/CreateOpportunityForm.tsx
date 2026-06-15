@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, CircleDollarSign, ClipboardCheck, MapPin, Users } from "lucide-react";
 import {
@@ -243,6 +243,7 @@ export function CreateOpportunityForm({
   const [tunnelSearch, setTunnelSearch] = useState("");
   const [isTunnelListOpen, setIsTunnelListOpen] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [maxVisitedStepIndex, setMaxVisitedStepIndex] = useState(
     mode === "edit" ? campSteps.length - 1 : 0,
   );
@@ -281,6 +282,21 @@ export function CreateOpportunityForm({
   const priceAppliesToError =
     type === "camp" ? getPriceAppliesToError(minMinutesOrHours) : "";
   const flowName = type === "camp" ? "Camp" : "Huck Jam";
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+
+    const updateViewport = () => {
+      setIsMobileViewport(media.matches);
+    };
+
+    updateViewport();
+    media.addEventListener("change", updateViewport);
+
+    return () => {
+      media.removeEventListener("change", updateViewport);
+    };
+  }, []);
 
   function goToStep(nextIndex: number) {
     setError("");
@@ -473,11 +489,11 @@ export function CreateOpportunityForm({
       if (onSuccess) {
         onSuccess(result.data.id);
       } else {
-        router.push(
-          mode === "edit" && initialOpportunity
-            ? `/app/organizer/opportunities/${initialOpportunity.id}`
-            : `/app/organizer/opportunities/${result.data.id}?published=1`,
-        );
+        if (isMobileViewport) {
+          router.replace("/app/dashboard");
+        } else {
+          router.push(`/app/coach-dashboard/${result.data.id}`);
+        }
       }
       router.refresh();
     });

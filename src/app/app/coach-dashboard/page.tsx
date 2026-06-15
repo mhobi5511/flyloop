@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import {
   CoachCommandCenterWorkspace,
   type CoachWorkspaceActivityItem,
@@ -8,7 +9,10 @@ import {
   type CoachWorkspaceNotificationItem,
 } from "@/components/CoachCommandCenterWorkspace";
 import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
-import { organizerActivityNotificationTypes, participantActivityNotificationTypes } from "@/lib/notifications";
+import {
+  activityFeedTypes,
+  coachNotificationTypes,
+} from "@/lib/notifications";
 import { formatOpportunityDate } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
@@ -82,11 +86,6 @@ type NotificationRow = {
   type: string;
 };
 
-const notificationTypes = [
-  ...organizerActivityNotificationTypes,
-  ...participantActivityNotificationTypes,
-];
-
 export default async function CoachDashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -117,16 +116,16 @@ export default async function CoachDashboardPage() {
         .select("id,title,body,created_at,opportunity_id,type")
         .eq("user_id", user.id)
         .eq("read", false)
-        .in("type", notificationTypes)
+        .in("type", [...coachNotificationTypes])
         .order("created_at", { ascending: false })
         .limit(8),
       supabase
         .from("notifications")
         .select("id,title,body,created_at,opportunity_id,type")
         .eq("user_id", user.id)
-        .in("type", notificationTypes)
+        .in("type", [...activityFeedTypes])
         .order("created_at", { ascending: false })
-        .limit(8),
+        .limit(12),
     ]);
 
   if (profileResult.error) {
@@ -158,6 +157,17 @@ export default async function CoachDashboardPage() {
 
   if (!canCreate) {
     redirect("/app/dashboard");
+  }
+
+  const { error: markReadError } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", user.id)
+    .eq("read", false)
+    .in("type", [...coachNotificationTypes]);
+
+  if (markReadError) {
+    console.error("Coach dashboard read-state update failed", markReadError);
   }
 
   const [coachProfileResult, tunnelResult] = await Promise.all([
@@ -233,16 +243,19 @@ export default async function CoachDashboardPage() {
   }));
 
   return (
-    <CoachCommandCenterWorkspace
-      coachName={profile?.full_name?.trim() || "Coach"}
-      camps={camps}
-      huckJams={huckJams}
-      attentionItems={attentionItems}
-      activityItems={activityItems}
-      notifications={notifications}
-      tunnels={tunnels}
-      inheritedCoachProfile={inheritedCoachProfile}
-    />
+    <>
+      <CoachCommandCenterWorkspace
+        coachName={profile?.full_name?.trim() || "Coach"}
+        camps={camps}
+        huckJams={huckJams}
+        attentionItems={attentionItems}
+        activityItems={activityItems}
+        notifications={notifications}
+        tunnels={tunnels}
+        inheritedCoachProfile={inheritedCoachProfile}
+      />
+      <NotificationReadSignal />
+    </>
   );
 }
 

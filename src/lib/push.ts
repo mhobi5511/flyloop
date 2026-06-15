@@ -1,6 +1,10 @@
 import webpush, { type PushSubscription } from "web-push";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import {
+  bellNotificationTypes,
+  isCoachNotificationType,
+} from "@/lib/notifications";
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -26,23 +30,7 @@ type PushSendFilter = {
   types?: string[];
 };
 
-const relevantPushTypes = [
-  "new_interest",
-  "application_status",
-  "timetable_published",
-  "timetable_booking_changed",
-  "slot_bookings_released",
-  "slot_bookings_released_by_organizer",
-  "slot_booking_released_by_organizer",
-  "slot_booking_assigned_by_organizer",
-  "new_opportunity",
-  "new_time_booking",
-  "timetable_reminder_interest",
-  "participant_removal_requested",
-  "participant_removed_from_camp",
-  "participant_removal_kept",
-  "opportunity_deleted",
-] as const;
+const relevantPushTypes = bellNotificationTypes;
 
 let vapidConfigured = false;
 
@@ -77,17 +65,11 @@ function configureVapid() {
 
 function notificationUrl(notification: NotificationRow) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
-  const isOrganizerNotification =
-    notification.type === "new_interest" ||
-    notification.type === "new_time_booking" ||
-    notification.type === "timetable_reminder_interest" ||
-    notification.type === "participant_removal_requested";
-  const path =
-    notification.opportunity_id && isOrganizerNotification
-      ? `/app/organizer/opportunities/${notification.opportunity_id}`
-      : notification.opportunity_id
-        ? `/app/opportunities/${notification.opportunity_id}`
-        : "/app";
+  const path = notification.opportunity_id
+    ? isCoachNotificationType(notification.type)
+      ? "/app/coach-dashboard"
+      : `/app/opportunities/${notification.opportunity_id}`
+    : "/app";
 
   return siteUrl ? `${siteUrl}${path}` : path;
 }

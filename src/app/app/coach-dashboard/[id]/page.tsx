@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { CoachDashboardWorkspace } from "@/components/CoachDashboardWorkspace";
 import {
   formatOpportunityDate,
   formatPriceAppliesToMinutes,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { coachNotificationTypes } from "@/lib/notifications";
 import { getTimetableSummary } from "@/lib/timetable";
 import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import type {
@@ -180,6 +182,17 @@ export default async function CoachWorkspaceCampPage({
     redirect("/app/dashboard");
   }
 
+  const { error: markReadError } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", user.id)
+    .eq("read", false)
+    .in("type", [...coachNotificationTypes]);
+
+  if (markReadError) {
+    console.error("Coach workspace read-state update failed", markReadError);
+  }
+
   const opportunity = (opportunityResult.data ?? null) as CoachOpportunityRow | null;
 
   if (!opportunity) {
@@ -200,11 +213,14 @@ export default async function CoachWorkspaceCampPage({
     country: tunnel.country ?? "",
   }));
   return (
-    <CoachDashboardWorkspace
-      selectedCampId={id}
-      camps={camps}
-      tunnels={tunnels}
-    />
+    <>
+      <CoachDashboardWorkspace
+        selectedCampId={id}
+        camps={camps}
+        tunnels={tunnels}
+      />
+      <NotificationReadSignal />
+    </>
   );
 }
 

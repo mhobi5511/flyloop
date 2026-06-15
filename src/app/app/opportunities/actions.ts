@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
 import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
@@ -304,6 +305,15 @@ export async function sendOpportunityInterest(
     };
   }
 
+  const adminSupabase = createSupabaseAdminClient();
+  const shouldPush =
+    adminSupabase &&
+    !(await hasUnreadNotification(adminSupabase, {
+      userId: opportunity.created_by,
+      type: "new_interest",
+      opportunityId,
+    }));
+
   if (!currentInterest) {
     const { data: createdInterest, error } = await supabase
       .from("opportunity_interests")
@@ -338,10 +348,12 @@ export async function sendOpportunityInterest(
     createdInterestId = createdInterest?.id ?? createdInterestId;
   }
 
-  await sendServerPush([opportunity.created_by], "new_interest", {
-    opportunityId,
-    types: ["new_interest"],
-  });
+  if (shouldPush) {
+    await sendServerPush([opportunity.created_by], "new_interest", {
+      opportunityId,
+      types: ["new_interest"],
+    });
+  }
 
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath("/app/dashboard");
@@ -496,11 +508,6 @@ export async function setTimetableReminder(
     return { ok: false, message: reminderErrorMessage(error) };
   }
 
-  await sendServerPush([opportunity.created_by], "timetable_reminder_interest", {
-    opportunityId,
-    types: ["timetable_reminder_interest"],
-  });
-
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath("/app/dashboard");
 
@@ -567,9 +574,9 @@ export async function deleteOpportunity(
   });
 
   const [
-    { data: opportunityBeforeDelete, error: opportunityLookupError },
-    { data: interestRecipients, error: interestRecipientError },
-    { data: bookingRecipients, error: bookingRecipientError },
+    { error: opportunityLookupError },
+    { error: interestRecipientError },
+    { error: bookingRecipientError },
   ] = await Promise.all([
     supabase
       .from("opportunities")
@@ -609,19 +616,6 @@ export async function deleteOpportunity(
       error: bookingRecipientError,
     });
   }
-
-  const affectedUserIds = [
-    ...new Set([
-      ...(interestRecipients ?? []).map((row) => row.athlete_id),
-      ...(bookingRecipients ?? []).map((row) => row.user_id),
-    ]),
-  ].filter((affectedUserId) =>
-    Boolean(
-      affectedUserId &&
-        affectedUserId !== user.id &&
-        affectedUserId !== opportunityBeforeDelete?.created_by,
-    ),
-  );
 
   const { data: deleted, error } = await supabase.rpc(
     "delete_opportunity_with_notification_cleanup",
@@ -665,12 +659,6 @@ export async function deleteOpportunity(
 
   if (!deleted) {
     return { ok: false, message: "Opportunity not found." };
-  }
-
-  if (affectedUserIds.length > 0) {
-    await sendServerPush(affectedUserIds, "opportunity_deleted", {
-      types: ["opportunity_deleted"],
-    });
   }
 
   revalidatePath("/app");
@@ -851,19 +839,6 @@ export async function releaseOwnOpportunitySlot(
         hint: error.hint,
       });
       return { ok: false, message: "Could not send release request." };
-    }
-
-    const { data: opportunity } = await supabase
-      .from("opportunities")
-      .select("created_by")
-      .eq("id", opportunityId)
-      .maybeSingle();
-
-    if (opportunity?.created_by) {
-      await sendServerPush([opportunity.created_by], "slot_release_requested", {
-        opportunityId,
-        types: ["slot_release_requested"],
-      });
     }
 
     revalidatePath(`/app/opportunities/${opportunityId}`);

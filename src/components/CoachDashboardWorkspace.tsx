@@ -32,11 +32,7 @@ import {
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
 import { deleteOpportunity } from "@/app/app/opportunities/actions";
-import {
-  sendCoachDashboardSlotReminder,
-  saveCampTimetable,
-  type TimetableSlotInput,
-} from "@/app/app/organizer/opportunities/actions";
+import { saveCampTimetable, type TimetableSlotInput } from "@/app/app/organizer/opportunities/actions";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
 import {
   AssignSlotButton,
@@ -434,7 +430,7 @@ export function CoachDashboardWorkspace({
           </button>
         </header>
 
-        <nav className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-sm">
+        <nav className="hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-sm md:block">
           <Link
             href="/app/coach-dashboard"
             className="inline-flex items-center gap-2 text-lg font-black text-sky-800 transition hover:text-sky-900"
@@ -1092,12 +1088,6 @@ export function CoachDashboardWorkspace({
             This control-tower workspace is optimized for desktop and tablet.
             Your mobile coaching pages stay available as usual.
           </p>
-          <Link
-            href="/app/coach-dashboard"
-            className="mt-4 inline-flex h-11 items-center rounded-2xl bg-sky-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-sky-700"
-          >
-            Back to Coach Command Center
-          </Link>
         </div>
       </main>
       {headerPanel === "share" ? (
@@ -2508,65 +2498,17 @@ function ParticipantPanel({
       participant.status === "accepted" &&
       bookedSlots.length === 0 &&
       participant.userId ? (
-        <div className="mt-2">
-          <ParticipantSlotReminderButton
-            opportunityId={camp.id}
-            participantId={participant.userId}
-          />
+        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-amber-700">
+            Requires attention
+          </p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-amber-900">
+            This athlete has no booked times yet. The task now lives in the
+            Command Center instead of generating a reminder notification.
+          </p>
         </div>
       ) : null}
     </section>
-  );
-}
-
-function ParticipantSlotReminderButton({
-  opportunityId,
-  participantId,
-}: {
-  opportunityId: string;
-  participantId: string;
-}) {
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [isPending, startTransition] = useTransition();
-
-  function sendReminder() {
-    setMessage("");
-    setError("");
-
-    startTransition(async () => {
-      const result = await sendCoachDashboardSlotReminder(
-        opportunityId,
-        participantId,
-      );
-
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      setMessage(result.message);
-    });
-  }
-
-  return (
-    <div className="grid gap-1.5">
-      <button
-        type="button"
-        onClick={sendReminder}
-        disabled={isPending}
-        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-black text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:bg-slate-100 disabled:text-slate-400"
-      >
-        <Clock3 size={16} />
-        {isPending ? "Sending..." : "Send reminder"}
-      </button>
-      {message ? (
-        <p className="text-center text-xs font-bold text-emerald-700">{message}</p>
-      ) : null}
-      {error ? (
-        <p className="text-center text-xs font-bold text-rose-700">{error}</p>
-      ) : null}
-    </div>
   );
 }
 

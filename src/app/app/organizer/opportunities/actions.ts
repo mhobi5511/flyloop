@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   sendPendingPushNotificationsForOpportunity,
@@ -95,6 +96,15 @@ export async function updateApplicantStatus(
     };
   }
 
+  const applicantNotificationSupabase = createSupabaseAdminClient();
+  const shouldPushApplicant =
+    applicantNotificationSupabase &&
+    !(await hasUnreadNotification(applicantNotificationSupabase, {
+      userId: interest.athlete_id,
+      type: "application_status",
+      opportunityId: interest.opportunity_id,
+    }));
+
   const { data: updatedInterest, error } = await supabase
     .from("opportunity_interests")
     .update({ status, removal_requested_at: null })
@@ -129,10 +139,12 @@ export async function updateApplicantStatus(
     return { ok: false, message: "Applicant not found or not editable." };
   }
 
-  await sendServerPush([interest.athlete_id], "application_status", {
-    opportunityId: interest.opportunity_id,
-    types: ["application_status", "slot_bookings_released"],
-  });
+  if (shouldPushApplicant) {
+    await sendServerPush([interest.athlete_id], "application_status", {
+      opportunityId: interest.opportunity_id,
+      types: ["application_status", "slot_bookings_released"],
+    });
+  }
 
   revalidatePath(`/app/organizer/opportunities/${updatedInterest.opportunity_id}`);
   revalidatePath(`/app/opportunities/${updatedInterest.opportunity_id}`);
@@ -297,6 +309,14 @@ async function resolveCampRemovalRequest(
         };
 
   const adminSupabase = createSupabaseAdminClient();
+  const shouldPush =
+    adminSupabase &&
+    !(await hasUnreadNotification(adminSupabase, {
+      userId: interest.athlete_id,
+      type: notification.type,
+      opportunityId: opportunity.id,
+    }));
+
   const { error: notificationError } = adminSupabase
     ? await adminSupabase.from("notifications").insert({
         user_id: interest.athlete_id,
@@ -317,7 +337,7 @@ async function resolveCampRemovalRequest(
       decision,
       error: notificationError,
     });
-  } else {
+  } else if (shouldPush) {
     await sendServerPush([interest.athlete_id], notification.type, {
       opportunityId: opportunity.id,
       types: [notification.type],
@@ -730,6 +750,8 @@ export async function sendTimetableBookingReminder(
   opportunityId: string,
   participantId: string,
 ): Promise<ActionResult> {
+  void opportunityId;
+  void participantId;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -740,43 +762,18 @@ export async function sendTimetableBookingReminder(
     return { ok: false, message: "Please log in again." };
   }
 
-  const { data: insertedCount, error } = await supabase.rpc(
-    "notify_timetable_booking_reminder",
-    {
-      target_opportunity_id: opportunityId,
-      target_user_id: participantId,
-    },
-  );
-
-  if (error) {
-    console.error("Timetable reminder failed", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  if (Number(insertedCount) > 0) {
-    await sendServerPush([participantId], "timetable_booking_reminder", {
-      opportunityId,
-      types: ["timetable_booking_reminder"],
-    });
-  }
-
-  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
-
-  return { ok: true, message: "Reminder sent." };
+  return {
+    ok: true,
+    message: "This follow-up now appears in Requires Attention.",
+  };
 }
 
 export async function sendCoachDashboardSlotReminder(
   opportunityId: string,
   participantId: string,
 ): Promise<ActionResult> {
+  void opportunityId;
+  void participantId;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -787,147 +784,10 @@ export async function sendCoachDashboardSlotReminder(
     return { ok: false, message: "Please log in again." };
   }
 
-  const { data: opportunity, error: opportunityError } = await supabase
-    .from("opportunities")
-    .select("id,title,booking_mode,created_by")
-    .eq("id", opportunityId)
-    .maybeSingle();
-
-  if (opportunityError) {
-    console.error("Coach dashboard reminder opportunity lookup failed", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-      error: opportunityError,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  if (!opportunity || opportunity.created_by !== user.id) {
-    return { ok: false, message: "Opportunity not found." };
-  }
-
-  const { data: participantInterest, error: participantError } = await supabase
-    .from("opportunity_interests")
-    .select("id")
-    .eq("opportunity_id", opportunityId)
-    .eq("athlete_id", participantId)
-    .eq("status", "accepted")
-    .maybeSingle();
-
-  if (participantError) {
-    console.error("Coach dashboard reminder participant lookup failed", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-      error: participantError,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  if (!participantInterest) {
-    return { ok: false, message: "Only accepted participants can be reminded." };
-  }
-
-  const { data: existingBooking, error: bookingError } = await supabase
-    .from("opportunity_slot_bookings")
-    .select("id")
-    .eq("opportunity_id", opportunityId)
-    .eq("user_id", participantId)
-    .limit(1)
-    .maybeSingle();
-
-  if (bookingError) {
-    console.error("Coach dashboard reminder booking lookup failed", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-      error: bookingError,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  if (existingBooking) {
-    return { ok: false, message: "This participant already has flying times." };
-  }
-
-  const { data: coachProfile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .maybeSingle();
-  const coachName = coachProfile?.full_name?.trim() || "Your coach";
-  const title = "Choose your flying times";
-  const body =
-    opportunity.booking_mode === "direct_time_booking"
-      ? `${coachName} reminded you to select your flying times for ${opportunity.title}.`
-      : `${coachName} reminded you that your flying times still need to be assigned for ${opportunity.title}.`;
-  const adminSupabase = createSupabaseAdminClient();
-
-  if (!adminSupabase) {
-    console.error("Coach dashboard reminder failed: missing admin Supabase client", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  const { data: existingNotification, error: existingNotificationError } =
-    await adminSupabase
-      .from("notifications")
-      .select("id")
-      .eq("user_id", participantId)
-      .eq("opportunity_id", opportunityId)
-      .eq("type", "timetable_booking_reminder")
-      .maybeSingle();
-
-  if (existingNotificationError) {
-    console.error("Coach dashboard reminder notification lookup failed", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-      error: existingNotificationError,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  const notificationPayload = {
-    user_id: participantId,
-    title,
-    body,
-    type: "timetable_booking_reminder",
-    opportunity_id: opportunityId,
-    read: false,
-    push_sent_at: null,
+  return {
+    ok: true,
+    message: "This follow-up now appears in Requires Attention.",
   };
-
-  const notificationResult = existingNotification
-    ? await adminSupabase
-        .from("notifications")
-        .update({ ...notificationPayload, created_at: new Date().toISOString() })
-        .eq("id", existingNotification.id)
-    : await adminSupabase.from("notifications").insert(notificationPayload);
-
-  if (notificationResult.error) {
-    console.error("Coach dashboard reminder notification write failed", {
-      opportunityId,
-      participantId,
-      organizerId: user.id,
-      error: notificationResult.error,
-    });
-    return { ok: false, message: "Could not send reminder." };
-  }
-
-  await sendServerPush([participantId], "timetable_booking_reminder", {
-    opportunityId,
-    types: ["timetable_booking_reminder"],
-  });
-
-  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
-  revalidatePath("/app/coach-dashboard");
-
-  return { ok: true, message: "Reminder sent." };
 }
 
 export async function sendTimetableBookingReminderForm(
@@ -951,6 +811,15 @@ export async function releaseParticipantTimes(
     return { ok: false, message: "Please log in again." };
   }
 
+  const releaseNotificationSupabase = createSupabaseAdminClient();
+  const shouldPushRelease =
+    releaseNotificationSupabase &&
+    !(await hasUnreadNotification(releaseNotificationSupabase, {
+      userId: participantId,
+      type: "slot_bookings_released_by_organizer",
+      opportunityId,
+    }));
+
   const { data: releasedCount, error } = await supabase.rpc(
     "release_participant_slot_bookings",
     {
@@ -972,10 +841,12 @@ export async function releaseParticipantTimes(
     return { ok: false, message: "Could not release times." };
   }
 
-  await sendServerPush([participantId], "slot_bookings_released_by_organizer", {
-    opportunityId,
-    types: ["slot_bookings_released_by_organizer"],
-  });
+  if (shouldPushRelease) {
+    await sendServerPush([participantId], "slot_bookings_released_by_organizer", {
+      opportunityId,
+      types: ["slot_bookings_released_by_organizer"],
+    });
+  }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
@@ -1020,6 +891,16 @@ export async function releaseParticipantSlotBooking(
     .eq("id", bookingId)
     .maybeSingle();
 
+  const releaseSlotNotificationSupabase = createSupabaseAdminClient();
+  const shouldPushSlotRelease =
+    booking?.user_id &&
+    releaseSlotNotificationSupabase &&
+    !(await hasUnreadNotification(releaseSlotNotificationSupabase, {
+      userId: booking.user_id,
+      type: "slot_booking_released_by_organizer",
+      opportunityId,
+    }));
+
   const { data: releasedCount, error } = await supabase.rpc(
     "release_opportunity_slot_booking",
     {
@@ -1041,7 +922,7 @@ export async function releaseParticipantSlotBooking(
     return { ok: false, message: "Could not release slot." };
   }
 
-  if (booking?.user_id) {
+  if (booking?.user_id && shouldPushSlotRelease) {
     await sendServerPush([booking.user_id], "slot_booking_released_by_organizer", {
       opportunityId,
       types: ["slot_booking_released_by_organizer"],
@@ -1108,6 +989,15 @@ export async function approveSlotReleaseRequest(
     return { ok: false, message: "Could not update release request." };
   }
 
+  const releaseRequestNotificationSupabase = createSupabaseAdminClient();
+  const shouldPushRequestRelease =
+    releaseRequestNotificationSupabase &&
+    !(await hasUnreadNotification(releaseRequestNotificationSupabase, {
+      userId: booking.user_id,
+      type: "slot_bookings_released_by_organizer",
+      opportunityId,
+    }));
+
   const { error } = await adminSupabase
     .from("opportunity_slot_bookings")
     .delete()
@@ -1119,10 +1009,12 @@ export async function approveSlotReleaseRequest(
     return { ok: false, message: "Could not update release request." };
   }
 
-  await sendServerPush([booking.user_id], "slot_bookings_released_by_organizer", {
-    opportunityId,
-    types: ["slot_bookings_released_by_organizer"],
-  });
+  if (shouldPushRequestRelease) {
+    await sendServerPush([booking.user_id], "slot_bookings_released_by_organizer", {
+      opportunityId,
+      types: ["slot_bookings_released_by_organizer"],
+    });
+  }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
