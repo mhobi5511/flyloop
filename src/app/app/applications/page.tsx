@@ -9,6 +9,10 @@ import {
   participantActivityNotificationTypes,
 } from "@/lib/notifications";
 import {
+  isOpportunityCompleted,
+  isOpportunityCurrent,
+} from "@/lib/opportunity-lifecycle";
+import {
   formatOpportunityDate,
   formatSessionTimeRange,
   formatOpportunityType,
@@ -142,14 +146,37 @@ export default async function ApplicationsPage({
       unreadNotificationsResult.error,
     );
   }
+  const now = new Date();
   const unreadCountsByOpportunity = countUnreadByOpportunity(
     unreadNotificationsResult.error ? [] : (unreadNotificationsResult.data ?? []),
   );
-  const activeRows = ((applications ?? []) as ApplicationRow[]).filter((application) =>
-    application.interest_type !== "timetable_reminder" &&
-    activeStatuses.includes(application.status),
+  const allRows = ((applications ?? []) as ApplicationRow[]).filter(
+    (application) => application.interest_type !== "timetable_reminder",
   );
-  const acceptedOpportunityIds = activeRows
+  const currentRows = allRows.filter((application) => {
+    const opportunity = getOpportunity(application);
+
+    return (
+      activeStatuses.includes(application.status) &&
+      Boolean(opportunity) &&
+      isOpportunityCurrent(
+        { endDate: opportunity?.end_date ?? "", registrationDeadline: null },
+        now,
+      )
+    );
+  });
+  const pastRows = allRows.filter((application) => {
+    const opportunity = getOpportunity(application);
+
+    return (
+      Boolean(opportunity) &&
+      isOpportunityCompleted(
+        { endDate: opportunity?.end_date ?? "", registrationDeadline: null },
+        now,
+      )
+    );
+  });
+  const acceptedOpportunityIds = currentRows
     .filter((application) => {
       const opportunity = getOpportunity(application);
       return application.status === "accepted" && opportunity?.type === "camp";
@@ -170,15 +197,24 @@ export default async function ApplicationsPage({
   const bookingsByOpportunity = groupBookingsByOpportunity(
     (bookingRows ?? []) as UserBookingRow[],
   );
-  const monthOptions = getMonthOptions(activeRows);
-  const tunnelOptions = getTunnelOptions(activeRows);
+  const monthOptions = getMonthOptions(allRows);
+  const tunnelOptions = getTunnelOptions(allRows);
   const selectedMonth = monthOptions.some((option) => option.value === filters.month)
     ? filters.month
     : "";
   const selectedTunnel = tunnelOptions.some((option) => option.id === filters.tunnel)
     ? filters.tunnel
     : "";
-  const rows = activeRows.filter((application) => {
+  const currentDisplayRows = currentRows.filter((application) => {
+    const opportunity = getOpportunity(application);
+    const tunnel = opportunity ? getTunnel(opportunity) : null;
+
+    return (
+      (!selectedMonth || opportunity?.start_date.slice(0, 7) === selectedMonth) &&
+      (!selectedTunnel || tunnel?.id === selectedTunnel)
+    );
+  });
+  const pastDisplayRows = pastRows.filter((application) => {
     const opportunity = getOpportunity(application);
     const tunnel = opportunity ? getTunnel(opportunity) : null;
 
@@ -237,7 +273,7 @@ export default async function ApplicationsPage({
       </form>
 
       <div className="mt-4 grid gap-3">
-        {rows.map((application) => {
+        {currentDisplayRows.map((application) => {
           const opportunity = getOpportunity(application);
 
           if (!opportunity) {
@@ -342,7 +378,79 @@ export default async function ApplicationsPage({
         })}
       </div>
 
-      {activeRows.length === 0 ? (
+      {pastDisplayRows.length > 0 ? (
+        <section className="mt-6">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black tracking-tight text-slate-950">
+                Past
+              </h2>
+              <p className="mt-0.5 text-sm font-semibold text-slate-500">
+                Completed opportunities stay in your history.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3">
+            {pastDisplayRows.map((application) => {
+              const opportunity = getOpportunity(application);
+
+              if (!opportunity) {
+                return null;
+              }
+
+              const tunnel = getTunnel(opportunity);
+              const unreadCount = unreadCountsByOpportunity.get(opportunity.id) ?? 0;
+
+              return (
+                <article
+                  key={application.id}
+                  className={`relative rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${applicantBorderClass(application.status)}`}
+                >
+                  <NotificationCountBadge count={unreadCount} />
+                  <Link href={`/app/opportunities/${opportunity.id}`} className="block p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
+                            {formatOpportunityType(opportunity.type)}
+                          </Badge>
+                        </div>
+                        <h2 className="mt-2 line-clamp-2 text-base font-black tracking-tight text-slate-950">
+                          {opportunity.title}
+                        </h2>
+                        <div className="mt-2 grid gap-0.5 text-sm text-slate-600">
+                          <p className="font-semibold text-slate-700">
+                            {tunnel?.name ?? "Tunnel"}
+                          </p>
+                          <p className="text-xs">
+                            {formatOpportunityDate(
+                              opportunity.type,
+                              opportunity.start_date,
+                              opportunity.end_date,
+                            )}
+                            {tunnel ? ` Â· ${formatLocation(tunnel.city, tunnel.country)}` : ""}
+                          </p>
+                          <p className="text-xs font-semibold text-slate-700">
+                            {formatPrice(Number(opportunity.price), opportunity.currency)}{" "}
+                            <span className="text-slate-500">
+                              {formatPriceLabel(
+                                opportunity.type,
+                                opportunity.min_minutes_or_hours,
+                              )}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {currentDisplayRows.length === 0 && pastDisplayRows.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           <p>You have not sent interest for any opportunities yet.</p>
           <Link
@@ -352,9 +460,9 @@ export default async function ApplicationsPage({
             Find your next camp
           </Link>
         </div>
-      ) : rows.length === 0 ? (
+      ) : currentDisplayRows.length === 0 ? (
         <p className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No flights match those filters.
+          No current flights match those filters.
         </p>
       ) : null}
     </AppShell>

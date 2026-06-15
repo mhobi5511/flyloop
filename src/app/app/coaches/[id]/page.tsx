@@ -6,6 +6,10 @@ import { FollowButton } from "@/components/FollowButton";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
+import {
+  isOpportunityCompleted,
+  isOpportunityCurrent,
+} from "@/lib/opportunity-lifecycle";
 import type { Opportunity } from "@/lib/types";
 
 type CoachProfileRow = {
@@ -58,14 +62,14 @@ export default async function CoachProfilePage({
     .eq("coach_id", coach.id)
     .order("start_date", { ascending: true });
   const opportunities = ((opportunityRows ?? []) as HomeFeedRow[]).map(mapOpportunity);
-  const today = getTodayDateString();
+  const now = new Date();
   const upcomingOpportunities = opportunities
-    .filter((opportunity) => isUpcomingOpportunity(opportunity, today))
+    .filter((opportunity) => isOpportunityCurrent(opportunity, now))
     .sort(compareUpcomingOpportunities);
   const visibleUpcomingOpportunities = upcomingOpportunities.slice(0, 4);
   const extraUpcomingOpportunities = upcomingOpportunities.slice(4);
   const pastOpportunities = opportunities
-    .filter((opportunity) => !isUpcomingOpportunity(opportunity, today))
+    .filter((opportunity) => isOpportunityCompleted(opportunity, now))
     .sort((a, b) => getOpportunitySortDate(b).localeCompare(getOpportunitySortDate(a)));
   const instagram = coach.instagram_handle ?? profile?.instagram_handle;
 
@@ -193,21 +197,10 @@ export default async function CoachProfilePage({
   );
 }
 
-function isUpcomingOpportunity(opportunity: Opportunity, today: string) {
-  const comparisonDate =
-    opportunity.type === "camp" ? opportunity.endDate : opportunity.startDate;
-
-  return comparisonDate >= today;
-}
-
 function compareUpcomingOpportunities(a: Opportunity, b: Opportunity) {
   return getOpportunitySortDate(a).localeCompare(getOpportunitySortDate(b));
 }
 
 function getOpportunitySortDate(opportunity: Opportunity) {
   return opportunity.startDate;
-}
-
-function getTodayDateString() {
-  return new Date().toISOString().slice(0, 10);
 }

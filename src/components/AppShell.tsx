@@ -40,6 +40,11 @@ const organizerNavItems = [
   { href: "/app/coach-dashboard", label: "Coaching", id: "dashboard", icon: LayoutDashboard },
 ] as const;
 
+const mobileOrganizerNavItems = [
+  { href: "/app/create", label: "Create", id: "create", icon: CalendarPlus },
+  { href: "/app/dashboard", label: "Coaching", id: "dashboard", icon: LayoutDashboard },
+] as const;
+
 const applicationNavItem = {
   href: "/app/applications",
   label: "My Flying",
@@ -177,6 +182,12 @@ export async function AppShell({
     ...(userCanJoin ? [applicationNavItem] : []),
     ...(shellState.isAdmin ? [adminNavItem] : []),
   ];
+  const mobileNavItems = [
+    ...baseNavItems,
+    ...(userCanCreate ? mobileOrganizerNavItems : []),
+    ...(userCanJoin ? [applicationNavItem] : []),
+    ...(shellState.isAdmin ? [adminNavItem] : []),
+  ];
   const profileSelected = active === profileNavItem.id;
 
   return (
@@ -261,10 +272,10 @@ export async function AppShell({
         <div
           className="mx-auto grid max-w-md px-2 py-2"
           style={{
-            gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))`,
           }}
         >
-          {navItems.map((item) => {
+          {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const selected = active === item.id;
             return (

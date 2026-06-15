@@ -7,6 +7,7 @@ import {
   type CoachWorkspaceCamp,
   type CoachWorkspaceNotificationItem,
 } from "@/components/CoachCommandCenterWorkspace";
+import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
 import { organizerActivityNotificationTypes, participantActivityNotificationTypes } from "@/lib/notifications";
 import { formatOpportunityDate } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -34,6 +35,7 @@ type CoachOpportunityRow = {
   status: OpportunityStatus;
   start_date: string;
   end_date: string;
+  registration_deadline: string | null;
   created_at: string | null;
   updated_at: string | null;
   tunnel_profiles:
@@ -105,7 +107,7 @@ export default async function CoachDashboardPage() {
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,status,start_date,end_date,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
+          "id,title,type,status,start_date,end_date,registration_deadline,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
         )
         .eq("created_by", user.id)
         .neq("status", "cancelled")
@@ -178,9 +180,14 @@ export default async function CoachDashboardPage() {
     console.error("Coach dashboard tunnel lookup failed", tunnelResult.error);
   }
 
-  const today = todayIso();
+  const now = new Date();
   const opportunityRows = ((opportunityResult.data ?? []) as CoachOpportunityRow[])
-    .filter((row) => row.end_date >= today);
+    .filter((row) =>
+      !isOpportunityCompleted(
+        { endDate: row.end_date, registrationDeadline: row.registration_deadline },
+        now,
+      ),
+    );
   const campRows = opportunityRows.filter((row) => row.type === "camp");
   const huckJamRows = opportunityRows.filter((row) => row.type === "huck_jam");
   const camps = campRows.map((row) => toCampModel(row)).sort((a, b) => {
@@ -545,8 +552,4 @@ function formatTunnelLabel(
 ) {
   const location = [city, country].filter(Boolean).join(", ");
   return location ? `${name} - ${location}` : name;
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
 }

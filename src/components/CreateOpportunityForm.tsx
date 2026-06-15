@@ -78,6 +78,14 @@ function isoDateFromNow(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function nextMondayIsoDate() {
+  const date = new Date();
+  const day = date.getDay();
+  const daysUntilMonday = ((8 - day) % 7) || 7;
+  date.setDate(date.getDate() + daysUntilMonday);
+  return date.toISOString().slice(0, 10);
+}
+
 function addDays(dateValue: string, days: number) {
   if (!dateValue) {
     return "";
@@ -180,13 +188,16 @@ export function CreateOpportunityForm({
 }: CreateOpportunityFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const defaultCampStartDate = nextMondayIsoDate();
+  const defaultCampEndDate = addDays(defaultCampStartDate, 4);
   const inheritedLanguages =
     inheritedCoachProfile?.languages ?? splitCsv(initialOpportunity?.languages ?? "");
   const inheritedDisciplines =
     inheritedCoachProfile?.disciplines ??
     splitCsv(initialOpportunity?.disciplines ?? "");
+  const initialFormType = initialOpportunity?.type ?? initialType ?? "camp";
   const [type, setType] = useState<OpportunityType>(
-    initialOpportunity?.type ?? initialType ?? "camp",
+    initialFormType,
   );
   const [bookingMode, setBookingMode] = useState<BookingMode>(
     initialOpportunity?.type === "huck_jam"
@@ -196,11 +207,14 @@ export function CreateOpportunityForm({
   const [title, setTitle] = useState(initialOpportunity?.title ?? "");
   const [tunnelId, setTunnelId] = useState(initialOpportunity?.tunnelId ?? "");
   const [startDate, setStartDate] = useState(
-    initialOpportunity?.startDate ?? isoDateFromNow(5),
+    initialOpportunity?.startDate ??
+      (initialFormType === "camp" ? defaultCampStartDate : isoDateFromNow(5)),
   );
   const [endDate, setEndDate] = useState(
     initialOpportunity?.endDate ??
-      addDays(initialOpportunity?.startDate ?? isoDateFromNow(5), 5),
+      (initialFormType === "camp"
+        ? defaultCampEndDate
+        : addDays(initialOpportunity?.startDate ?? isoDateFromNow(5), 5)),
   );
   const [endDateTouched, setEndDateTouched] = useState(Boolean(initialOpportunity));
   const [registrationDeadline, setRegistrationDeadline] = useState(
@@ -213,11 +227,11 @@ export function CreateOpportunityForm({
     initialOpportunity?.sessionEnd?.slice(0, 5) ?? "20:00",
   );
   const [price, setPrice] = useState(
-    String(initialOpportunity?.price ?? (type === "huck_jam" ? "50" : "550")),
+    String(initialOpportunity?.price ?? (initialFormType === "huck_jam" ? "99" : "550")),
   );
   const [currency, setCurrency] = useState(initialOpportunity?.currency ?? "EUR");
   const [totalCapacity, setTotalCapacity] = useState(
-    String(initialOpportunity?.totalCapacity ?? "8"),
+    String(initialOpportunity?.totalCapacity ?? (initialFormType === "camp" ? "4" : "8")),
   );
   const [minMinutesOrHours, setMinMinutesOrHours] = useState(
     normalizeInitialPriceAppliesTo(initialOpportunity?.minMinutesOrHours),
@@ -281,20 +295,29 @@ export function CreateOpportunityForm({
 
     if (nextType === "huck_jam") {
       setBookingMode("approval_required");
-      setEndDate(startDate);
       if (!initialOpportunity) {
-        setPrice("50");
+        setPrice("99");
       }
-    } else {
-      setBookingMode("approval_required");
-      if (!initialOpportunity) {
-        setPrice("550");
-        setMinMinutesOrHours("60");
+
+      if (!endDateTouched && startDate) {
+        setEndDate(startDate);
       }
+      return;
+    }
+
+    setBookingMode("approval_required");
+    if (!initialOpportunity) {
+      setPrice("550");
+      setMinMinutesOrHours("60");
+      setTotalCapacity("4");
+      setStartDate(defaultCampStartDate);
+      setEndDate(defaultCampEndDate);
+      setEndDateTouched(false);
+      return;
     }
 
     if (!endDateTouched && startDate) {
-      setEndDate(nextType === "camp" ? addDays(startDate, 5) : startDate);
+      setEndDate(addDays(startDate, 4));
     }
   }
 
@@ -303,7 +326,7 @@ export function CreateOpportunityForm({
     if (type === "huck_jam") {
       setEndDate(value);
     } else if (!endDateTouched) {
-      setEndDate(addDays(value, 5));
+      setEndDate(addDays(value, 4));
     }
   }
 

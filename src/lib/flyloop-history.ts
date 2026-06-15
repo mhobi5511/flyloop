@@ -1,4 +1,5 @@
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
@@ -77,7 +78,6 @@ export async function getFlyloopProfileHistory(
   userId: string,
   now = new Date(),
 ): Promise<FlyloopProfileHistory> {
-  const today = now.toISOString().slice(0, 10);
   const [campBookingsResult, huckJamInterestsResult, organizedResult] =
     await Promise.all([
       supabase
@@ -113,7 +113,11 @@ export async function getFlyloopProfileHistory(
   for (const row of (campBookingsResult.data ?? []) as CampBookingRow[]) {
     const opportunity = firstRelation(row.opportunities);
 
-    if (!opportunity || opportunity.type !== "camp" || !isCompleted(opportunity.end_date, today)) {
+    if (
+      !opportunity ||
+      opportunity.type !== "camp" ||
+      !isOpportunityCompleted({ endDate: opportunity.end_date }, now)
+    ) {
       continue;
     }
 
@@ -128,7 +132,7 @@ export async function getFlyloopProfileHistory(
     if (
       !opportunity ||
       opportunity.type !== "huck_jam" ||
-      !isCompleted(opportunity.start_date, today)
+      !isOpportunityCompleted({ endDate: opportunity.end_date }, now)
     ) {
       continue;
     }
@@ -143,9 +147,7 @@ export async function getFlyloopProfileHistory(
   );
   const completedOrganized = ((organizedResult.data ?? []) as OrganizedOpportunityRow[])
     .filter((opportunity) =>
-      opportunity.type === "camp"
-        ? isCompleted(opportunity.end_date, today)
-        : isCompleted(opportunity.start_date, today),
+      isOpportunityCompleted({ endDate: opportunity.end_date }, now),
     );
   const athleteMinutesCoached = completedOrganized.reduce((total, opportunity) => {
     if (opportunity.type !== "camp") {
@@ -202,8 +204,7 @@ function toHistoryEntry(
 ): FlyloopHistoryEntry {
   const tunnel = firstRelation(opportunity.tunnel_profiles);
   const coach = firstRelation(opportunity.profiles);
-  const completedDate =
-    opportunity.type === "camp" ? opportunity.end_date : opportunity.start_date;
+  const completedDate = opportunity.end_date;
 
   return {
     opportunityId: opportunity.id,
@@ -249,10 +250,6 @@ function topByMinutes(
   }
 
   return [...totals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-}
-
-function isCompleted(date: string, today: string) {
-  return date < today;
 }
 
 function firstRelation<T>(value: T | T[] | null | undefined) {

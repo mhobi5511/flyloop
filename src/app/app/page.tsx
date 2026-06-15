@@ -4,6 +4,11 @@ import { GlobalCampSearch } from "@/components/GlobalCampSearch";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { distanceKm, parseCoordinate } from "@/lib/location";
 import {
+  isOpportunityCompleted,
+  isOpportunityCurrent,
+  isOpportunityJoinable,
+} from "@/lib/opportunity-lifecycle";
+import {
   countUnreadByOpportunity,
   participantActivityNotificationTypes,
 } from "@/lib/notifications";
@@ -168,6 +173,7 @@ export default async function AppHomePage({
     homeProfile?.use_location_recommendations === true;
   const locationAvailable = userLat !== null && userLon !== null;
   const useRadiusFilter = recommendationsEnabled && locationAvailable;
+  const now = new Date();
   const mapped = allRows.map((row) => {
     const location = classifyLocation(row, homeProfile, useRadiusFilter);
     const opportunity = {
@@ -188,13 +194,11 @@ export default async function AppHomePage({
       distanceKm: location.distanceKm,
     };
   });
-
-  const today = new Date().toISOString().slice(0, 10);
   const upcomingAccepted = mapped
     .filter(
       (item) =>
         item.opportunity.viewerInterestStatus === "accepted" &&
-        item.opportunity.endDate >= today &&
+        isOpportunityCurrent(item.opportunity, now) &&
         item.opportunity.createdBy !== user.id,
     )
     .map((item) => item.opportunity)
@@ -204,7 +208,7 @@ export default async function AppHomePage({
 
     return (
       item.opportunity.status === "published" &&
-      item.opportunity.endDate >= today &&
+      isOpportunityJoinable(item.opportunity, now) &&
       item.opportunity.availableSpots > 0 &&
       item.opportunity.createdBy !== user.id &&
       (!viewerStatus || !interactedStatuses.has(viewerStatus))
@@ -219,17 +223,12 @@ export default async function AppHomePage({
     : nearbyDiscoveryFeed;
   const visibleDiscoveryFeed = discoveryFeed.slice(0, 5);
   const globalSearchOpportunities = mapped
-    .filter(
-      (item) =>
-        (item.opportunity.status === "published" ||
-          item.opportunity.status === "full") &&
-        item.opportunity.endDate >= today,
-    )
+    .filter((item) => item.opportunity.status === "published" && isOpportunityJoinable(item.opportunity, now))
     .map((item) => item.opportunity);
   const futureRows = allRows.filter(
     (row) =>
-      (row.status === "published" || row.status === "full") &&
-      row.end_date >= today,
+      row.status !== "cancelled" &&
+      !isOpportunityCompleted({ endDate: row.end_date, registrationDeadline: row.registration_deadline }, now),
   );
   const countryOptions = getCountryOptions(futureRows);
   const monthOptions = getMonthOptions(futureRows);

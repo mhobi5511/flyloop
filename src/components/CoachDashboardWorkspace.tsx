@@ -6,7 +6,6 @@ import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
-  Activity,
   CalendarClock,
   CalendarDays,
   ChevronLeft,
@@ -44,13 +43,8 @@ import {
   type AssignSlotParticipant,
 } from "@/components/AssignSlotButton";
 import { Avatar } from "@/components/Avatar";
-import {
-  CreateOpportunityForm,
-  type InheritedCoachProfile,
-} from "@/components/CreateOpportunityForm";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
 import { SlotReleaseRequestActions } from "@/components/SlotReleaseRequestActions";
-import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import {
   formatPrice,
@@ -141,17 +135,8 @@ type TunnelOption = {
   country: string | null;
 };
 
-type ActivityItem = {
-  id: string;
-  title: string;
-  body: string;
-  opportunityId: string;
-  createdAt: string;
-};
-
-type HeaderPanel = "share" | "activity" | null;
+type HeaderPanel = "share" | null;
 type TabletPanel = "participants" | "participant" | null;
-type CreationType = OpportunityType | null;
 type AttentionItem = {
   label: string;
   tone: "amber" | "slate";
@@ -177,12 +162,9 @@ type SlotActionPopoverState = {
 };
 
 type CoachDashboardWorkspaceProps = {
-  coachName: string;
   selectedCampId: string;
   camps: CampWorkspace[];
   tunnels: TunnelOption[];
-  inheritedCoachProfile?: InheritedCoachProfile;
-  activity: ActivityItem[];
 };
 
 const participantColors = [
@@ -197,26 +179,19 @@ const participantColors = [
 ];
 
 export function CoachDashboardWorkspace({
-  coachName,
   selectedCampId,
   camps,
   tunnels,
-  inheritedCoachProfile,
-  activity,
 }: CoachDashboardWorkspaceProps) {
-  const router = useRouter();
-  const [activeCampId, setActiveCampId] = useState(selectedCampId);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<HeaderPanel>(null);
   const [tabletPanel, setTabletPanel] = useState<TabletPanel>(null);
-  const [creationType, setCreationType] = useState<CreationType>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [desktopDayStart, setDesktopDayStart] = useState(0);
   const [activeBookingAction, setActiveBookingAction] =
     useState<SlotActionPopoverState | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
-  const [lastSeenActivityCount, setLastSeenActivityCount] = useState(0);
-  const activeCamp = camps.find((camp) => camp.id === activeCampId) ?? camps[0];
+  const activeCamp = camps.find((camp) => camp.id === selectedCampId) ?? camps[0];
   const participant =
     activeCamp?.participants.find((item) => item.id === selectedParticipantId) ??
     null;
@@ -255,22 +230,6 @@ export function CoachDashboardWorkspace({
     setSelectedParticipantId("");
     setIsSidebarCollapsed(false);
     setTabletPanel("participants");
-  }
-
-  function openActivityPanel() {
-    setLastSeenActivityCount(activityBadgeCount);
-    setHeaderPanel((current) => (current === "activity" ? null : "activity"));
-  }
-
-  function handleOpportunityCreated(opportunityId: string) {
-    setCreationType(null);
-    setActiveCampId(opportunityId);
-    setSelectedParticipantId("");
-    setHeaderPanel(null);
-    setTabletPanel(null);
-    setDesktopDayStart(0);
-    router.replace(`/app/coach-dashboard/${opportunityId}`, { scroll: false });
-    router.refresh();
   }
 
   function handleAttentionClick(item: AttentionItem) {
@@ -322,24 +281,7 @@ export function CoachDashboardWorkspace({
             Create your first Camp or Huck Jam to start running your coaching
             workspace.
           </p>
-          <button
-            type="button"
-            onClick={() => setCreationType("camp")}
-            className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-sky-500 px-4 text-sm font-black text-white"
-          >
-            <Plus size={17} /> New Camp
-          </button>
         </div>
-        {creationType ? (
-          <CreationPanel
-            type={creationType}
-            tunnels={tunnels}
-            inheritedCoachProfile={inheritedCoachProfile}
-            organizerName={coachName}
-            onCancel={() => setCreationType(null)}
-            onSuccess={handleOpportunityCreated}
-          />
-        ) : null}
       </div>
     );
   }
@@ -358,8 +300,6 @@ export function CoachDashboardWorkspace({
   const canPageForward = clampedDesktopDayStart + desktopDayCount < visibleDays.length;
   const participantColorMap = buildParticipantColorMap(activeCamp.participants);
   const attention = getAttentionItems(activeCamp);
-  const activityBadgeCount = getActivityBadgeCount(attention);
-  const showActivityBadge = activityBadgeCount > lastSeenActivityCount;
   const unpublishedChangeCount = getUnpublishedChangeCount(activeCamp.timetableSlots);
   const hasUnpublishedChanges = unpublishedChangeCount > 0;
   const hasPublishedTimetable = activeCamp.timetableSlots.some(
@@ -367,8 +307,6 @@ export function CoachDashboardWorkspace({
   );
   const showTimetableStatus = hasPublishedTimetable || hasUnpublishedChanges;
   const isHuckJam = activeCamp.type === "huck_jam";
-  const scopedActivity = activity
-    .filter((item) => !item.opportunityId || item.opportunityId === activeCamp.id);
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
@@ -435,66 +373,43 @@ export function CoachDashboardWorkspace({
                 </div>
               ) : null}
             </div>
-            <div className="relative grid h-full content-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950">
-              <div className="grid gap-1.5">
-                <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
-                  Utilities
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setHeaderPanel((current) =>
-                        current === "share" ? null : "share",
-                      )
-                    }
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <Share2 size={17} /> Share
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openActivityPanel}
-                    className="relative inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <Activity size={17} /> Activity
-                    {headerPanel !== "activity" && showActivityBadge ? (
-                      <NotificationCountBadge
-                        count={activityBadgeCount}
-                        className="right-0 top-0 translate-x-1/2 -translate-y-1/2"
-                      />
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <Settings size={17} /> Settings
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-1.5">
-                <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
-                  Create
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCreationType("camp")}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700"
-                  >
-                    <Plus size={17} /> New Camp
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCreationType("huck_jam")}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700"
-                  >
-                    <Plus size={17} /> New Huck Jam
-                  </button>
-                </div>
-              </div>
+            <div className="grid h-full grid-cols-2 gap-2 self-stretch">
+              <button
+                type="button"
+                onClick={() =>
+                  setHeaderPanel((current) => (current === "share" ? null : "share"))
+                }
+                className="flex h-full min-h-[6.75rem] w-full flex-col items-start justify-between rounded-2xl border border-sky-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-md"
+              >
+                <span className="grid size-11 place-items-center rounded-2xl bg-sky-100 text-sky-700">
+                  <Share2 size={19} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-slate-950">
+                    Invite &amp; Share
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-600">
+                    Invite athletes and share links.
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex h-full min-h-[6.75rem] w-full flex-col items-start justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md"
+              >
+                <span className="grid size-11 place-items-center rounded-2xl bg-slate-100 text-slate-700">
+                  <Settings size={19} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-slate-950">
+                    Opportunity Settings
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-600">
+                    Edit dates, pricing, capacity and details.
+                  </span>
+                </span>
+              </button>
             </div>
           </div>
         </header>
@@ -516,19 +431,6 @@ export function CoachDashboardWorkspace({
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
           >
             <Share2 size={16} /> Share
-          </button>
-          <button
-            type="button"
-            onClick={openActivityPanel}
-            className="relative inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
-          >
-            <Activity size={16} /> Activity
-            {headerPanel !== "activity" && showActivityBadge ? (
-              <NotificationCountBadge
-                count={activityBadgeCount}
-                className="right-0 top-0 translate-x-1/2 -translate-y-1/2"
-              />
-            ) : null}
           </button>
         </header>
 
@@ -950,196 +852,196 @@ export function CoachDashboardWorkspace({
           <HuckjamOverviewPanel camp={activeCamp} compact />
         ) : (
           <>
-        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-black tracking-tight">Schedule</h2>
-              <p className="mt-0.5 text-xs font-bold text-slate-500">
-                {activeCamp.dateLabel}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {showTimetableStatus ? (
-                <span
-                  className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-black ${
-                    hasUnpublishedChanges
-                      ? "border-amber-200 bg-amber-50 text-amber-700"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  }`}
+            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black tracking-tight">Schedule</h2>
+                  <p className="mt-0.5 text-xs font-bold text-slate-500">
+                    {activeCamp.dateLabel}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {showTimetableStatus ? (
+                    <span
+                      className={`inline-flex h-9 items-center rounded-full border px-3 text-xs font-black ${
+                        hasUnpublishedChanges
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {hasUnpublishedChanges
+                        ? `Draft changes pending (${unpublishedChangeCount})`
+                        : "Timetable fully published"}
+                    </span>
+                  ) : null}
+                  {activeCamp.type === "camp" ? (
+                    <PublishTimetableButton camp={activeCamp} compact />
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setTabletPanel("participants")}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+                  >
+                    <Menu size={15} /> Participants
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 overflow-x-auto pb-2">
+                <div
+                  className="grid min-h-[34rem] gap-3"
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.max(visibleDays.length, 1)}, minmax(14rem, 1fr))`,
+                  }}
                 >
-                  {hasUnpublishedChanges
-                    ? `Draft changes pending (${unpublishedChangeCount})`
-                    : "Timetable fully published"}
-                </span>
-              ) : null}
-              {activeCamp.type === "camp" ? (
-                <PublishTimetableButton camp={activeCamp} compact />
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setTabletPanel("participants")}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
-              >
-                <Menu size={15} /> Participants
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 overflow-x-auto pb-2">
-            <div
-              className="grid min-h-[34rem] gap-3"
-              style={{
-                gridTemplateColumns: `repeat(${Math.max(visibleDays.length, 1)}, minmax(14rem, 1fr))`,
-              }}
-            >
-              {visibleDays.map((day) => (
-                <section
-                  key={day.date}
-                  className="min-w-0 rounded-xl border border-slate-200 bg-slate-50"
-                >
-                  <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="text-sm font-black text-slate-950">
-                          {formatLongDay(day.date)}
-                        </h3>
-                        <p className="text-xs font-bold text-slate-500">
-                          {day.slots.length} slots
-                        </p>
+                  {visibleDays.map((day) => (
+                    <section
+                      key={day.date}
+                      className="min-w-0 rounded-xl border border-slate-200 bg-slate-50"
+                    >
+                      <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h3 className="text-sm font-black text-slate-950">
+                              {formatLongDay(day.date)}
+                            </h3>
+                            <p className="text-xs font-bold text-slate-500">
+                              {day.slots.length} slots
+                            </p>
+                          </div>
+                          {activeCamp.type === "camp" ? (
+                            <EditDayButton camp={activeCamp} date={day.date} />
+                          ) : null}
+                        </div>
                       </div>
-                      {activeCamp.type === "camp" ? (
-                        <EditDayButton camp={activeCamp} date={day.date} />
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="grid gap-2 p-2">
-                    {day.slots.length > 0 ? (
-                      day.slots.map((slot) => {
-                        const isFull = slot.bookings.length >= slot.capacity;
-                        const isDraftSlot = slot.isPublished === false;
+                      <div className="grid gap-2 p-2">
+                        {day.slots.length > 0 ? (
+                          day.slots.map((slot) => {
+                            const isFull = slot.bookings.length >= slot.capacity;
+                            const isDraftSlot = slot.isPublished === false;
 
-                        return (
-                          <article
-                            key={slot.id}
-                            className={`relative rounded-lg border bg-white p-2 ${
-                              isDraftSlot
-                                ? "border-dashed border-orange-300 bg-orange-50/35"
-                                : isFull
-                                  ? "border-emerald-200"
-                                  : "border-slate-200"
-                            }`}
-                          >
-                            <div className="mb-2 flex items-center justify-between gap-2">
-                              <p className="inline-flex items-center gap-1.5 text-sm font-black">
-                                <Clock3 size={15} className="text-sky-700" />
-                                {formatTimetableTime(slot.startTime)}
-                                {isDraftSlot ? (
-                                  <span className="text-slate-300">|</span>
-                                ) : null}
-                                {isDraftSlot ? (
-                                  <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                    Draft
-                                  </span>
-                                ) : null}
-                              </p>
-                              <span className="inline-flex items-center gap-1.5">
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
-                                    isFull
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {slot.bookings.length}/{slot.capacity}
-                                </span>
-                              </span>
-                            </div>
-                            <div className="grid gap-1">
-                              {slot.bookings.map((booking) => {
-                                const colors = participantColorMap.get(booking.userId);
-
-                                return (
-                                  <button
-                                    key={booking.id}
-                                    type="button"
-                                    onClick={() => {
-                                      const match = activeCamp.participants.find(
-                                        (item) => item.userId === booking.userId,
-                                      );
-                                      if (match) {
-                                        setSelectedParticipantId(match.id);
-                                        setTabletPanel("participant");
-                                      }
-                                    }}
-                                    className="grid rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm"
-                                    style={{
-                                      backgroundColor: colors?.bg,
-                                      borderColor:
-                                        booking.isFinal === false
-                                          ? "#f97316"
-                                          : colors?.bg,
-                                    }}
-                                  >
-                                    <span className="block truncate text-sm font-black">
-                                      {booking.athleteName}
-                                    </span>
-                                    <span className="flex items-center gap-2 text-xs font-bold text-white/80">
-                                      <span>{booking.minutes} min</span>
-                                      {booking.isFinal === false ? (
-                                        <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                          Draft
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                              {Array.from({
-                                length: Math.max(slot.capacity - slot.bookings.length, 0),
-                              }).map((_, index) => (
-                                <div
-                                  key={`${slot.id}-tablet-open-${index}`}
-                                  className="grid gap-2 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2"
-                                >
-                                  <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                                    Open slot
+                            return (
+                              <article
+                                key={slot.id}
+                                className={`relative rounded-lg border bg-white p-2 ${
+                                  isDraftSlot
+                                    ? "border-dashed border-orange-300 bg-orange-50/35"
+                                    : isFull
+                                      ? "border-emerald-200"
+                                      : "border-slate-200"
+                                }`}
+                              >
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                  <p className="inline-flex items-center gap-1.5 text-sm font-black">
+                                    <Clock3 size={15} className="text-sky-700" />
+                                    {formatTimetableTime(slot.startTime)}
+                                    {isDraftSlot ? (
+                                      <span className="text-slate-300">|</span>
+                                    ) : null}
+                                    {isDraftSlot ? (
+                                      <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                        Draft
+                                      </span>
+                                    ) : null}
                                   </p>
-                                  <AssignSlotButton
-                                    opportunityId={activeCamp.id}
-                                    slotId={slot.id}
-                                    participants={getAssignableParticipantsForDay(
-                                      activeCamp,
-                                      slot.slotDate,
-                                    ).filter(
-                                      (item) =>
-                                        !slot.bookings.some(
-                                          (booking) => booking.userId === item.id,
-                                        ),
-                                    )}
-                                  />
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
+                                        isFull
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : "bg-slate-100 text-slate-600"
+                                      }`}
+                                    >
+                                      {slot.bookings.length}/{slot.capacity}
+                                    </span>
+                                  </span>
                                 </div>
-                              ))}
-                            </div>
-                          </article>
-                        );
-                      })
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-6 text-center">
-                        <p className="text-sm font-black text-slate-500">
-                          No slots yet
-                        </p>
+                                <div className="grid gap-1">
+                                  {slot.bookings.map((booking) => {
+                                    const colors = participantColorMap.get(booking.userId);
+
+                                    return (
+                                      <button
+                                        key={booking.id}
+                                        type="button"
+                                        onClick={() => {
+                                          const match = activeCamp.participants.find(
+                                            (item) => item.userId === booking.userId,
+                                          );
+                                          if (match) {
+                                            setSelectedParticipantId(match.id);
+                                            setTabletPanel("participant");
+                                          }
+                                        }}
+                                        className="grid rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm"
+                                        style={{
+                                          backgroundColor: colors?.bg,
+                                          borderColor:
+                                            booking.isFinal === false
+                                              ? "#f97316"
+                                              : colors?.bg,
+                                        }}
+                                      >
+                                        <span className="block truncate text-sm font-black">
+                                          {booking.athleteName}
+                                        </span>
+                                        <span className="flex items-center gap-2 text-xs font-bold text-white/80">
+                                          <span>{booking.minutes} min</span>
+                                          {booking.isFinal === false ? (
+                                            <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                              Draft
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                  {Array.from({
+                                    length: Math.max(slot.capacity - slot.bookings.length, 0),
+                                  }).map((_, index) => (
+                                    <div
+                                      key={`${slot.id}-tablet-open-${index}`}
+                                      className="grid gap-2 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2"
+                                    >
+                                      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                                        Open slot
+                                      </p>
+                                      <AssignSlotButton
+                                        opportunityId={activeCamp.id}
+                                        slotId={slot.id}
+                                        participants={getAssignableParticipantsForDay(
+                                          activeCamp,
+                                          slot.slotDate,
+                                        ).filter(
+                                          (item) =>
+                                            !slot.bookings.some(
+                                              (booking) => booking.userId === item.id,
+                                            ),
+                                        )}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </article>
+                            );
+                          })
+                        ) : (
+                          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-6 text-center">
+                            <p className="text-sm font-black text-slate-500">
+                              No slots yet
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </div>
-        </section>
-        <CampSettingsPanel
-          key={`tablet-${activeCamp.id}`}
-          camp={activeCamp}
-          tunnels={tunnels}
-        />
+                    </section>
+                  ))}
+                </div>
+              </div>
+            </section>
+            <CampSettingsPanel
+              key={`tablet-${activeCamp.id}`}
+              camp={activeCamp}
+              tunnels={tunnels}
+            />
           </>
         )}
       </main>
@@ -1175,28 +1077,6 @@ export function CoachDashboardWorkspace({
                 onSelectApplicants={focusApplicants}
                 participantColorMap={participantColorMap}
               />
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTabletPanel(null);
-                    setCreationType("camp");
-                  }}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white"
-                >
-                  <Plus size={16} /> New Camp
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTabletPanel(null);
-                    setCreationType("huck_jam");
-                  }}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700"
-                >
-                  <Plus size={16} /> Huck Jam
-                </button>
-              </div>
             </div>
           )}
         </TabletSlideOver>
@@ -1220,18 +1100,8 @@ export function CoachDashboardWorkspace({
           </Link>
         </div>
       </main>
-      {creationType ? (
-        <CreationPanel
-          type={creationType}
-          tunnels={tunnels}
-          inheritedCoachProfile={inheritedCoachProfile}
-          organizerName={coachName}
-          onCancel={() => setCreationType(null)}
-          onSuccess={handleOpportunityCreated}
-        />
-      ) : null}
       {headerPanel === "share" ? (
-        <CenteredModal title="Share" onClose={() => setHeaderPanel(null)}>
+        <CenteredModal title="Invite & Share" onClose={() => setHeaderPanel(null)}>
           <SharePanel
             publicUrl={publicUrl}
             shareText={shareText}
@@ -1239,13 +1109,8 @@ export function CoachDashboardWorkspace({
           />
         </CenteredModal>
       ) : null}
-      {headerPanel === "activity" ? (
-        <CenteredModal title="Activity" onClose={() => setHeaderPanel(null)}>
-          <ActivityPanel activity={scopedActivity} />
-        </CenteredModal>
-      ) : null}
       {isSettingsOpen ? (
-        <CenteredModal title="Camp Settings" onClose={() => setIsSettingsOpen(false)}>
+        <CenteredModal title="Opportunity Settings" onClose={() => setIsSettingsOpen(false)}>
           <CampSettingsPanel
             key={`modal-${activeCamp.id}`}
             camp={activeCamp}
@@ -1270,7 +1135,7 @@ function CenteredModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
+        className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -1281,9 +1146,8 @@ function CenteredModal({
       >
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
           <h2 className="inline-flex items-center gap-2 text-lg font-black tracking-tight">
-            {title === "Camp Settings" ? <Settings size={18} /> : null}
-            {title === "Share" ? <Share2 size={18} /> : null}
-            {title === "Activity" ? <Activity size={18} /> : null}
+            {title === "Opportunity Settings" ? <Settings size={18} /> : null}
+            {title === "Invite & Share" ? <Share2 size={18} /> : null}
             {title}
           </h2>
           <button
@@ -1296,62 +1160,6 @@ function CenteredModal({
           </button>
         </div>
         <div className="overflow-y-auto p-3">{children}</div>
-      </section>
-    </div>
-  );
-}
-
-function CreationPanel({
-  type,
-  tunnels,
-  inheritedCoachProfile,
-  organizerName,
-  onCancel,
-  onSuccess,
-}: {
-  type: OpportunityType;
-  tunnels: TunnelOption[];
-  inheritedCoachProfile?: InheritedCoachProfile;
-  organizerName: string;
-  onCancel: () => void;
-  onSuccess: (opportunityId: string) => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 grid bg-slate-950/40 p-3 md:place-items-center md:p-5">
-      <section className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl md:max-h-[calc(100dvh-2.5rem)]">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
-              Create inside Coach Dashboard
-            </p>
-            <h2 className="mt-1 text-xl font-black tracking-tight">
-              New {type === "huck_jam" ? "Huck Jam" : "Camp"}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-            aria-label="Close creation panel"
-          >
-            <X size={17} />
-          </button>
-        </div>
-        <div className="overflow-y-auto px-4 pb-4">
-          <CreateOpportunityForm
-            tunnels={tunnels.map((tunnel) => ({
-              id: tunnel.id,
-              name: tunnel.name,
-              city: tunnel.city ?? "",
-              country: tunnel.country ?? "",
-            }))}
-            inheritedCoachProfile={inheritedCoachProfile}
-            organizerName={organizerName}
-            initialType={type}
-            onCancel={onCancel}
-            onSuccess={onSuccess}
-          />
-        </div>
       </section>
     </div>
   );
@@ -1724,7 +1532,7 @@ function EditDayButton({
 }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<EditDayTab>("manual");
+  const [activeTab, setActiveTab] = useState<EditDayTab>("camp-builder");
   const [startTime, setStartTime] = useState("15:00");
   const [durationMinutes, setDurationMinutes] = useState(15);
   const [builderStartTime, setBuilderStartTime] = useState("09:00");
@@ -1846,7 +1654,12 @@ function EditDayButton({
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setActiveTab("camp-builder");
+          setError("");
+          setBuilderPreview(null);
+          setIsOpen(true);
+        }}
         className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sky-600 px-2.5 text-xs font-black text-white transition hover:bg-sky-700"
       >
         <Plus size={14} /> Edit Day
@@ -2004,16 +1817,17 @@ function EditDayButton({
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                        Day Generator
-                      </p>
-                      <p className="mt-1 text-sm font-bold text-slate-600">
-                        Maximum tunnel time is the total operating hours for this day.
-                        Create Day replaces the existing schedule for this day with draft
-                        slots.
-                      </p>
-                    </div>
+                    <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Camp Builder
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-950">
+                      Hour In – Hour Out
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-slate-600">
+                      Maximum tunnel time is the total operating hours for this day.
+                      Create Day replaces the existing schedule for this day with draft
+                      slots.
+                    </p>
                   </div>
                   {builderPreview ? (
                     <div className="mt-3 grid gap-2">
@@ -2789,31 +2603,6 @@ function SharePanel({
   );
 }
 
-function ActivityPanel({ activity }: { activity: ActivityItem[] }) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="grid gap-2">
-        {activity.length > 0 ? (
-          activity.map((item) => (
-            <article key={item.id} className="rounded-xl bg-slate-50 p-2">
-              <p className="text-sm font-black">{item.title}</p>
-              {item.body ? (
-                <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
-                  {item.body}
-                </p>
-              ) : null}
-            </article>
-          ))
-        ) : (
-          <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
-            No recent activity.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
 function HuckjamOverviewPanel({
   camp,
   compact = false,
@@ -3280,10 +3069,6 @@ function getAttentionItems(camp: CampWorkspace) {
   }
 
   return items;
-}
-
-function getActivityBadgeCount(attention: AttentionItem[]) {
-  return attention.reduce((total, item) => total + item.count, 0);
 }
 
 function getHuckjamOverview(camp: CampWorkspace) {

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Bell, CheckCircle2, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, CheckCircle2, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
@@ -13,6 +13,7 @@ import {
   type TunnelOption,
 } from "@/components/CreateOpportunityForm";
 import { formatOpportunityType } from "@/lib/opportunities";
+import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
 export type CoachWorkspaceCamp = {
@@ -120,8 +121,10 @@ export function CoachCommandCenterWorkspace({
   const campsManaged = camps.length;
   const athletesCoached = camps.reduce((total, camp) => total + camp.athleteCount, 0);
   const tunnelsVisited = new Set(camps.map((camp) => camp.tunnelLabel)).size;
-  const upcomingCamps = camps
-    .filter((camp) => camp.endDate >= todayIso())
+  const now = new Date();
+  const activeCamps = camps.filter((camp) => !isOpportunityCompleted({ endDate: camp.endDate }, now));
+  const activeHuckJams = huckJams.filter((camp) => !isOpportunityCompleted({ endDate: camp.endDate }, now));
+  const upcomingCamps = activeCamps
     .slice()
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title))
     .slice(0, 3);
@@ -131,7 +134,7 @@ export function CoachCommandCenterWorkspace({
       items: attentionItems.filter((item) => item.group === group),
     }))
     .filter((group) => group.items.length > 0);
-  const activeOpportunityCards = activeTab === "camps" ? camps : huckJams;
+  const activeOpportunityCards = activeTab === "camps" ? activeCamps : activeHuckJams;
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
@@ -181,6 +184,12 @@ export function CoachCommandCenterWorkspace({
               >
                 <Plus size={17} /> Create Opportunity
               </button>
+              <Link
+                href="/app"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800"
+              >
+                <ArrowLeft size={17} /> Back to App
+              </Link>
             </div>
           </div>
         </section>
@@ -693,8 +702,4 @@ function formatRelativeTime(value: string) {
 function relativeLabel(diffMs: number, value: number, unit: "minute" | "hour" | "day") {
   const suffix = value === 1 ? unit : `${unit}s`;
   return diffMs > 0 ? `in ${value} ${suffix}` : `${value} ${suffix}`;
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
 }

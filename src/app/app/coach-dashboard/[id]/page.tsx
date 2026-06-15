@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import {
-  CoachDashboardWorkspace,
-} from "@/components/CoachDashboardWorkspace";
-import { organizerActivityNotificationTypes, participantActivityNotificationTypes } from "@/lib/notifications";
+import { CoachDashboardWorkspace } from "@/components/CoachDashboardWorkspace";
 import {
   formatOpportunityDate,
   formatPriceAppliesToMinutes,
@@ -26,11 +23,6 @@ type CoachProfileRow = {
   full_name: string | null;
   is_organizer: boolean | null;
   wants_to_create_opportunities: boolean | null;
-};
-
-type CoachProfileDetailsRow = {
-  languages: string[] | null;
-  disciplines: string[] | null;
 };
 
 type CoachOpportunityRow = {
@@ -128,23 +120,8 @@ type PreferenceRow = {
   preferred_minutes: number;
 };
 
-type NotificationRow = {
-  id: string;
-  title: string | null;
-  body: string | null;
-  created_at: string;
-  opportunity_id: string | null;
-  type: string;
-};
-
-const notificationTypes = [
-  ...organizerActivityNotificationTypes,
-  ...participantActivityNotificationTypes,
-];
-
 type CoachDashboardWorkspaceProps = Parameters<typeof CoachDashboardWorkspace>[0];
 type CampWorkspace = CoachDashboardWorkspaceProps["camps"][number];
-type CoachWorkspaceActivityItem = CoachDashboardWorkspaceProps["activity"][number];
 
 export default async function CoachWorkspaceCampPage({
   params,
@@ -161,17 +138,12 @@ export default async function CoachWorkspaceCampPage({
     redirect("/login?next=/app/coach-dashboard");
   }
 
-  const [profileResult, coachProfileResult, opportunityResult, notificationResult, tunnelResult] =
+  const [profileResult, opportunityResult, tunnelResult] =
     await Promise.all([
       supabase
         .from("profiles")
         .select("full_name,is_organizer,wants_to_create_opportunities")
         .eq("id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("coach_profiles")
-        .select("languages,disciplines")
-        .eq("user_id", user.id)
         .maybeSingle(),
       supabase
         .from("opportunities")
@@ -182,14 +154,6 @@ export default async function CoachWorkspaceCampPage({
         .eq("created_by", user.id)
         .maybeSingle(),
       supabase
-        .from("notifications")
-        .select("id,title,body,created_at,opportunity_id,type")
-        .eq("user_id", user.id)
-        .eq("opportunity_id", id)
-        .in("type", notificationTypes)
-        .order("created_at", { ascending: false })
-        .limit(8),
-      supabase
         .from("tunnel_profiles")
         .select("id,name,city,country")
         .order("name", { ascending: true }),
@@ -199,16 +163,8 @@ export default async function CoachWorkspaceCampPage({
     console.error("Coach workspace profile lookup failed", profileResult.error);
   }
 
-  if (coachProfileResult.error) {
-    console.error("Coach workspace coach profile lookup failed", coachProfileResult.error);
-  }
-
   if (opportunityResult.error) {
     console.error("Coach workspace opportunity lookup failed", opportunityResult.error);
-  }
-
-  if (notificationResult.error) {
-    console.error("Coach workspace activity lookup failed", notificationResult.error);
   }
 
   if (tunnelResult.error) {
@@ -243,27 +199,11 @@ export default async function CoachWorkspaceCampPage({
     city: tunnel.city ?? "",
     country: tunnel.country ?? "",
   }));
-  const inheritedCoachProfile = {
-    languages: (coachProfileResult.data as CoachProfileDetailsRow | null)?.languages ?? [],
-    disciplines:
-      (coachProfileResult.data as CoachProfileDetailsRow | null)?.disciplines ?? [],
-  };
-  const activity = buildActivityItems(
-    (notificationResult.data ?? []) as NotificationRow[],
-    profile?.full_name?.trim() || "Coach",
-    opportunity.id,
-    opportunity.title,
-    opportunity.created_at,
-  );
-
   return (
     <CoachDashboardWorkspace
-      coachName={profile?.full_name?.trim() || "Coach"}
       selectedCampId={id}
       camps={camps}
       tunnels={tunnels}
-      inheritedCoachProfile={inheritedCoachProfile}
-      activity={activity}
     />
   );
 }
@@ -384,34 +324,6 @@ async function toCampWorkspace(
       estimatedRevenue: summary.estimatedRevenue,
     },
   };
-}
-
-function buildActivityItems(
-  rows: NotificationRow[],
-  coachName: string,
-  opportunityId: string,
-  opportunityTitle: string,
-  createdAt: string | null,
-): CoachWorkspaceActivityItem[] {
-  const items: CoachWorkspaceActivityItem[] = rows.map((row) => ({
-    id: row.id,
-    title: row.title?.trim() || "Activity update",
-    body: row.body?.trim() || "",
-    opportunityId: row.opportunity_id ?? opportunityId,
-    createdAt: row.created_at,
-  }));
-
-  if (createdAt) {
-    items.push({
-      id: `created-${opportunityId}`,
-      title: `${coachName} created ${opportunityTitle}`,
-      body: `${opportunityTitle} is now open in the operations workspace.`,
-      opportunityId,
-      createdAt,
-    });
-  }
-
-  return items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 8);
 }
 
 function firstRelation<T>(value: T | T[] | null | undefined) {

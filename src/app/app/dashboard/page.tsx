@@ -12,6 +12,7 @@ import {
   countUnreadByOpportunity,
   organizerActivityNotificationTypes,
 } from "@/lib/notifications";
+import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
@@ -284,7 +285,15 @@ function toCardModel(
   const startsInDays = daysBetween(today, opportunity.start_date);
   const isDraft = opportunity.status === "draft";
   const isCancelled = opportunity.status === "cancelled";
-  const isPast = !isDraft && opportunity.end_date < today;
+  const isPast =
+    !isDraft &&
+    isOpportunityCompleted(
+      {
+        endDate: opportunity.end_date,
+        registrationDeadline: opportunity.registration_deadline,
+      },
+      now,
+    );
   const isUpcoming = !isDraft && !isCancelled && opportunity.start_date >= today;
   const activeForAttention = !isDraft && !isCancelled;
   const isFullyBooked =
