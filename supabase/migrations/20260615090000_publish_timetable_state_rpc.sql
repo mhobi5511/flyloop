@@ -43,12 +43,7 @@ begin
     is_final = true,
     finalized_at = coalesce(osb.finalized_at, publish_timestamp)
   where osb.opportunity_id = target_opportunity_id
-     or exists (
-       select 1
-       from public.opportunity_time_slots ots
-       where ots.id = osb.slot_id
-         and ots.opportunity_id = target_opportunity_id
-     );
+    and osb.is_final = false;
 end;
 $$;
 
