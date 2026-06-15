@@ -12,6 +12,14 @@ type OrganizerNavBadgeProps = {
   notificationTypes?: readonly string[];
 };
 
+type BadgeSubscription = {
+  channel: RealtimeChannel;
+  listeners: Set<() => void>;
+  refCount: number;
+};
+
+const badgeSubscriptions = new Map<string, BadgeSubscription>();
+
 export function OrganizerNavBadge({
   initialCount,
   notificationTypes = ["new_interest"],
@@ -22,9 +30,8 @@ export function OrganizerNavBadge({
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     let disposed = false;
-    let channel: RealtimeChannel | null = null;
     let currentUserId: string | null = null;
-    let isSubscribed = false;
+    let subscriptionKey: string | null = null;
 
     async function loadCount() {
       if (!currentUserId) {
@@ -70,9 +77,9 @@ export function OrganizerNavBadge({
     }
 
     window.addEventListener("flyloop-notifications-read", handleRead);
-    void supabase.auth.getUser().then(({ data }) => {
-      const userId = data.user?.id;
+    const userPromise = supabase.auth.getUser().then(({ data }) => data.user?.id ?? null);
 
+    void userPromise.then((userId) => {
       if (!userId || disposed) {
         return;
       }
@@ -80,9 +87,21 @@ export function OrganizerNavBadge({
       currentUserId = userId;
       void loadCount();
 
-      const nextChannel = supabase.channel(`organizer-notifications:${userId}`);
+      const key = `${userId}:${notificationTypesKey}`;
+      subscriptionKey = key;
 
-      nextChannel.on(
+      const existingSubscription = badgeSubscriptions.get(key);
+
+      if (existingSubscription) {
+        existingSubscription.refCount += 1;
+        existingSubscription.listeners.add(loadCount);
+        return;
+      }
+
+      const listeners = new Set<() => void>([loadCount]);
+      const channel = supabase.channel(`organizer-notifications:${key}`);
+
+      channel.on(
         "postgres_changes",
         {
           event: "*",
@@ -90,15 +109,19 @@ export function OrganizerNavBadge({
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        () => void loadCount(),
+        () => {
+          for (const listener of listeners) {
+            listener();
+          }
+        },
       );
 
-      if (disposed) {
-        return;
-      }
+      badgeSubscriptions.set(key, {
+        channel,
+        listeners,
+        refCount: 1,
+      });
 
-      channel = nextChannel;
-      isSubscribed = true;
       void channel.subscribe();
     });
 
@@ -108,8 +131,22 @@ export function OrganizerNavBadge({
       disposed = true;
       window.removeEventListener("flyloop-notifications-read", handleRead);
       window.clearInterval(interval);
-      if (channel && isSubscribed) {
-        void supabase.removeChannel(channel);
+      if (!subscriptionKey) {
+        return;
+      }
+
+      const subscription = badgeSubscriptions.get(subscriptionKey);
+
+      if (!subscription) {
+        return;
+      }
+
+      subscription.listeners.delete(loadCount);
+      subscription.refCount -= 1;
+
+      if (subscription.refCount <= 0) {
+        badgeSubscriptions.delete(subscriptionKey);
+        void supabase.removeChannel(subscription.channel);
       }
     };
   }, [notificationTypesKey]);

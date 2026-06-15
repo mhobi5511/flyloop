@@ -88,6 +88,14 @@ function isValidTime(value: string) {
   return /^\d{2}:\d{2}$/.test(value);
 }
 
+function resolveRegistrationDeadline(
+  registrationDeadline: string,
+  startDate: string,
+) {
+  const trimmedDeadline = registrationDeadline.trim();
+  return trimmedDeadline.length > 0 ? trimmedDeadline : startDate;
+}
+
 function isValidPriceAppliesToMinutes(value: string) {
   const trimmed = value.trim();
 
@@ -232,10 +240,15 @@ export async function publishOpportunity(
     };
   }
 
+  const registrationDeadline = resolveRegistrationDeadline(
+    input.registrationDeadline,
+    input.startDate,
+  );
+
   if (
-    input.registrationDeadline &&
-    (!isValidDate(input.registrationDeadline) ||
-      new Date(input.registrationDeadline) > new Date(input.startDate))
+    !isValidDate(registrationDeadline) ||
+    new Date(registrationDeadline) >
+      new Date(input.startDate)
   ) {
     return {
       ok: false,
@@ -306,7 +319,7 @@ export async function publishOpportunity(
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
       end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
-      registration_deadline: input.registrationDeadline || null,
+      registration_deadline: registrationDeadline,
       session_start: input.type === "huck_jam" ? input.sessionStart : null,
       session_end: input.type === "huck_jam" ? input.sessionEnd : null,
       price: input.price,
@@ -404,10 +417,15 @@ export async function updateOpportunity(
     };
   }
 
+  const registrationDeadline = resolveRegistrationDeadline(
+    input.registrationDeadline,
+    input.startDate,
+  );
+
   if (
-    input.registrationDeadline &&
-    (!isValidDate(input.registrationDeadline) ||
-      new Date(input.registrationDeadline) > new Date(input.startDate))
+    !isValidDate(registrationDeadline) ||
+    new Date(registrationDeadline) >
+      new Date(input.startDate)
   ) {
     return {
       ok: false,
@@ -506,7 +524,7 @@ export async function updateOpportunity(
       tunnel_id: input.tunnelId,
       start_date: input.startDate,
       end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
-      registration_deadline: input.registrationDeadline || null,
+      registration_deadline: registrationDeadline,
       session_start: input.type === "huck_jam" ? input.sessionStart : null,
       session_end: input.type === "huck_jam" ? input.sessionEnd : null,
       price: input.price,

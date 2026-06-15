@@ -196,6 +196,9 @@ export function CreateOpportunityForm({
     inheritedCoachProfile?.disciplines ??
     splitCsv(initialOpportunity?.disciplines ?? "");
   const initialFormType = initialOpportunity?.type ?? initialType ?? "camp";
+  const initialStartDate =
+    initialOpportunity?.startDate ??
+    (initialFormType === "camp" ? defaultCampStartDate : isoDateFromNow(5));
   const [type, setType] = useState<OpportunityType>(
     initialFormType,
   );
@@ -206,19 +209,22 @@ export function CreateOpportunityForm({
   );
   const [title, setTitle] = useState(initialOpportunity?.title ?? "");
   const [tunnelId, setTunnelId] = useState(initialOpportunity?.tunnelId ?? "");
-  const [startDate, setStartDate] = useState(
-    initialOpportunity?.startDate ??
-      (initialFormType === "camp" ? defaultCampStartDate : isoDateFromNow(5)),
-  );
+  const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(
     initialOpportunity?.endDate ??
       (initialFormType === "camp"
         ? defaultCampEndDate
-        : addDays(initialOpportunity?.startDate ?? isoDateFromNow(5), 5)),
+        : addDays(initialStartDate, 5)),
   );
   const [endDateTouched, setEndDateTouched] = useState(Boolean(initialOpportunity));
   const [registrationDeadline, setRegistrationDeadline] = useState(
-    initialOpportunity?.registrationDeadline ?? "",
+    initialOpportunity?.registrationDeadline ?? initialStartDate,
+  );
+  const [deadlineMode, setDeadlineMode] = useState<"start" | "custom">(
+    initialOpportunity?.registrationDeadline &&
+      initialOpportunity.registrationDeadline !== initialStartDate
+      ? "custom"
+      : "start",
   );
   const [sessionStart, setSessionStart] = useState(
     initialOpportunity?.sessionStart?.slice(0, 5) ?? "18:00",
@@ -315,6 +321,10 @@ export function CreateOpportunityForm({
         setPrice("99");
       }
 
+      if (deadlineMode === "start") {
+        setRegistrationDeadline(startDate);
+      }
+
       if (!endDateTouched && startDate) {
         setEndDate(startDate);
       }
@@ -329,6 +339,9 @@ export function CreateOpportunityForm({
       setStartDate(defaultCampStartDate);
       setEndDate(defaultCampEndDate);
       setEndDateTouched(false);
+      if (deadlineMode === "start") {
+        setRegistrationDeadline(defaultCampStartDate);
+      }
       return;
     }
 
@@ -339,6 +352,9 @@ export function CreateOpportunityForm({
 
   function updateStartDate(value: string) {
     setStartDate(value);
+    if (deadlineMode === "start") {
+      setRegistrationDeadline(value);
+    }
     if (type === "huck_jam") {
       setEndDate(value);
     } else if (!endDateTouched) {
@@ -381,9 +397,8 @@ export function CreateOpportunityForm({
       }
 
       if (
-        registrationDeadline &&
-        (!isValidDate(registrationDeadline) ||
-          new Date(registrationDeadline) > new Date(startDate))
+        !isValidDate(registrationDeadline) ||
+        new Date(registrationDeadline) > new Date(startDate)
       ) {
         return type === "huck_jam"
           ? "Registration deadline must be on or before the event date."
@@ -558,6 +573,7 @@ export function CreateOpportunityForm({
             startDate={startDate}
             endDate={endDate}
             registrationDeadline={registrationDeadline}
+            deadlineMode={deadlineMode}
             sessionStart={sessionStart}
             sessionEnd={sessionEnd}
             showLastMinuteNotice={showLastMinuteNotice}
@@ -565,6 +581,12 @@ export function CreateOpportunityForm({
             onEndDateChange={(value) => {
               setEndDateTouched(true);
               setEndDate(value);
+            }}
+            onDeadlineModeChange={(value) => {
+              setDeadlineMode(value);
+              if (value === "start") {
+                setRegistrationDeadline(startDate);
+              }
             }}
             onRegistrationDeadlineChange={setRegistrationDeadline}
             onSessionStartChange={setSessionStart}
@@ -942,11 +964,13 @@ function ScheduleStep({
   startDate,
   endDate,
   registrationDeadline,
+  deadlineMode,
   sessionStart,
   sessionEnd,
   showLastMinuteNotice,
   onStartDateChange,
   onEndDateChange,
+  onDeadlineModeChange,
   onRegistrationDeadlineChange,
   onSessionStartChange,
   onSessionEndChange,
@@ -955,19 +979,18 @@ function ScheduleStep({
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  deadlineMode: "start" | "custom";
   sessionStart: string;
   sessionEnd: string;
   showLastMinuteNotice: boolean;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
+  onDeadlineModeChange: (value: "start" | "custom") => void;
   onRegistrationDeadlineChange: (value: string) => void;
   onSessionStartChange: (value: string) => void;
   onSessionEndChange: (value: string) => void;
 }) {
   const isHuckJam = type === "huck_jam";
-  const [deadlineMode, setDeadlineMode] = useState<"start" | "custom">(
-    registrationDeadline ? "custom" : "start",
-  );
   const startLabel = isHuckJam ? "When the event starts" : "When the camp starts";
 
   return (
@@ -1040,8 +1063,8 @@ function ScheduleStep({
               name="registrationDeadlineMode"
               checked={deadlineMode === "start"}
               onChange={() => {
-                setDeadlineMode("start");
-                onRegistrationDeadlineChange("");
+                onDeadlineModeChange("start");
+                onRegistrationDeadlineChange(startDate);
               }}
               className="size-4 accent-sky-600"
             />
@@ -1058,7 +1081,7 @@ function ScheduleStep({
               type="radio"
               name="registrationDeadlineMode"
               checked={deadlineMode === "custom"}
-              onChange={() => setDeadlineMode("custom")}
+              onChange={() => onDeadlineModeChange("custom")}
               className="size-4 accent-sky-600"
             />
             Custom date

@@ -99,7 +99,7 @@ export default async function EditOrganizerOpportunityPage({
             tunnelId: row.tunnel_id,
             startDate: row.start_date,
             endDate: row.end_date,
-            registrationDeadline: row.registration_deadline ?? "",
+            registrationDeadline: row.registration_deadline ?? row.start_date,
             sessionStart: row.session_start ?? "",
             sessionEnd: row.session_end ?? "",
             price: Number(row.price),
