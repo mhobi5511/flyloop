@@ -11,11 +11,13 @@ import {
 type SlotReleaseRequestActionsProps = {
   opportunityId: string;
   bookingId: string;
+  compact?: boolean;
 };
 
 export function SlotReleaseRequestActions({
   opportunityId,
   bookingId,
+  compact = false,
 }: SlotReleaseRequestActionsProps) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -43,29 +45,49 @@ export function SlotReleaseRequestActions({
   }
 
   return (
-    <div className="grid gap-2">
-      <div className="flex flex-wrap gap-2">
+    <div className={compact ? "grid gap-1.5" : "grid gap-2"}>
+      <div className={`flex flex-wrap ${compact ? "gap-1.5" : "gap-2"}`}>
         <button
           type="button"
           disabled={isPending}
           onClick={() => resolve("approve")}
-          className="inline-flex h-8 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          aria-label="Approve"
+          title="Approve"
+          className={`inline-flex items-center justify-center rounded-lg border font-black transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${
+            compact
+              ? "size-8 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              : "h-8 gap-1 border-emerald-200 bg-emerald-50 px-2 text-xs text-emerald-700 hover:bg-emerald-100"
+          }`}
         >
-          <Check size={14} /> Approve
+          <Check size={14} />
+          <span className={compact ? "sr-only" : ""}>Approve</span>
         </button>
         <button
           type="button"
           disabled={isPending}
           onClick={() => resolve("reject")}
-          className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          aria-label="Reject"
+          title="Reject"
+          className={`inline-flex items-center justify-center rounded-lg border font-black transition disabled:cursor-not-allowed disabled:text-slate-400 ${
+            compact
+              ? "size-8 border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              : "h-8 gap-1 border-slate-200 bg-white px-2 text-xs text-slate-700 hover:bg-slate-50"
+          }`}
         >
-          <X size={14} /> Reject
+          <X size={14} />
+          <span className={compact ? "sr-only" : ""}>Reject</span>
         </button>
       </div>
       {message ? (
-        <p className="text-xs font-semibold text-emerald-700">{message}</p>
+        <p className={compact ? "text-[11px] font-semibold text-emerald-700" : "text-xs font-semibold text-emerald-700"}>
+          {message}
+        </p>
       ) : null}
-      {error ? <p className="text-xs font-semibold text-rose-700">{error}</p> : null}
+      {error ? (
+        <p className={compact ? "text-[11px] font-semibold text-rose-700" : "text-xs font-semibold text-rose-700"}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

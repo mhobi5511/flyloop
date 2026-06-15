@@ -2,7 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Bell, CheckCircle2, Plus, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  Plus,
+  Users,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
@@ -88,7 +98,7 @@ export type CoachWorkspaceNotificationItem = {
 
 type CoachCommandCenterWorkspaceProps = {
   coachName: string;
-  camps: CoachWorkspaceCamp[]; 
+  camps: CoachWorkspaceCamp[];
   huckJams: CoachWorkspaceCamp[];
   attentionItems: CoachWorkspaceAttentionItem[];
   activityItems: CoachWorkspaceActivityItem[];
@@ -330,9 +340,22 @@ function CoachCommandCenter({
   activeOpportunityCards: CoachWorkspaceCamp[];
   onCreateOpportunity: () => void;
 }) {
+  const inboxAttentionItems = groupedAttention
+    .flatMap((group) => group.items)
+    .slice()
+    .sort((a, b) => {
+      const delta = getAttentionPriority(a) - getAttentionPriority(b);
+
+      if (delta !== 0) {
+        return delta;
+      }
+
+      return a.title.localeCompare(b.title);
+    });
+
   return (
     <div className="grid gap-5">
-      <section className="grid gap-3">
+      <section className="grid gap-2.5">
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-xl font-black tracking-tight text-slate-950">
@@ -341,87 +364,62 @@ function CoachCommandCenter({
           </div>
         </div>
 
-        <div className="grid gap-4">
-          {groupedAttention.length > 0 ? (
-            groupedAttention.map((group) => (
-              <section
-                key={group.group}
-                className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+        <div className="grid gap-2">
+          {inboxAttentionItems.length > 0 ? (
+            inboxAttentionItems.map((item) => (
+              <article
+                key={item.id}
+                className="group grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition hover:border-sky-200 hover:bg-sky-50/60 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
               >
-                <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
-                  <h4 className="text-base font-black text-slate-950">{group.group}</h4>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-500">
-                    {group.items.length} item{group.items.length === 1 ? "" : "s"}
+                <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${getAttentionTone(item)}`}>
+                  {getAttentionIcon(item)}
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-sm font-black leading-5 text-slate-950">
+                    {item.title}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-5 text-slate-600">
+                    {item.description}
                   </p>
                 </div>
-                <div className="grid gap-2 p-3 sm:p-4">
-                  {group.items.map((item) =>
-                    item.kind === "waitlist" ? (
-                      <Link
-                        key={item.id}
-                        href={`/app/coach-dashboard/${item.campId}`}
-                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-sky-200 hover:bg-sky-50/40"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-950">{item.title}</p>
-                          <p className="mt-1 text-sm leading-6 text-slate-600">
-                            {item.description}
-                          </p>
-                        </div>
-                        <span className="shrink-0 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-black text-slate-700 shadow-sm">
-                          {item.workshopLabel ?? "Open Workspace"}
-                        </span>
-                      </Link>
-                    ) : (
-                      <div
-                        key={item.id}
-                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-950">{item.title}</p>
-                          <p className="mt-1 text-sm leading-6 text-slate-600">
-                            {item.description}
-                          </p>
-                        </div>
-                        <div className="shrink-0">
-                          {item.kind === "application" ? (
-                            <ApplicantStatusActions
-                              interestId={item.interestId ?? ""}
-                              currentStatus="pending"
-                              compact
-                            />
-                          ) : item.kind === "release" ? (
-                            <SlotReleaseRequestActions
-                              opportunityId={item.campId}
-                              bookingId={item.bookingId ?? ""}
-                            />
-                          ) : (
-                            <Link
-                              href={`/app/coach-dashboard/${item.campId}`}
-                              className="inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-black text-slate-700 shadow-sm"
-                            >
-                              Open Camp
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    ),
+
+                <div className="flex flex-wrap items-center gap-1.5 md:justify-self-end">
+                  {item.kind === "application" ? (
+                    <ApplicantStatusActions
+                      interestId={item.interestId ?? ""}
+                      currentStatus="pending"
+                      compact
+                    />
+                  ) : item.kind === "release" ? (
+                    <SlotReleaseRequestActions
+                      opportunityId={item.campId}
+                      bookingId={item.bookingId ?? ""}
+                      compact
+                    />
+                  ) : (
+                    <Link
+                      href={`/app/coach-dashboard/${item.campId}`}
+                      className="inline-flex h-8 items-center rounded-lg bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-sky-700 hover:text-white"
+                    >
+                      Open Opportunity
+                    </Link>
                   )}
                 </div>
-              </section>
+              </article>
             ))
           ) : (
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
               <div className="flex items-start gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
-                  <CheckCircle2 size={18} />
+                <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                  <CheckCircle2 size={16} />
                 </div>
-                <div>
-                  <h4 className="text-base font-black text-slate-950">
-                    Everything looks great.
+                <div className="min-w-0">
+                  <h4 className="text-sm font-black text-slate-950">
+                    Everything is running smoothly.
                   </h4>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    All camps and Huckjams are up to date.
+                  <p className="mt-1 text-sm leading-5 text-slate-600">
+                    No pending applications. No draft changes. No athletes waiting for action.
                   </p>
                 </div>
               </div>
@@ -590,6 +588,66 @@ function MetricPill({
       <p className="mt-1 text-lg font-black text-inherit">{value}</p>
     </div>
   );
+}
+
+function getAttentionPriority(item: CoachWorkspaceAttentionItem) {
+  if (item.kind === "application") {
+    return 0;
+  }
+
+  if (item.kind === "waitlist") {
+    return 1;
+  }
+
+  if (item.kind === "draft") {
+    return 2;
+  }
+
+  if (item.kind === "unassigned") {
+    return 3;
+  }
+
+  return 4;
+}
+
+function getAttentionTone(item: CoachWorkspaceAttentionItem) {
+  if (item.kind === "application") {
+    return "bg-sky-100 text-sky-700";
+  }
+
+  if (item.kind === "waitlist") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  if (item.kind === "draft") {
+    return "bg-violet-100 text-violet-700";
+  }
+
+  if (item.kind === "unassigned") {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  return "bg-slate-200 text-slate-700";
+}
+
+function getAttentionIcon(item: CoachWorkspaceAttentionItem) {
+  if (item.kind === "application") {
+    return <Clock3 size={16} />;
+  }
+
+  if (item.kind === "waitlist") {
+    return <Users size={16} />;
+  }
+
+  if (item.kind === "draft") {
+    return <CalendarClock size={16} />;
+  }
+
+  if (item.kind === "unassigned") {
+    return <Users size={16} />;
+  }
+
+  return <Bell size={16} />;
 }
 
 function CreationModal({
