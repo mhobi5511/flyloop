@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { CampApplyPreferencesForm } from "@/components/CampApplyPreferencesForm";
 import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
+import { CampTunnelTimeSummary } from "@/components/CampTunnelTimeSummary";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import { SlotBookingSelector } from "@/components/SlotBookingSelector";
 import { participantActivityNotificationTypes } from "@/lib/notifications";
@@ -131,6 +132,10 @@ export default async function SlotBookingPage({
                     dayId: preference.day_id,
                     preferredMinutes: preference.preferred_minutes,
                   }))}
+                />
+                <CampTunnelTimeSummary
+                  status={viewerInterest?.tunnel_time_status as TunnelTimeStatus | null}
+                  accountEmail={viewerInterest?.tunnel_account_email ?? null}
                 />
               </div>
             ) : (

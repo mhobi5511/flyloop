@@ -15,6 +15,17 @@ export type CampDayPreferenceInput = {
   preferredMinutes: number;
 };
 
+export type CampTunnelTimeInput = {
+  status: TunnelTimeStatus | "";
+  accountEmail: string;
+};
+
+type ValidatedCampTunnelTime = {
+  ok: true;
+  status: TunnelTimeStatus;
+  accountEmail: string | null;
+};
+
 function debugSupabaseMessage(error: {
   message?: string;
   details?: string | null;
@@ -52,6 +63,7 @@ async function sendServerPush(
 export async function sendOpportunityInterest(
   opportunityId: string,
   campPreferences: CampDayPreferenceInput[] = [],
+  campTunnelTime?: CampTunnelTimeInput,
 ): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -144,6 +156,22 @@ export async function sendOpportunityInterest(
   }
 
   const needsCampPreferences = opportunity.type === "camp" && campPreferences.length > 0;
+  const validatedCampTunnelTime =
+    opportunity.type === "camp"
+      ? validateCampTunnelTimeInput(campTunnelTime)
+      : null;
+
+  if (validatedCampTunnelTime && !validatedCampTunnelTime.ok) {
+    return validatedCampTunnelTime;
+  }
+
+  const campTunnelTimeFields =
+    validatedCampTunnelTime?.ok
+      ? {
+          tunnel_time_status: validatedCampTunnelTime.status,
+          tunnel_account_email: validatedCampTunnelTime.accountEmail,
+        }
+      : {};
 
   if (needsCampPreferences && !currentInterest) {
     const { data: createdInterest, error: createInterestError } = await supabase
@@ -152,6 +180,7 @@ export async function sendOpportunityInterest(
         opportunity_id: opportunityId,
         athlete_id: user.id,
         status: "pending",
+        ...campTunnelTimeFields,
       })
       .select("id,status")
       .maybeSingle();
@@ -234,6 +263,39 @@ export async function sendOpportunityInterest(
     }
   }
 
+  if (!hadExistingInterest && currentInterest && validatedCampTunnelTime?.ok) {
+    const { error: tunnelTimeError } = await supabase
+      .from("opportunity_interests")
+      .update(campTunnelTimeFields)
+      .eq("id", currentInterest.id)
+      .eq("athlete_id", user.id);
+
+    if (tunnelTimeError) {
+      console.error("Camp tunnel time save failed", tunnelTimeError);
+      if (createdInterestId) {
+        const { error: cleanupError } = await supabase
+          .from("opportunity_interests")
+          .delete()
+          .eq("id", createdInterestId)
+          .eq("athlete_id", user.id);
+
+        if (cleanupError) {
+          console.error("Camp application cleanup failed after tunnel time error", {
+            opportunityId,
+            athleteId: user.id,
+            createdInterestId,
+            error: cleanupError,
+          });
+        }
+      }
+
+      return {
+        ok: false,
+        message: `Could not save your tunnel time information. Backend error: ${debugSupabaseMessage(tunnelTimeError) || "Unknown error."}`,
+      };
+    }
+  }
+
   if (hadExistingInterest && currentInterest) {
     return {
       ok: true,
@@ -249,6 +311,7 @@ export async function sendOpportunityInterest(
         opportunity_id: opportunityId,
         athlete_id: user.id,
         status: "pending",
+        ...campTunnelTimeFields,
       })
       .select("id,status")
       .maybeSingle();
@@ -905,6 +968,40 @@ async function saveTunnelTimeStatus(
   }
 
   return { ok: true, message: "Tunnel time status saved." };
+}
+
+function validateCampTunnelTimeInput(
+  tunnelTime: CampTunnelTimeInput | undefined,
+): ValidatedCampTunnelTime | { ok: false; message: string } {
+  if (
+    !tunnelTime ||
+    (tunnelTime.status !== "owns_tunnel_time" &&
+      tunnelTime.status !== "needs_tunnel_time")
+  ) {
+    return { ok: false, message: "Choose whether you already have tunnel time." };
+  }
+
+  const tunnelAccountEmail = tunnelTime.accountEmail.trim().toLowerCase();
+
+  if (tunnelTime.status === "owns_tunnel_time") {
+    if (!tunnelAccountEmail) {
+      return {
+        ok: false,
+        message: "Enter the email address used for your tunnel account.",
+      };
+    }
+
+    if (!isEmailInput(tunnelAccountEmail)) {
+      return { ok: false, message: "Enter a valid tunnel account email address." };
+    }
+  }
+
+  return {
+    ok: true,
+    status: tunnelTime.status,
+    accountEmail:
+      tunnelTime.status === "owns_tunnel_time" ? tunnelAccountEmail : null,
+  };
 }
 
 function isEmailInput(value: string) {

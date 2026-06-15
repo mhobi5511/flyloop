@@ -708,38 +708,40 @@ export function CoachDashboardWorkspace({
                               className={`relative overflow-hidden rounded-xl border bg-white p-2 shadow-sm transition ${
                                 isSelectedSlot
                                   ? "border-sky-300 bg-sky-50/60 ring-2 ring-sky-100"
-                                  : isFull
-                                  ? "border-emerald-200"
-                                  : "border-slate-200"
+                                  : isDraftSlot
+                                    ? "border-dashed border-orange-300 bg-orange-50/35"
+                                    : isFull
+                                      ? "border-emerald-200"
+                                      : "border-slate-200"
                               }`}
-                              style={
-                                isDraftSlot
-                                  ? {
-                                      backgroundColor: "#f59e0b",
-                                      backgroundImage:
-                                        "repeating-linear-gradient(135deg, rgba(255,255,255,0.82) 0 12px, rgba(255,255,255,0) 12px 24px)",
-                                      backgroundBlendMode: "screen",
-                                    }
-                                  : undefined
-                              }
                             >
                               <div
                                 className={`mb-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 ${
-                                  isDraftSlot ? "bg-white/85" : "bg-slate-50"
+                                  isDraftSlot ? "bg-white" : "bg-slate-50"
                                 }`}
                               >
                                 <p className="inline-flex items-center gap-1.5 text-base font-black text-slate-950">
                                   <Clock3 size={15} className="text-sky-700" />
                                   {formatTimetableTime(slot.startTime)}
+                                  {isDraftSlot ? (
+                                    <span className="text-slate-300">|</span>
+                                  ) : null}
+                                  {isDraftSlot ? (
+                                    <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                      Draft
+                                    </span>
+                                  ) : null}
                                 </p>
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
-                                    isFull
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {slot.bookings.length}/{slot.capacity}
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
+                                      isFull
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : "bg-slate-100 text-slate-600"
+                                    }`}
+                                  >
+                                    {slot.bookings.length}/{slot.capacity}
+                                  </span>
                                 </span>
                               </div>
                               <div className="grid gap-1">
@@ -812,7 +814,9 @@ export function CoachDashboardWorkspace({
                                         className="grid w-full rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm"
                                         style={{
                                           backgroundColor: colors?.soft,
-                                          borderColor: colors?.bg,
+                                          borderColor: booking.isFinal
+                                            ? colors?.bg
+                                            : "#f97316",
                                           color: colors?.text,
                                         }}
                                       >
@@ -822,7 +826,7 @@ export function CoachDashboardWorkspace({
                                         <span className="flex items-center gap-2 text-xs font-bold opacity-80">
                                           <span>{booking.minutes} min</span>
                                           {!booking.isFinal ? (
-                                            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[0.68rem] font-black uppercase">
+                                            <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
                                               Draft
                                             </span>
                                           ) : null}
@@ -1005,27 +1009,42 @@ export function CoachDashboardWorkspace({
                     {day.slots.length > 0 ? (
                       day.slots.map((slot) => {
                         const isFull = slot.bookings.length >= slot.capacity;
+                        const isDraftSlot = slot.isPublished === false;
 
                         return (
                           <article
                             key={slot.id}
                             className={`relative rounded-lg border bg-white p-2 ${
-                              isFull ? "border-emerald-200" : "border-slate-200"
+                              isDraftSlot
+                                ? "border-dashed border-orange-300 bg-orange-50/35"
+                                : isFull
+                                  ? "border-emerald-200"
+                                  : "border-slate-200"
                             }`}
                           >
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <p className="inline-flex items-center gap-1.5 text-sm font-black">
                                 <Clock3 size={15} className="text-sky-700" />
                                 {formatTimetableTime(slot.startTime)}
+                                {isDraftSlot ? (
+                                  <span className="text-slate-300">|</span>
+                                ) : null}
+                                {isDraftSlot ? (
+                                  <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                    Draft
+                                  </span>
+                                ) : null}
                               </p>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
-                                  isFull
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {slot.bookings.length}/{slot.capacity}
+                              <span className="inline-flex items-center gap-1.5">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
+                                    isFull
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {slot.bookings.length}/{slot.capacity}
+                                </span>
                               </span>
                             </div>
                             <div className="grid gap-1">
@@ -1045,14 +1064,24 @@ export function CoachDashboardWorkspace({
                                         setTabletPanel("participant");
                                       }
                                     }}
-                                    className="grid rounded-md px-2.5 py-2 text-left text-white shadow-sm"
-                                    style={{ backgroundColor: colors?.bg }}
+                                    className="grid rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm"
+                                    style={{
+                                      backgroundColor: colors?.bg,
+                                      borderColor: booking.isFinal
+                                        ? colors?.bg
+                                        : "#f97316",
+                                    }}
                                   >
                                     <span className="block truncate text-sm font-black">
                                       {booking.athleteName}
                                     </span>
-                                    <span className="text-xs font-bold text-white/80">
-                                      {booking.minutes} min
+                                    <span className="flex items-center gap-2 text-xs font-bold text-white/80">
+                                      <span>{booking.minutes} min</span>
+                                      {!booking.isFinal ? (
+                                        <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                          Draft
+                                        </span>
+                                      ) : null}
                                     </span>
                                   </button>
                                 );
@@ -1459,29 +1488,59 @@ function ParticipantColumns({
                   const colors = participantColorMap.get(participant.userId);
 
                   return (
-                    <button
+                    <div
                       key={participant.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelectParticipant(participant.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onSelectParticipant(participant.id);
+                        }
+                      }}
                       className={`grid min-w-0 rounded-xl border px-2 py-2 text-left transition ${
                         selectedParticipantId === participant.id
                           ? "border-sky-300 bg-sky-50"
                           : "border-slate-200 hover:bg-slate-50"
                       }`}
                     >
-                      <span className="flex min-w-0 items-center gap-2">
+                      <div className="flex items-start gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2 px-1 py-0.5">
+                          <Avatar
+                            name={participant.name}
+                            imageUrl={participant.profileImageUrl}
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-950">
+                              {participant.name}
+                            </p>
+                            <p className="truncate text-xs font-semibold text-slate-500">
+                              Select to open sidebar
+                            </p>
+                          </div>
+                        </div>
                         <span
-                          className="size-3 shrink-0 rounded-full"
+                          className="mt-0.5 size-3 shrink-0 rounded-full"
                           style={{ backgroundColor: colors?.bg ?? "#cbd5e1" }}
+                          aria-hidden="true"
                         />
-                        <span className="truncate text-sm font-black text-slate-950">
-                          {participant.name}
+                      </div>
+                      <div
+                        className="mt-2 flex items-center justify-between gap-2"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <span className="truncate text-xs font-bold text-slate-500">
+                          {formatInterestStatusLabel(participant.status)}
                         </span>
-                      </span>
-                      <span className="truncate pl-5 text-xs font-bold text-slate-500">
-                        {formatTunnelTimeStatus(participant.tunnelTimeStatus)}
-                      </span>
-                    </button>
+                        <ApplicantStatusActions
+                          interestId={participant.id}
+                          currentStatus={participant.status}
+                          compact
+                        />
+                      </div>
+                    </div>
                   );
                 })}
                 {column.participants.length === 0 ? (
@@ -2432,23 +2491,45 @@ function ParticipantPanel({
   const preferencesByDay = camp.preferences
     .filter((preference) => preference.participantId === participant.userId)
     .sort((a, b) => a.dayId - b.dayId);
+  const profileHref = participant.userId ? `/app/users/${participant.userId}` : null;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar
-            name={participant.name}
-            imageUrl={participant.profileImageUrl}
-            size="md"
-          />
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-black">{participant.name}</h2>
-            <p className="truncate text-sm font-bold text-slate-500">
-              {participant.email || "No email"}
-            </p>
+        {profileHref ? (
+          <Link
+            href={profileHref}
+            className="flex min-w-0 items-center gap-3 rounded-2xl px-1 py-1 transition hover:bg-slate-50"
+          >
+            <Avatar
+              name={participant.name}
+              imageUrl={participant.profileImageUrl}
+              size="md"
+            />
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-black text-slate-950">
+                {participant.name}
+              </h2>
+              <p className="truncate text-sm font-bold text-sky-700">View profile</p>
+            </div>
+          </Link>
+        ) : (
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar
+              name={participant.name}
+              imageUrl={participant.profileImageUrl}
+              size="md"
+            />
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-black text-slate-950">
+                {participant.name}
+              </h2>
+              <p className="truncate text-sm font-bold text-slate-500">
+                No profile available
+              </p>
+            </div>
           </div>
-        </div>
+        )}
         <button
           type="button"
           onClick={onClear}
@@ -2457,77 +2538,118 @@ function ParticipantPanel({
           Close
         </button>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <InfoTile label="Status" value={participant.status} />
-        <InfoTile label="Booked Minutes" value={`${bookedMinutes} min`} />
-        <InfoTile label="Booked Hours" value={formatDuration(bookedMinutes)} />
-        <InfoTile
+      <div className="mt-3 grid grid-cols-2 items-stretch gap-2">
+        <SummaryMetricCard
+          label="Status"
+          value={formatInterestStatusLabel(participant.status)}
+        />
+        <SummaryMetricCard
+          label="Booked Time"
+          value={formatBookedTimeSummary(bookedMinutes)}
+        />
+        <SummaryMetricCard
           label="Tunnel Time"
-          value={formatTunnelTimeAvailability(participant.tunnelTimeStatus)}
+          value={participant.tunnelTimeStatus === "owns_tunnel_time" ? "✅ Available" : "❌ Not Available"}
+          tone={participant.tunnelTimeStatus === "owns_tunnel_time" ? "success" : "slate"}
+        />
+        <SummaryMetricCard
+          label="Country"
+          value={participant.country || "Not provided"}
         />
       </div>
-      <div className="mt-3 grid gap-1.5 text-sm font-semibold text-slate-600">
-        <p>Phone: {participant.phone || "Not provided"}</p>
-        <p>Country: {participant.country || "Not provided"}</p>
-        <p>{formatTunnelTimeAvailability(participant.tunnelTimeStatus)}</p>
-      </div>
       <div className="mt-3">
+        <details className="group rounded-2xl border border-slate-200 bg-slate-50">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-slate-700 [&::-webkit-details-marker]:hidden">
+            <span>Participant Details</span>
+            <ChevronRight
+              size={16}
+              className="shrink-0 text-slate-400 transition group-open:rotate-90"
+            />
+          </summary>
+          <div className="grid gap-1.5 border-t border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600">
+            <p>Email: {participant.email || "No email"}</p>
+            <p>Phone: {participant.phone || "Not provided"}</p>
+            <p>
+              Tunnel Time:{" "}
+              {participant.tunnelTimeStatus === "owns_tunnel_time"
+                ? "Available"
+                : participant.tunnelTimeStatus === "needs_tunnel_time"
+                  ? "Not available"
+                  : "Not provided"}
+            </p>
+            <p>
+              Tunnel Account Email: {participant.tunnelAccountEmail || "Not provided"}
+            </p>
+          </div>
+        </details>
+      </div>
+      <div className="mt-3 grid gap-3">
         {camp.type === "camp" ? (
-          <div className="mb-3">
-            <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-              Preferences
-            </h3>
-            <div className="mt-2 grid gap-1.5">
+          <details className="group rounded-2xl border border-slate-200 bg-slate-50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-slate-700 [&::-webkit-details-marker]:hidden">
+              <span>Preferences ({preferencesByDay.length})</span>
+              <ChevronRight
+                size={16}
+                className="shrink-0 text-slate-400 transition group-open:rotate-90"
+              />
+            </summary>
+            <div className="grid gap-1.5 border-t border-slate-200 px-3 py-2.5">
               {preferencesByDay.length > 0 ? (
                 preferencesByDay.map((preference) => (
-                    <p
-                      key={`${preference.participantId}-${preference.dayId}`}
-                      className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      {formatCampDayPreferenceLabel(
-                        camp.startDate,
-                        camp.endDate,
-                        preference.dayId,
-                      )}
+                  <p
+                    key={`${preference.participantId}-${preference.dayId}`}
+                    className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    {formatCampDayPreferenceLabel(
+                      camp.startDate,
+                      camp.endDate,
+                      preference.dayId,
+                    )}
                     : {formatCampPreferenceMinutes(preference.preferredMinutes)}
-                    </p>
+                  </p>
                 ))
               ) : (
-                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+                <p className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-500">
                   No preferences submitted.
                 </p>
               )}
             </div>
-          </div>
+          </details>
         ) : null}
-        <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-          Booked Slots
-        </h3>
-        <div className="mt-2 grid gap-1.5">
-          {bookedSlotsByDay.length > 0 ? (
-            bookedSlotsByDay.map((day) => (
-              <section key={day.date} className="rounded-xl bg-slate-50 p-2.5">
-                <h4 className="text-sm font-black text-slate-950">
-                  {formatTimetableDate(day.date)}
-                </h4>
-                <div className="mt-1 grid gap-0.5">
-                  {day.slots.map((slot) => (
-                    <p
-                      key={slot.id}
-                      className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-700"
-                    >
-                      {formatTimetableTime(slot.time)} - {slot.minutes} min
-                    </p>
-                  ))}
-                </div>
-              </section>
-            ))
-          ) : (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-black text-amber-700">
-              No slots assigned
-            </p>
-          )}
-        </div>
+        <details className="group rounded-2xl border border-slate-200 bg-slate-50">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-slate-700 [&::-webkit-details-marker]:hidden">
+            <span>Booked Slots ({bookedSlots.length})</span>
+            <ChevronRight
+              size={16}
+              className="shrink-0 text-slate-400 transition group-open:rotate-90"
+            />
+          </summary>
+          <div className="grid gap-1.5 border-t border-slate-200 px-3 py-2.5">
+            {bookedSlotsByDay.length > 0 ? (
+              bookedSlotsByDay.map((day) => (
+                <section key={day.date} className="grid gap-1.5 rounded-xl bg-white p-2.5">
+                  <h4 className="text-sm font-black text-slate-950">
+                    {formatTimetableDate(day.date)}
+                  </h4>
+                  <div className="grid gap-0.5">
+                    {day.slots.map((slot) => (
+                      <p
+                        key={slot.id}
+                        className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-700"
+                      >
+                        {formatTimetableTime(slot.time)} - {slot.minutes} min
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              ))
+            ) : (
+              <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-amber-700">
+                No slots assigned
+              </p>
+            )}
+          </div>
+        </details>
       </div>
       <div className="mt-3">
         <ApplicantStatusActions
@@ -2669,11 +2791,29 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
+function SummaryMetricCard({
+  label,
+  value,
+  detail,
+  tone = "slate",
+}: {
+  label: string;
+  value: string;
+  detail?: React.ReactNode;
+  tone?: "slate" | "success";
+}) {
+  const toneStyles =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50"
+      : "border-slate-200 bg-slate-50";
+
   return (
-    <div className="rounded-xl bg-slate-50 p-2">
-      <p className="text-[0.68rem] font-black uppercase text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-black capitalize">{value}</p>
+    <div className={`flex h-full min-h-28 flex-col justify-between rounded-2xl border p-3 ${toneStyles}`}>
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-sm font-black text-slate-950">{value}</p>
+      {detail ? <div className="mt-1.5">{detail}</div> : null}
     </div>
   );
 }
@@ -2912,40 +3052,35 @@ function getAssignableParticipantsForDay(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function formatTunnelTimeStatus(status: string | null) {
-  if (status === "owns_tunnel_time") {
-    return "Own tunnel time";
-  }
-
-  if (status === "needs_tunnel_time") {
-    return "Needs tunnel time";
-  }
-
-  return "Not provided";
-}
-
-function formatTunnelTimeAvailability(status: string | null) {
-  if (status === "owns_tunnel_time") {
-    return "✓ Own tunnel time available";
-  }
-
-  return "✕ Tunnel time still required";
-}
-
-function formatDuration(totalMinutes: number) {
+function formatBookedTimeSummary(totalMinutes: number) {
   const minutes = Math.max(0, Math.round(totalMinutes));
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
 
-  if (hours === 0) {
-    return `${remainder} min`;
+  const compact =
+    hours === 0
+      ? `${remainder}min`
+      : remainder === 0
+        ? `${hours}h`
+        : `${hours}h ${remainder}min`;
+
+  return `${compact} (${minutes}min)`;
+}
+
+function formatInterestStatusLabel(status: InterestStatus) {
+  if (status === "accepted") {
+    return "Accepted";
   }
 
-  if (remainder === 0) {
-    return `${hours} h`;
+  if (status === "declined") {
+    return "Declined";
   }
 
-  return `${hours} h ${remainder} min`;
+  if (status === "waitlist") {
+    return "Waitlist";
+  }
+
+  return "Pending";
 }
 
 function formatLongDay(value: string) {
@@ -2955,3 +3090,5 @@ function formatLongDay(value: string) {
     day: "numeric",
   }).format(new Date(`${value}T00:00:00`));
 }
+
+

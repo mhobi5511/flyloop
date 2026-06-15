@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
+import { CampTunnelTimeSummary } from "@/components/CampTunnelTimeSummary";
 import { CampTunnelTimeSettings } from "@/components/CampTunnelTimeSettings";
 import { FollowButton } from "@/components/FollowButton";
 import { FollowGuidance } from "@/components/FollowGuidance";
@@ -413,6 +414,10 @@ export default async function OpportunityDetailPage({
                             preferredMinutes: preference.preferred_minutes,
                           }))}
                         />
+                        <CampTunnelTimeSummary
+                          status={viewerTunnelTimeStatus}
+                          accountEmail={viewerTunnelAccountEmail}
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -453,6 +458,10 @@ export default async function OpportunityDetailPage({
                     dayId: preference.day_id,
                     preferredMinutes: preference.preferred_minutes,
                   }))}
+                />
+                <CampTunnelTimeSummary
+                  status={viewerTunnelTimeStatus}
+                  accountEmail={viewerTunnelAccountEmail}
                 />
               </div>
             ) : canShowCampApply ? (
