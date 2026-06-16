@@ -501,9 +501,10 @@ export default async function OpportunityDetailPage({
               <div className="mt-4">
                 <InterestButton
                   opportunityId={opportunity.id}
-                  disabled={isUnavailable}
+                  disabled={false}
                   initialStatus={viewerApplicationStatus}
                   compact
+                  isFull={isFull}
                 />
               </div>
             ) : !isCamp && !hasPublishedTimetable && !isUnavailable ? (

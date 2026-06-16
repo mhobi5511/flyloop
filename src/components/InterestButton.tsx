@@ -11,6 +11,7 @@ type InterestButtonProps = {
   disabled?: boolean;
   initialStatus?: InterestStatus;
   compact?: boolean;
+  isFull?: boolean;
 };
 
 export function InterestButton({
@@ -18,6 +19,7 @@ export function InterestButton({
   disabled,
   initialStatus,
   compact = false,
+  isFull = false,
 }: InterestButtonProps) {
   const [interestStatus, setInterestStatus] = useState<InterestStatus | null>(
     initialStatus ?? null,
@@ -99,6 +101,13 @@ export function InterestButton({
 
   return (
     <div className={compact ? "" : "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"}>
+      {isFull && !interestStatus ? (
+        <p className={`${compact ? "mb-2" : "mb-3"} rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-900`}>
+          This opportunity has already reached its participant capacity.
+          You can still apply, but there is a high likelihood that your
+          application will be placed on the waitlist or declined.
+        </p>
+      ) : null}
       <button
         type="button"
         disabled={disabled || hasInterest || isLoading}

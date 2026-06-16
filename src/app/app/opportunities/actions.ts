@@ -87,7 +87,10 @@ export async function sendOpportunityInterest(
     return { ok: false, message: "Could not send interest. Please try again." };
   }
 
-  if (!opportunity || opportunity.status !== "published") {
+  if (
+    !opportunity ||
+    (opportunity.status !== "published" && opportunity.status !== "full")
+  ) {
     return { ok: false, message: "This opportunity is no longer available." };
   }
 
@@ -106,10 +109,6 @@ export async function sendOpportunityInterest(
       ok: false,
       message: "This opportunity uses direct time booking.",
     };
-  }
-
-  if (opportunity.type !== "camp" && opportunity.available_spots <= 0) {
-    return { ok: false, message: "This opportunity is already full." };
   }
 
   const { data: existingInterest, error: existingError } = await supabase
