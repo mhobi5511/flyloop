@@ -692,10 +692,7 @@ function CreationModal({
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
-              Create inside Coaching
-            </p>
-            <h2 className="mt-1 text-xl font-black tracking-tight">
+            <h2 className="text-xl font-black tracking-tight">
               New Opportunity
             </h2>
           </div>

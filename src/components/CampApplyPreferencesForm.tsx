@@ -18,6 +18,7 @@ type CampApplyPreferencesFormProps = {
   opportunityId: string;
   campStartDate: string;
   campEndDate: string;
+  isFull?: boolean;
 };
 
 const preferenceOptions = [
@@ -35,6 +36,7 @@ export function CampApplyPreferencesForm({
   opportunityId,
   campStartDate,
   campEndDate,
+  isFull = false,
 }: CampApplyPreferencesFormProps) {
   const router = useRouter();
   const days = useMemo(() => getCampDays(campStartDate, campEndDate), [
@@ -284,6 +286,16 @@ export function CampApplyPreferencesForm({
             <p className="text-sm font-black text-slate-950">
               Submit Application
             </p>
+            {isFull ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-900">
+                This camp has already reached its participant capacity.
+                <br />
+                You can still apply, but there is a high likelihood that your
+                application will be placed on the waitlist or declined.
+                <br />
+                You may continue if you wish.
+              </div>
+            ) : null}
             <p className="text-sm font-semibold text-slate-600">
               Tunnel Time:{" "}
               {tunnelTimeStatus === "owns_tunnel_time"

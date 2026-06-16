@@ -209,7 +209,6 @@ export default async function AppHomePage({
     return (
       item.opportunity.status === "published" &&
       isOpportunityJoinable(item.opportunity, now) &&
-      item.opportunity.availableSpots > 0 &&
       item.opportunity.createdBy !== user.id &&
       (!viewerStatus || !interactedStatuses.has(viewerStatus))
     );
@@ -223,7 +222,11 @@ export default async function AppHomePage({
     : nearbyDiscoveryFeed;
   const visibleDiscoveryFeed = discoveryFeed.slice(0, 5);
   const globalSearchOpportunities = mapped
-    .filter((item) => item.opportunity.status === "published" && isOpportunityJoinable(item.opportunity, now))
+    .filter(
+      (item) =>
+        item.opportunity.status === "published" &&
+        isOpportunityJoinable(item.opportunity, now),
+    )
     .map((item) => item.opportunity);
   const futureRows = allRows.filter(
     (row) =>

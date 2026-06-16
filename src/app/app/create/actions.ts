@@ -115,10 +115,6 @@ function isSupportedCurrency(value: string): value is Currency {
   return supportedCurrencies.includes(value as Currency);
 }
 
-function isBookingMode(value: string): value is BookingMode {
-  return value === "approval_required" || value === "direct_time_booking";
-}
-
 function inferRegion(country: string) {
   const normalized = country.trim().toLowerCase();
   const europe = [
@@ -203,14 +199,7 @@ export async function publishOpportunity(
     return { ok: false, message: "Please choose an opportunity type." };
   }
 
-  const bookingMode: BookingMode =
-    input.type === "camp" || input.type === "huck_jam"
-      ? "approval_required"
-      : input.bookingMode;
-
-  if (!isBookingMode(bookingMode)) {
-    return { ok: false, message: "Please choose a booking mode." };
-  }
+  const bookingMode: BookingMode = "approval_required";
 
   if (!uuidPattern.test(input.tunnelId)) {
     return { ok: false, message: "Please select a tunnel before publishing." };
@@ -387,14 +376,7 @@ export async function updateOpportunity(
     return { ok: false, message: "Please choose an opportunity type." };
   }
 
-  const bookingMode: BookingMode =
-    input.type === "camp" || input.type === "huck_jam"
-      ? "approval_required"
-      : input.bookingMode;
-
-  if (!isBookingMode(bookingMode)) {
-    return { ok: false, message: "Please choose a booking mode." };
-  }
+  const bookingMode: BookingMode = "approval_required";
 
   if (!uuidPattern.test(input.tunnelId)) {
     return { ok: false, message: "Please select a tunnel before saving." };

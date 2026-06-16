@@ -61,6 +61,7 @@ export default async function SlotBookingPage({
   }
 
   const opportunity = mapOpportunity(row as HomeFeedRow);
+  const isFull = isOpportunityFull(opportunity);
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
@@ -143,6 +144,7 @@ export default async function SlotBookingPage({
                 opportunityId={opportunity.id}
                 campStartDate={opportunity.startDate}
                 campEndDate={opportunity.endDate}
+                isFull={isFull}
               />
             )}
           </div>
@@ -151,7 +153,6 @@ export default async function SlotBookingPage({
     );
   }
 
-  const isFull = isOpportunityFull(opportunity);
   const canBook =
     viewerApplicationStatus === "accepted" ||
     (opportunity.bookingMode === "direct_time_booking" &&

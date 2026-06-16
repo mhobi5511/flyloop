@@ -245,7 +245,10 @@ export default async function OpportunityDetailPage({
   const bookedTimesByDay = groupBookedTimesByDay(bookedTimes);
   const showAcceptedNextAction = canSelectTimes && isAccepted && !hasBookedSlots;
   const showBookedStatus = canSelectTimes && isAccepted && hasBookedSlots;
-  const canShowCampApply = isCamp && !viewerApplicationStatus && !isUnavailable;
+  const canShowCampApply =
+    isCamp &&
+    !viewerApplicationStatus &&
+    (opportunity.status === "published" || isFull);
   const sessionRange = formatSessionTimeRange(
     opportunity.sessionStart,
     opportunity.sessionEnd,
@@ -477,6 +480,14 @@ export default async function OpportunityDetailPage({
                     <p className="mt-1 text-sm font-semibold text-slate-600">
                       This camp still requires coach approval before any timetable is visible.
                     </p>
+                    {isFull ? (
+                      <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-900">
+                        This camp has already reached its participant capacity.
+                        You can still apply, but there is a high likelihood that
+                        your application will be placed on the waitlist or declined.
+                        You may continue if you wish.
+                      </p>
+                    ) : null}
                   </div>
                   <Link
                     href={`/app/opportunities/${opportunity.id}/times`}

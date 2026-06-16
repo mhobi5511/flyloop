@@ -108,7 +108,7 @@ export async function sendOpportunityInterest(
     };
   }
 
-  if (opportunity.available_spots <= 0) {
+  if (opportunity.type !== "camp" && opportunity.available_spots <= 0) {
     return { ok: false, message: "This opportunity is already full." };
   }
 

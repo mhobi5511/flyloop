@@ -357,6 +357,7 @@ export function CoachDashboardWorkspace({
               {!isHuckJam ? (
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   <FlightCapacityCard
+                    hasTimetable={activeCamp.timetableSlots.length > 0}
                     bookedMinutes={activeCamp.summary.totalBookedMinutes}
                     availableMinutes={activeCamp.summary.totalAvailableMinutes}
                   />
@@ -2091,7 +2092,6 @@ function CampSettingsPanel({
     registrationDeadline: camp.registrationDeadline ?? "",
     sessionStart: camp.sessionStart?.slice(0, 5) ?? "18:00",
     sessionEnd: camp.sessionEnd?.slice(0, 5) ?? "20:00",
-    bookingMode: camp.bookingMode,
     price: String(camp.price),
     currency: camp.currency,
     totalCapacity: String(camp.totalCapacity),
@@ -2108,7 +2108,7 @@ function CampSettingsPanel({
 
     const payload: OpportunityFormInput = {
       type: camp.type,
-      bookingMode: form.bookingMode as BookingMode,
+      bookingMode: "approval_required",
       title: form.title,
       tunnelId: form.tunnelId,
       startDate: form.startDate,
@@ -2277,16 +2277,6 @@ function CampSettingsPanel({
             </DashboardField>
           </div>
         ) : null}
-        <DashboardField label="Booking Mode">
-          <select
-            value={form.bookingMode}
-            onChange={(event) => updateField("bookingMode", event.target.value)}
-            className={dashboardInputClass}
-          >
-            <option value="approval_required">Coach approves participants</option>
-            <option value="direct_time_booking">Direct booking</option>
-          </select>
-        </DashboardField>
         <div className="grid grid-cols-[1fr_5rem] gap-2">
           <DashboardField label="Price">
             <input
@@ -2870,14 +2860,31 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function FlightCapacityCard({
+  hasTimetable,
   bookedMinutes,
   availableMinutes,
 }: {
+  hasTimetable: boolean;
   bookedMinutes: number;
   availableMinutes: number;
 }) {
-  const totalMinutes = Math.max(bookedMinutes + availableMinutes, 1);
-  const bookedPercent = Math.min((bookedMinutes / totalMinutes) * 100, 100);
+  if (!hasTimetable) {
+    return (
+      <div className="rounded-xl bg-slate-50 px-3 py-2">
+        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+          Flight Capacity
+        </p>
+        <p className="mt-1 text-2xl font-black text-slate-950">N/A</p>
+        <p className="mt-2 text-xs font-black text-slate-500">
+          No timetable created yet.
+        </p>
+      </div>
+    );
+  }
+
+  const totalMinutes = bookedMinutes + availableMinutes;
+  const bookedPercent =
+    totalMinutes > 0 ? Math.min((bookedMinutes / totalMinutes) * 100, 100) : 0;
   const bookedLabel = `${bookedPercent.toFixed(bookedPercent % 1 === 0 ? 0 : 1)}% booked`;
 
   return (

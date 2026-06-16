@@ -296,6 +296,9 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
   const draftChanges = (row.opportunity_time_slots ?? []).filter(
     (slot) => !slot.is_published,
   ).length;
+  const hasPublishedTimetable = (row.opportunity_time_slots ?? []).some(
+    (slot) => slot.is_published,
+  );
   const bookedUserIds = new Set(
     (row.opportunity_time_slots ?? []).flatMap((slot) =>
       (slot.opportunity_slot_bookings ?? [])
@@ -313,7 +316,7 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
   const actionScore =
     pendingApplications * 4 +
     waitlistApplications * 3 +
-    (row.status === "published" && !row.tunnel_shared_at ? 4 : 0) +
+    (hasPublishedTimetable && !row.tunnel_shared_at ? 4 : 0) +
     draftChanges * 3 +
     unassignedAthletes * 3 +
     releaseRequests.length * 4;
@@ -337,6 +340,7 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
     hasAttention:
       pendingApplications > 0 ||
       waitlistApplications > 0 ||
+      (hasPublishedTimetable && !row.tunnel_shared_at) ||
       draftChanges > 0 ||
       unassignedAthletes > 0 ||
       releaseRequests.length > 0,
@@ -367,6 +371,9 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
 
     const waitlistApplicants = applicants.filter(
       (applicant) => applicant.status === "waitlist",
+    );
+    const hasPublishedTimetable = (row.opportunity_time_slots ?? []).some(
+      (slot) => slot.is_published,
     );
 
     for (const applicant of applicants.filter((item) => item.status === "pending")) {
@@ -399,7 +406,7 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
       });
     }
 
-    if (row.status === "published" && !row.tunnel_shared_at) {
+    if (hasPublishedTimetable && !row.tunnel_shared_at) {
       const tunnel = firstRelation(row.tunnel_profiles);
       const tunnelName = tunnel?.name?.trim() || "the tunnel";
 

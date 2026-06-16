@@ -317,11 +317,11 @@ function badgeClass(tone: "amber" | "blue" | "green" | "slate") {
 function FullBadge({ dense }: { dense: boolean }) {
   return (
     <span
-      className={`rounded-full border border-slate-300 bg-white/95 px-2 font-black text-slate-700 shadow-sm ${
+      className={`rounded-full border border-amber-200 bg-amber-50 px-2 font-black text-amber-800 shadow-sm ${
         dense ? "py-0.5 text-[0.68rem]" : "py-1 text-xs"
       }`}
     >
-      Full
+      FULL
     </span>
   );
 }

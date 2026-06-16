@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Check, CircleDollarSign, ClipboardCheck, MapPin, Users } from "lucide-react";
+import { CalendarDays, Check, CircleDollarSign, MapPin, Users } from "lucide-react";
 import {
   publishOpportunity,
   updateOpportunity,
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
-import type { BookingMode, OpportunityType } from "@/lib/types";
+import type { OpportunityType } from "@/lib/types";
 
 export type TunnelOption = {
   id: string;
@@ -202,11 +202,6 @@ export function CreateOpportunityForm({
   const [type, setType] = useState<OpportunityType>(
     initialFormType,
   );
-  const [bookingMode, setBookingMode] = useState<BookingMode>(
-    initialOpportunity?.type === "huck_jam"
-      ? "approval_required"
-      : (initialOpportunity?.bookingMode ?? "approval_required"),
-  );
   const [title, setTitle] = useState(initialOpportunity?.title ?? "");
   const [tunnelId, setTunnelId] = useState(initialOpportunity?.tunnelId ?? "");
   const [startDate, setStartDate] = useState(initialStartDate);
@@ -316,7 +311,6 @@ export function CreateOpportunityForm({
     setError("");
 
     if (nextType === "huck_jam") {
-      setBookingMode("approval_required");
       if (!initialOpportunity) {
         setPrice("99");
       }
@@ -331,7 +325,6 @@ export function CreateOpportunityForm({
       return;
     }
 
-    setBookingMode("approval_required");
     if (!initialOpportunity) {
       setPrice("550");
       setMinMinutesOrHours("60");
@@ -474,7 +467,7 @@ export function CreateOpportunityForm({
       const effectiveEndDate = type === "huck_jam" ? startDate : endDate;
       const values = {
         type,
-        bookingMode: "approval_required" as BookingMode,
+        bookingMode: "approval_required" as const,
         title,
         tunnelId,
         startDate,
@@ -596,10 +589,7 @@ export function CreateOpportunityForm({
 
         {currentStep.id === "capacity" ? (
           <CapacityStep
-            type={type}
-            bookingMode={bookingMode}
             totalCapacity={totalCapacity}
-            onBookingModeChange={setBookingMode}
             onCapacityChange={setTotalCapacity}
           />
         ) : null}
@@ -638,7 +628,6 @@ export function CreateOpportunityForm({
             sessionEnd={sessionEnd}
             registrationDeadline={registrationDeadline}
             totalCapacity={totalCapacity}
-            bookingMode={bookingMode}
             price={price}
             currency={currency}
             minMinutesOrHours={minMinutesOrHours}
@@ -821,13 +810,13 @@ function TypeStep({
         <TypeCard
           selected={type === "camp"}
           title="Camp"
-          description="A multi-day coaching opportunity with capacity, booking mode and hourly pricing."
+          description="A multi-day coaching opportunity with athlete applications and timetable management."
           onClick={() => onChange("camp")}
         />
         <TypeCard
           selected={type === "huck_jam"}
           title="Huck Jam"
-          description="A single-day session with a participation fee and a simple sign-up flow."
+          description="A single-day session with a participation fee and simple sign-up flow."
           onClick={() => onChange("huck_jam")}
         />
       </div>
@@ -1126,49 +1115,19 @@ function DateInput({
 }
 
 function CapacityStep({
-  type,
-  bookingMode,
   totalCapacity,
-  onBookingModeChange,
   onCapacityChange,
 }: {
-  type: OpportunityType;
-  bookingMode: BookingMode;
   totalCapacity: string;
-  onBookingModeChange: (value: BookingMode) => void;
   onCapacityChange: (value: string) => void;
 }) {
-  const isCamp = type === "camp";
-
   return (
     <div className="grid gap-3">
       <StepHeader
         eyebrow="Capacity"
-        title="How should booking work?"
-        description="Choose how athletes join, then set the maximum number of participants."
+        title="Maximum Participants"
+        description="Set the maximum number of athletes allowed for this opportunity."
       />
-      {isCamp ? (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm font-bold text-sky-800">
-          Camps always use coach approval.
-        </div>
-      ) : (
-        <div className="grid gap-2 md:grid-cols-2">
-          <BookingModeOption
-            value="approval_required"
-            selectedValue={bookingMode}
-            title="Coach approves participants"
-            description="Recommended for Camps"
-            onChange={onBookingModeChange}
-          />
-          <BookingModeOption
-            value="direct_time_booking"
-            selectedValue={bookingMode}
-            title="Direct booking"
-            description="Recommended for Huck Jams"
-            onChange={onBookingModeChange}
-          />
-        </div>
-      )}
       <Field label="Maximum Participants" required>
         <input
           type="text"
@@ -1288,7 +1247,7 @@ function ParticipationStep({
     <div className="grid gap-3">
       <StepHeader
         eyebrow="Participation"
-        title="Set capacity and fee"
+        title="Set the fee"
         description="Participation fee represents entry to this Huck Jam session."
       />
       <Field label="Maximum Participants" required>
@@ -1339,7 +1298,6 @@ function ReviewStep({
   sessionEnd,
   registrationDeadline,
   totalCapacity,
-  bookingMode,
   price,
   currency,
   minMinutesOrHours,
@@ -1355,7 +1313,6 @@ function ReviewStep({
   sessionEnd: string;
   registrationDeadline: string;
   totalCapacity: string;
-  bookingMode: BookingMode;
   price: string;
   currency: string;
   minMinutesOrHours: string;
@@ -1374,10 +1331,6 @@ function ReviewStep({
     isHuckJam && sessionStart && sessionEnd
       ? `${formatSessionTime(sessionStart)} - ${formatSessionTime(sessionEnd)}`
       : "";
-  const bookingLabel =
-    isHuckJam || bookingMode === "approval_required"
-      ? "Approval Required"
-      : "Direct Booking";
   const priceLabel = isHuckJam
     ? formatCurrency(price, currency)
     : `${formatCurrency(price, currency)} per ${minMinutesOrHours || "60"} minutes`;
@@ -1413,11 +1366,6 @@ function ReviewStep({
           <ReviewLine
             icon={<Users size={17} />}
             value={`${totalCapacity || "0"} Participants`}
-            onEdit={() => onEdit(isHuckJam ? "participation" : "capacity")}
-          />
-          <ReviewLine
-            icon={<ClipboardCheck size={17} />}
-            value={bookingLabel}
             onEdit={() => onEdit(isHuckJam ? "participation" : "capacity")}
           />
           <ReviewLine
@@ -1582,43 +1530,3 @@ function TunnelCombobox({
   );
 }
 
-function BookingModeOption({
-  value,
-  selectedValue,
-  title,
-  description,
-  onChange,
-}: {
-  value: BookingMode;
-  selectedValue: BookingMode;
-  title: string;
-  description: string;
-  onChange: (value: BookingMode) => void;
-}) {
-  const isSelected = selectedValue === value;
-
-  return (
-    <label
-      className={`grid cursor-pointer gap-1.5 rounded-xl border px-3 py-3 text-sm transition ${
-        isSelected
-          ? "border-sky-300 bg-sky-50"
-          : "border-slate-200 bg-white hover:bg-slate-50"
-      }`}
-    >
-      <span className="flex items-center gap-2 font-black text-slate-950">
-        <input
-          type="radio"
-          name="bookingMode"
-          value={value}
-          checked={isSelected}
-          onChange={() => onChange(value)}
-          className="size-4 accent-sky-600"
-        />
-        {title}
-      </span>
-      <span className="pl-6 text-xs font-bold leading-4 text-slate-500">
-        {description}
-      </span>
-    </label>
-  );
-}
