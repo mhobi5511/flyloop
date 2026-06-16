@@ -42,6 +42,7 @@ import { Avatar } from "@/components/Avatar";
 import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
 import { SlotReleaseRequestActions } from "@/components/SlotReleaseRequestActions";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
+import { TunnelDashboardShareButton } from "@/components/TunnelDashboardShareButton";
 import {
   formatPrice,
   getOpportunityShareText,
@@ -101,7 +102,7 @@ type CampWorkspace = {
   tunnelId: string;
   tunnelName: string;
   tunnelLocation: string;
-  tunnelDashboardUrl: string;
+  tunnelSharedAt: string | null;
   dateLabel: string;
   participants: Participant[];
   preferences: CampPreference[];
@@ -131,12 +132,11 @@ type TunnelOption = {
   country: string | null;
 };
 
-type HeaderPanel = "share" | null;
 type TabletPanel = "participants" | "participant" | null;
 type AttentionItem = {
   label: string;
   tone: "amber" | "slate";
-  target: "applicants" | "participant" | "timetable";
+  target: "applicants" | "participant" | "timetable" | "share";
   count: number;
   participantId?: string;
 };
@@ -180,7 +180,7 @@ export function CoachDashboardWorkspace({
   tunnels,
 }: CoachDashboardWorkspaceProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [headerPanel, setHeaderPanel] = useState<HeaderPanel>(null);
+  const [headerPanel, setHeaderPanel] = useState<"share" | null>(null);
   const [tabletPanel, setTabletPanel] = useState<TabletPanel>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [desktopDayStart, setDesktopDayStart] = useState(0);
@@ -221,6 +221,7 @@ export function CoachDashboardWorkspace({
         publicUrl,
       )
     : "";
+  const tunnelDashboardShared = Boolean(activeCamp?.tunnelSharedAt);
 
   function focusApplicants() {
     setSelectedParticipantId("");
@@ -238,6 +239,11 @@ export function CoachDashboardWorkspace({
       setSelectedParticipantId(item.participantId);
       setIsSidebarCollapsed(false);
       setTabletPanel("participant");
+      return;
+    }
+
+    if (item.target === "share") {
+      setHeaderPanel("share");
       return;
     }
 
@@ -308,7 +314,7 @@ export function CoachDashboardWorkspace({
     <div className="min-h-dvh bg-slate-100 text-slate-950">
       <div className="mx-auto grid max-w-[96rem] gap-4 p-3 sm:p-4 xl:p-5">
         <header className="hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 xl:block">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-stretch">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)] xl:items-stretch">
             <div className="grid content-start">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -349,18 +355,14 @@ export function CoachDashboardWorkspace({
                 </div>
               </div>
               {!isHuckJam ? (
-                <div className="mt-3 grid gap-2 md:grid-cols-4">
-                  <StatCard
-                    label="Booked minutes"
-                    value={`${activeCamp.summary.totalBookedMinutes} min`}
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <FlightCapacityCard
+                    bookedMinutes={activeCamp.summary.totalBookedMinutes}
+                    availableMinutes={activeCamp.summary.totalAvailableMinutes}
                   />
+                  <StatCard label="Open Slots" value={activeCamp.summary.openSlots} />
                   <StatCard
-                    label="Open minutes"
-                    value={`${activeCamp.summary.totalAvailableMinutes} min`}
-                  />
-                  <StatCard label="Open slots" value={activeCamp.summary.openSlots} />
-                  <StatCard
-                    label="Estimated total"
+                    label="Estimated Revenue"
                     value={formatTimetableMoney(
                       activeCamp.summary.estimatedRevenue,
                       activeCamp.currency,
@@ -369,43 +371,57 @@ export function CoachDashboardWorkspace({
                 </div>
               ) : null}
             </div>
-            <div className="grid h-full grid-cols-2 gap-2 self-stretch">
-              <button
-                type="button"
-                onClick={() =>
-                  setHeaderPanel((current) => (current === "share" ? null : "share"))
+            <div className="grid h-full gap-3 self-stretch xl:grid-cols-3">
+              <UtilityCard
+                tone="sky"
+                icon={<Share2 size={19} />}
+                title="Invite Athletes"
+                description="Share this opportunity with athletes."
+              >
+                <ShareOpportunityButton
+                  label="Invite"
+                  shareText={shareText}
+                  url={publicUrl}
+                  copyUrlOnly
+                  compact
+                  fill
+                  variant="primary"
+                />
+              </UtilityCard>
+              <UtilityCard
+                tone={tunnelDashboardShared ? "amber" : "slate"}
+                icon={<Users size={19} />}
+                title="Tunnel Dashboard"
+                description="Share live schedules with the tunnel."
+                status={
+                  tunnelDashboardShared
+                    ? "✅ Shared With Tunnel"
+                    : "⚠ Not Shared Yet"
                 }
-                className="flex h-full min-h-[6.75rem] w-full flex-col items-start justify-between rounded-2xl border border-sky-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-md"
               >
-                <span className="grid size-11 place-items-center rounded-2xl bg-sky-100 text-sky-700">
-                  <Share2 size={19} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-black text-slate-950">
-                    Invite &amp; Share
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-600">
-                    Invite athletes and share links.
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(true)}
-                className="flex h-full min-h-[6.75rem] w-full flex-col items-start justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md"
+                <TunnelDashboardShareButton
+                  opportunityId={activeCamp.id}
+                  opportunityTitle={activeCamp.title}
+                  tunnelSharedAt={activeCamp.tunnelSharedAt}
+                  label="Share"
+                  compact
+                  fill
+                />
+              </UtilityCard>
+              <UtilityCard
+                tone="slate"
+                icon={<Settings size={19} />}
+                title="Opportunity Settings"
+                description="Edit dates, pricing, capacity and details."
               >
-                <span className="grid size-11 place-items-center rounded-2xl bg-slate-100 text-slate-700">
-                  <Settings size={19} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-black text-slate-950">
-                    Opportunity Settings
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-600">
-                    Edit dates, pricing, capacity and details.
-                  </span>
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  Open Settings
+                </button>
+              </UtilityCard>
             </div>
           </div>
         </header>
@@ -1091,12 +1107,60 @@ export function CoachDashboardWorkspace({
         </div>
       </main>
       {headerPanel === "share" ? (
-        <CenteredModal title="Invite & Share" onClose={() => setHeaderPanel(null)}>
-          <SharePanel
-            publicUrl={publicUrl}
-            shareText={shareText}
-            tunnelDashboardUrl={activeCamp.tunnelDashboardUrl}
-          />
+        <CenteredModal title="Utilities" onClose={() => setHeaderPanel(null)}>
+          <div className="grid gap-2">
+            <UtilityCard
+              tone="sky"
+              icon={<Share2 size={19} />}
+              title="Invite Athletes"
+              description="Share this opportunity with athletes."
+            >
+              <ShareOpportunityButton
+                label="Invite"
+                shareText={shareText}
+                url={publicUrl}
+                copyUrlOnly
+                compact
+                fill
+                variant="primary"
+              />
+            </UtilityCard>
+            <UtilityCard
+              tone={tunnelDashboardShared ? "amber" : "slate"}
+              icon={<Users size={19} />}
+              title="Tunnel Dashboard"
+              description="Share live schedules with the tunnel."
+              status={
+                tunnelDashboardShared ? "✅ Shared With Tunnel" : "⚠ Not Shared Yet"
+              }
+            >
+              <TunnelDashboardShareButton
+                opportunityId={activeCamp.id}
+                opportunityTitle={activeCamp.title}
+                tunnelSharedAt={activeCamp.tunnelSharedAt}
+                label="Share"
+                compact
+                fill
+              />
+            </UtilityCard>
+            <UtilityCard
+              tone="slate"
+              icon={<Settings size={19} />}
+              title="Opportunity Settings"
+              description="Edit dates, pricing, capacity and details."
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setHeaderPanel(null);
+                  setIsSettingsOpen(true);
+                }}
+                className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Open Settings
+              </button>
+            </UtilityCard>
+          </div>
         </CenteredModal>
       ) : null}
       {isSettingsOpen ? (
@@ -1137,7 +1201,6 @@ function CenteredModal({
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
           <h2 className="inline-flex items-center gap-2 text-lg font-black tracking-tight">
             {title === "Opportunity Settings" ? <Settings size={18} /> : null}
-            {title === "Invite & Share" ? <Share2 size={18} /> : null}
             {title}
           </h2>
           <button
@@ -1152,6 +1215,56 @@ function CenteredModal({
         <div className="overflow-y-auto p-3">{children}</div>
       </section>
     </div>
+  );
+}
+
+function UtilityCard({
+  tone,
+  icon,
+  title,
+  description,
+  status,
+  children,
+}: {
+  tone: "sky" | "amber" | "slate";
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  status?: string;
+  children: React.ReactNode;
+}) {
+  const toneStyles =
+    tone === "amber"
+      ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white"
+      : tone === "sky"
+        ? "border-sky-200 bg-gradient-to-br from-sky-50 to-white"
+        : "border-slate-200 bg-gradient-to-br from-slate-50 to-white";
+
+  const iconStyles =
+    tone === "amber"
+      ? "bg-amber-100 text-amber-700"
+      : tone === "sky"
+        ? "bg-sky-100 text-sky-700"
+        : "bg-slate-100 text-slate-700";
+
+  return (
+    <section className={`grid h-full min-h-0 gap-2 rounded-2xl border p-3 text-left shadow-sm ${toneStyles}`}>
+      <div className="flex items-start justify-between gap-2">
+        <span className={`grid size-10 shrink-0 place-items-center rounded-2xl ${iconStyles}`}>
+          {icon}
+        </span>
+      </div>
+      <div className="min-w-0">
+        <h2 className="text-sm font-black text-slate-950">{title}</h2>
+        <p className="mt-1 text-xs font-semibold leading-4 text-slate-600">{description}</p>
+        {status ? (
+          <p className="mt-2 inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[0.7rem] font-black text-slate-600">
+            {status}
+          </p>
+        ) : null}
+      </div>
+      <div className="mt-auto">{children}</div>
+    </section>
   );
 }
 
@@ -2512,39 +2625,6 @@ function ParticipantPanel({
   );
 }
 
-function SharePanel({
-  publicUrl,
-  shareText,
-  tunnelDashboardUrl = "",
-}: {
-  publicUrl: string;
-  shareText: string;
-  tunnelDashboardUrl?: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="grid gap-2">
-        <ShareOpportunityButton
-          label="Invite Athlete"
-          shareText={shareText}
-          url={publicUrl}
-          compact
-          fill
-        />
-        {tunnelDashboardUrl ? (
-          <ShareOpportunityButton
-            label="Tunnel Operations Dashboard"
-            shareText={tunnelDashboardUrl}
-            url={tunnelDashboardUrl}
-            compact
-            fill
-          />
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
 function HuckjamOverviewPanel({
   camp,
   compact = false,
@@ -2789,6 +2869,36 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function FlightCapacityCard({
+  bookedMinutes,
+  availableMinutes,
+}: {
+  bookedMinutes: number;
+  availableMinutes: number;
+}) {
+  const totalMinutes = Math.max(bookedMinutes + availableMinutes, 1);
+  const bookedPercent = Math.min((bookedMinutes / totalMinutes) * 100, 100);
+  const bookedLabel = `${bookedPercent.toFixed(bookedPercent % 1 === 0 ? 0 : 1)}% booked`;
+
+  return (
+    <div className="rounded-xl bg-slate-50 px-3 py-2">
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+        Flight Capacity
+      </p>
+      <p className="mt-1 text-2xl font-black text-slate-950">
+        {bookedMinutes} / {totalMinutes} min
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+        <div
+          className="h-full rounded-full bg-sky-600"
+          style={{ width: `${bookedPercent}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs font-black text-slate-500">{bookedLabel}</p>
+    </div>
+  );
+}
+
 function SummaryMetricCard({
   label,
   value,
@@ -2990,6 +3100,14 @@ function getAttentionItems(camp: CampWorkspace) {
       target: "participant",
       count: participantsMissingTunnelTime.length,
       participantId: participantsMissingTunnelTime[0]?.id,
+    });
+  }
+  if (camp.status === "published" && !camp.tunnelSharedAt) {
+    items.push({
+      label: "Tunnel not informed",
+      tone: "amber",
+      target: "share",
+      count: 1,
     });
   }
   if (openSlots > 0) {

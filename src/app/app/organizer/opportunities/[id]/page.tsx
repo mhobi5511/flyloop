@@ -47,7 +47,6 @@ import {
   groupTimetableSlotsByDay,
   type TimetableSlot,
 } from "@/lib/timetable";
-import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import type {
   BookingMode,
   InterestStatus,
@@ -71,6 +70,7 @@ type OrganizerOpportunity = {
   currency: string;
   min_minutes_or_hours: string | null;
   description: string | null;
+  tunnel_shared_at: string | null;
   tunnel_profiles:
     | { name: string; city: string | null; country: string | null }
     | Array<{ name: string; city: string | null; country: string | null }>
@@ -164,7 +164,7 @@ export default async function OrganizerOpportunityPage({
       .maybeSingle(),
     supabase
       .from("opportunities")
-      .select("id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_profiles(name,city,country)")
+      .select("id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_shared_at,tunnel_profiles(name,city,country)")
       .eq("id", id)
       .eq("created_by", user?.id)
       .maybeSingle(),
@@ -323,32 +323,6 @@ export default async function OrganizerOpportunityPage({
     currentOpportunity.session_start,
     currentOpportunity.session_end,
   );
-  const tunnelDashboardUrl = isHuckJam
-    ? ""
-    : await getOrCreateTunnelDashboardUrl(supabase, currentOpportunity.id);
-  const coachName = profile?.full_name?.trim() || "Coach";
-  const tunnelDashboardShareSubject = `Flyloop Operations Dashboard - ${currentOpportunity.title}`;
-  const tunnelDashboardShareText = tunnelDashboardUrl
-    ? [
-        "Hello,",
-        "",
-        `Here is the Flyloop Operations Dashboard for ${currentOpportunity.title}.`,
-        "",
-        "This dashboard reflects the current camp planning and updates whenever changes are made.",
-        "",
-        "You can use it to view:",
-        "- participant schedule",
-        "- timetable",
-        "- participant contact information",
-        "- latest changes",
-        "",
-        "Dashboard:",
-        tunnelDashboardUrl,
-        "",
-        "Kind regards,",
-        coachName,
-      ].join("\n")
-    : "";
 
   return (
     <AppShell active="dashboard" canCreate={canCreate}>
@@ -473,12 +447,11 @@ export default async function OrganizerOpportunityPage({
           <div className="grid gap-2">
             <OrganizerOpportunityActions
               opportunityId={currentOpportunity.id}
+              opportunityTitle={currentOpportunity.title}
               shareLabel={shareLabel}
               shareText={shareText}
               shareUrl={publicUrl}
-              tunnelDashboardUrl={tunnelDashboardUrl}
-              tunnelDashboardShareText={tunnelDashboardShareText}
-              tunnelDashboardShareSubject={tunnelDashboardShareSubject}
+              tunnelSharedAt={currentOpportunity.tunnel_shared_at}
               hasTimetable={(timetableSlotCount ?? 0) > 0}
               showTimetable={!isHuckJam}
             />
@@ -776,37 +749,6 @@ function formatTunnelTimeStatus(status: string | null) {
   }
 
   return "Not provided";
-}
-
-async function getOrCreateTunnelDashboardUrl(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  opportunityId: string,
-) {
-  const { data: existingLink } = await supabase
-    .from("opportunity_tunnel_dashboard_links")
-    .select("secret")
-    .eq("opportunity_id", opportunityId)
-    .maybeSingle();
-
-  if (existingLink?.secret) {
-    return getTunnelDashboardUrl(existingLink.secret);
-  }
-
-  const { data: createdLink, error } = await supabase
-    .from("opportunity_tunnel_dashboard_links")
-    .insert({ opportunity_id: opportunityId })
-    .select("secret")
-    .single();
-
-  if (error || !createdLink?.secret) {
-    console.error("Tunnel dashboard link creation failed", {
-      opportunityId,
-      error,
-    });
-    return "";
-  }
-
-  return getTunnelDashboardUrl(createdLink.secret);
 }
 
 function TimetableStat({

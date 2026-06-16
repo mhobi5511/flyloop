@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock3,
   Plus,
+  Share2,
   Users,
   X,
 } from "lucide-react";
@@ -35,6 +36,7 @@ export type CoachWorkspaceCamp = {
   endDate: string;
   dateLabel: string;
   tunnelLabel: string;
+  tunnelSharedAt: string | null;
   athleteCount: number;
   pendingApplications: number;
   waitlistApplications: number;
@@ -69,10 +71,11 @@ export type CoachWorkspaceAttentionItem = {
   group:
     | "Applications Waiting"
     | "Waitlist"
+    | "Tunnel Not Informed"
     | "Draft Changes Pending"
     | "Release Requests"
     | "Unassigned Athletes";
-  kind: "application" | "waitlist" | "draft" | "release" | "unassigned";
+  kind: "application" | "waitlist" | "tunnel" | "draft" | "release" | "unassigned";
   title: string;
   description: string;
   campId: string;
@@ -110,6 +113,7 @@ type CoachCommandCenterWorkspaceProps = {
 const attentionGroupOrder: CoachWorkspaceAttentionItem["group"][] = [
   "Applications Waiting",
   "Waitlist",
+  "Tunnel Not Informed",
   "Draft Changes Pending",
   "Release Requests",
   "Unassigned Athletes",
@@ -599,15 +603,19 @@ function getAttentionPriority(item: CoachWorkspaceAttentionItem) {
     return 1;
   }
 
-  if (item.kind === "draft") {
+  if (item.kind === "tunnel") {
     return 2;
   }
 
-  if (item.kind === "unassigned") {
+  if (item.kind === "draft") {
     return 3;
   }
 
-  return 4;
+  if (item.kind === "unassigned") {
+    return 4;
+  }
+
+  return 5;
 }
 
 function getAttentionTone(item: CoachWorkspaceAttentionItem) {
@@ -616,6 +624,10 @@ function getAttentionTone(item: CoachWorkspaceAttentionItem) {
   }
 
   if (item.kind === "waitlist") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  if (item.kind === "tunnel") {
     return "bg-amber-100 text-amber-700";
   }
 
@@ -637,6 +649,10 @@ function getAttentionIcon(item: CoachWorkspaceAttentionItem) {
 
   if (item.kind === "waitlist") {
     return <Users size={16} />;
+  }
+
+  if (item.kind === "tunnel") {
+    return <Share2 size={16} />;
   }
 
   if (item.kind === "draft") {

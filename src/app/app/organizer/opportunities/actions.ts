@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 import { hasUnreadNotification } from "@/lib/notification-dedupe";
+import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   sendPendingPushNotificationsForOpportunity,
@@ -16,6 +17,14 @@ const editableStatuses: InterestStatus[] = ["accepted", "declined", "waitlist"];
 
 type ActionResult =
   | { ok: true; message: string }
+  | { ok: false; message: string };
+
+type TunnelDashboardShareResult =
+  | { ok: true; message: string; tunnelDashboardUrl: string }
+  | { ok: false; message: string };
+
+type TunnelDashboardLinkResult =
+  | { ok: true; message: string; tunnelDashboardUrl: string }
   | { ok: false; message: string };
 
 type ExistingTimetableSlotWithBookings = {
@@ -717,6 +726,167 @@ export async function sendCoachDashboardSlotReminder(
     ok: true,
     message: "This follow-up now appears in Requires Attention.",
   };
+}
+
+export async function shareTunnelDashboard(
+  opportunityId: string,
+): Promise<TunnelDashboardShareResult> {
+  const linkResult = await ensureTunnelDashboardLink(opportunityId);
+
+  if (!linkResult.ok) {
+    return linkResult;
+  }
+
+  const shareResult = await markTunnelDashboardShared(opportunityId);
+
+  if (!shareResult.ok) {
+    return shareResult;
+  }
+
+  return {
+    ok: true,
+    message: "Tunnel dashboard shared with the tunnel.",
+    tunnelDashboardUrl: linkResult.tunnelDashboardUrl,
+  };
+}
+
+export async function ensureTunnelDashboardLink(
+  opportunityId: string,
+): Promise<TunnelDashboardLinkResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("id,title,created_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityError) {
+    console.error("Tunnel dashboard share lookup failed", {
+      opportunityId,
+      code: opportunityError.code,
+      message: opportunityError.message,
+      details: opportunityError.details,
+      hint: opportunityError.hint,
+    });
+    return { ok: false, message: "Could not share the tunnel dashboard." };
+  }
+
+  if (!opportunity || opportunity.created_by !== user.id) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  const { data: existingLink, error: linkLookupError } = await supabase
+    .from("opportunity_tunnel_dashboard_links")
+    .select("secret")
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+
+  if (linkLookupError) {
+    console.error("Tunnel dashboard link lookup failed", {
+      opportunityId,
+      code: linkLookupError.code,
+      message: linkLookupError.message,
+      details: linkLookupError.details,
+      hint: linkLookupError.hint,
+    });
+    return { ok: false, message: "Could not share the tunnel dashboard." };
+  }
+
+  let secret = existingLink?.secret ?? "";
+
+  if (!secret) {
+    const { data: createdLink, error: createError } = await supabase
+      .from("opportunity_tunnel_dashboard_links")
+      .insert({ opportunity_id: opportunityId })
+      .select("secret")
+      .single();
+
+    if (createError || !createdLink?.secret) {
+      console.error("Tunnel dashboard link creation failed", {
+        opportunityId,
+        code: createError?.code,
+        message: createError?.message,
+        details: createError?.details,
+        hint: createError?.hint,
+      });
+      return { ok: false, message: "Could not share the tunnel dashboard." };
+    }
+
+    secret = createdLink.secret;
+  }
+
+  return {
+    ok: true,
+    message: "Tunnel dashboard link ready.",
+    tunnelDashboardUrl: getTunnelDashboardUrl(secret),
+  };
+}
+
+export async function markTunnelDashboardShared(
+  opportunityId: string,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("id,created_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityError) {
+    console.error("Tunnel dashboard shared-state lookup failed", {
+      opportunityId,
+      code: opportunityError.code,
+      message: opportunityError.message,
+      details: opportunityError.details,
+      hint: opportunityError.hint,
+    });
+    return { ok: false, message: "Could not update tunnel status." };
+  }
+
+  if (!opportunity || opportunity.created_by !== user.id) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("opportunities")
+    .update({ tunnel_shared_at: new Date().toISOString() })
+    .eq("id", opportunityId)
+    .eq("created_by", user.id);
+
+  if (updateError) {
+    console.error("Tunnel dashboard share timestamp update failed", {
+      opportunityId,
+      code: updateError.code,
+      message: updateError.message,
+      details: updateError.details,
+      hint: updateError.hint,
+    });
+    return { ok: false, message: "Could not update tunnel status." };
+  }
+
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath(`/app/coach-dashboard/${opportunityId}`);
+  revalidatePath("/app/coach-dashboard");
+
+  return { ok: true, message: "Tunnel dashboard shared with the tunnel." };
 }
 
 export async function sendTimetableBookingReminderForm(

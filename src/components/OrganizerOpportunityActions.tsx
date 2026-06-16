@@ -10,24 +10,22 @@ import { TunnelDashboardShareButton } from "./TunnelDashboardShareButton";
 
 type OrganizerOpportunityActionsProps = {
   opportunityId: string;
+  opportunityTitle: string;
   shareLabel: string;
   shareText: string;
   shareUrl: string;
-  tunnelDashboardUrl?: string;
-  tunnelDashboardShareText?: string;
-  tunnelDashboardShareSubject?: string;
+  tunnelSharedAt: string | null;
   hasTimetable: boolean;
   showTimetable?: boolean;
 };
 
 export function OrganizerOpportunityActions({
   opportunityId,
+  opportunityTitle,
   shareLabel,
   shareText,
   shareUrl,
-  tunnelDashboardUrl,
-  tunnelDashboardShareText,
-  tunnelDashboardShareSubject,
+  tunnelSharedAt,
   hasTimetable,
   showTimetable = true,
 }: OrganizerOpportunityActionsProps) {
@@ -78,12 +76,11 @@ export function OrganizerOpportunityActions({
           {hasTimetable ? "Edit Timetable" : "Set Timetable"}
         </Link>
       ) : null}
-      {tunnelDashboardUrl ? (
-        <TunnelDashboardShareButton
-          message={tunnelDashboardShareText ?? tunnelDashboardUrl}
-          subject={tunnelDashboardShareSubject ?? "Flyloop Operations Dashboard"}
-        />
-      ) : null}
+      <TunnelDashboardShareButton
+        opportunityId={opportunityId}
+        opportunityTitle={opportunityTitle}
+        tunnelSharedAt={tunnelSharedAt}
+      />
       <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
         <ShareOpportunityButton
           label={shareLabel}

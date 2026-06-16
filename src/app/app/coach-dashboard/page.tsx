@@ -40,6 +40,7 @@ type CoachOpportunityRow = {
   start_date: string;
   end_date: string;
   registration_deadline: string | null;
+  tunnel_shared_at: string | null;
   created_at: string | null;
   updated_at: string | null;
   tunnel_profiles:
@@ -106,7 +107,7 @@ export default async function CoachDashboardPage() {
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,status,start_date,end_date,registration_deadline,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
+          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
         )
         .eq("created_by", user.id)
         .neq("status", "cancelled")
@@ -312,6 +313,7 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
   const actionScore =
     pendingApplications * 4 +
     waitlistApplications * 3 +
+    (row.status === "published" && !row.tunnel_shared_at ? 4 : 0) +
     draftChanges * 3 +
     unassignedAthletes * 3 +
     releaseRequests.length * 4;
@@ -325,6 +327,7 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
     endDate: row.end_date,
     dateLabel: formatOpportunityDate(row.type, row.start_date, row.end_date),
     tunnelLabel: formatTunnelLabel(tunnel?.name ?? "Tunnel", tunnel?.city, tunnel?.country),
+    tunnelSharedAt: row.tunnel_shared_at,
     athleteCount: acceptedApplicants.length,
     pendingApplications,
     waitlistApplications,
@@ -393,6 +396,21 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
         campId,
         campTitle,
         workshopLabel: "Open Workspace",
+      });
+    }
+
+    if (row.status === "published" && !row.tunnel_shared_at) {
+      const tunnel = firstRelation(row.tunnel_profiles);
+      const tunnelName = tunnel?.name?.trim() || "the tunnel";
+
+      items.push({
+        id: `tunnel-${campId}`,
+        group: "Tunnel Not Informed",
+        kind: "tunnel",
+        title: "Tunnel not informed",
+        description: `${campTitle}: timetable published but not yet shared with ${tunnelName}.`,
+        campId,
+        campTitle,
       });
     }
 

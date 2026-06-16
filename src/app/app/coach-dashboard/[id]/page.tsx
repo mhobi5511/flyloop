@@ -9,7 +9,6 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { coachNotificationTypes } from "@/lib/notifications";
 import { getTimetableSummary } from "@/lib/timetable";
-import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import type {
   BookingMode,
   InterestStatus,
@@ -45,6 +44,7 @@ type CoachOpportunityRow = {
   min_minutes_or_hours: string | null;
   description: string | null;
   tunnel_id: string | null;
+  tunnel_shared_at: string | null;
   created_at: string | null;
   updated_at: string | null;
   tunnel_profiles:
@@ -150,7 +150,7 @@ export default async function CoachWorkspaceCampPage({
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
+          "id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
         )
         .eq("id", id)
         .eq("created_by", user.id)
@@ -201,7 +201,6 @@ export default async function CoachWorkspaceCampPage({
 
   const selectedCamp = await toCampWorkspace(
     opportunity,
-    id,
     supabase,
   );
 
@@ -233,7 +232,6 @@ type TunnelRow = {
 
 async function toCampWorkspace(
   row: CoachOpportunityRow,
-  selectedCampId: string,
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
 ): Promise<CampWorkspace> {
   const tunnel = firstRelation(row.tunnel_profiles);
@@ -297,8 +295,6 @@ async function toCampWorkspace(
     Number(row.price),
     row.min_minutes_or_hours,
   );
-  const tunnelDashboardUrl =
-    row.id === selectedCampId ? await getOrCreateTunnelDashboardUrl(supabase, row.id) : "";
 
   return {
     id: row.id,
@@ -318,9 +314,9 @@ async function toCampWorkspace(
     priceAppliesToMinutes: formatPriceAppliesToMinutes(row.min_minutes_or_hours),
     description: row.description ?? "",
     tunnelId: row.tunnel_id ?? "",
+    tunnelSharedAt: row.tunnel_shared_at,
     tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
     tunnelLocation: formatLocation(tunnel?.city, tunnel?.country),
-    tunnelDashboardUrl,
     dateLabel: formatOpportunityDate(row.type, row.start_date, row.end_date),
     participants,
     preferences: preferenceRows.map((preference: PreferenceRow) => ({
@@ -364,35 +360,4 @@ function statusRank(status: InterestStatus) {
 
 function formatLocation(city?: string | null, country?: string | null) {
   return [city, country].filter(Boolean).join(", ");
-}
-
-async function getOrCreateTunnelDashboardUrl(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  opportunityId: string,
-) {
-  const { data: existingLink } = await supabase
-    .from("opportunity_tunnel_dashboard_links")
-    .select("secret")
-    .eq("opportunity_id", opportunityId)
-    .maybeSingle();
-
-  if (existingLink?.secret) {
-    return getTunnelDashboardUrl(existingLink.secret);
-  }
-
-  const { data: createdLink, error } = await supabase
-    .from("opportunity_tunnel_dashboard_links")
-    .insert({ opportunity_id: opportunityId })
-    .select("secret")
-    .single();
-
-  if (error || !createdLink?.secret) {
-    console.error("Tunnel dashboard link creation failed", {
-      opportunityId,
-      error,
-    });
-    return "";
-  }
-
-  return getTunnelDashboardUrl(createdLink.secret);
 }
