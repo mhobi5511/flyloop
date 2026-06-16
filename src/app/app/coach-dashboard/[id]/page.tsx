@@ -140,8 +140,7 @@ export default async function CoachWorkspaceCampPage({
     redirect("/login?next=/app/coach-dashboard");
   }
 
-  const [profileResult, opportunityResult, tunnelResult] =
-    await Promise.all([
+  const [profileResult, opportunityResult] = await Promise.all([
       supabase
         .from("profiles")
         .select("full_name,is_organizer,wants_to_create_opportunities")
@@ -155,10 +154,6 @@ export default async function CoachWorkspaceCampPage({
         .eq("id", id)
         .eq("created_by", user.id)
         .maybeSingle(),
-      supabase
-        .from("tunnel_profiles")
-        .select("id,name,city,country")
-        .order("name", { ascending: true }),
     ]);
 
   if (profileResult.error) {
@@ -167,10 +162,6 @@ export default async function CoachWorkspaceCampPage({
 
   if (opportunityResult.error) {
     console.error("Coach workspace opportunity lookup failed", opportunityResult.error);
-  }
-
-  if (tunnelResult.error) {
-    console.error("Coach workspace tunnel lookup failed", tunnelResult.error);
   }
 
   const profile = (profileResult.data ?? null) as CoachProfileRow | null;
@@ -205,30 +196,16 @@ export default async function CoachWorkspaceCampPage({
   );
 
   const camps = [selectedCamp];
-  const tunnels = ((tunnelResult.data ?? []) as TunnelRow[]).map((tunnel) => ({
-    id: tunnel.id,
-    name: tunnel.name,
-    city: tunnel.city ?? "",
-    country: tunnel.country ?? "",
-  }));
   return (
     <>
       <CoachDashboardWorkspace
         selectedCampId={id}
         camps={camps}
-        tunnels={tunnels}
       />
       <NotificationReadSignal />
     </>
   );
 }
-
-type TunnelRow = {
-  id: string;
-  name: string;
-  city: string | null;
-  country: string | null;
-};
 
 async function toCampWorkspace(
   row: CoachOpportunityRow,

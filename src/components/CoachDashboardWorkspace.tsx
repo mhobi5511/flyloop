@@ -125,13 +125,6 @@ type CampPreference = {
   preferredMinutes: number;
 };
 
-type TunnelOption = {
-  id: string;
-  name: string;
-  city: string | null;
-  country: string | null;
-};
-
 type TabletPanel = "participants" | "participant" | null;
 type AttentionItem = {
   label: string;
@@ -160,7 +153,6 @@ type SlotActionPopoverState = {
 type CoachDashboardWorkspaceProps = {
   selectedCampId: string;
   camps: CampWorkspace[];
-  tunnels: TunnelOption[];
 };
 
 const participantColors = [
@@ -177,7 +169,6 @@ const participantColors = [
 export function CoachDashboardWorkspace({
   selectedCampId,
   camps,
-  tunnels,
 }: CoachDashboardWorkspaceProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<"share" | null>(null);
@@ -1053,7 +1044,6 @@ export function CoachDashboardWorkspace({
             <CampSettingsPanel
               key={`tablet-${activeCamp.id}`}
               camp={activeCamp}
-              tunnels={tunnels}
             />
           </>
         )}
@@ -1148,7 +1138,7 @@ export function CoachDashboardWorkspace({
               tone="slate"
               icon={<Settings size={19} />}
               title="Opportunity Settings"
-              description="Edit dates, pricing, capacity and details."
+              description="Edit pricing, capacity and details."
             >
               <button
                 type="button"
@@ -1169,7 +1159,6 @@ export function CoachDashboardWorkspace({
           <CampSettingsPanel
             key={`modal-${activeCamp.id}`}
             camp={activeCamp}
-            tunnels={tunnels}
             onDeleteComplete={() => setIsSettingsOpen(false)}
           />
         </CenteredModal>
@@ -2070,11 +2059,9 @@ function PublishTimetableButton({
 
 function CampSettingsPanel({
   camp,
-  tunnels,
   onDeleteComplete,
 }: {
   camp: CampWorkspace;
-  tunnels: TunnelOption[];
   onDeleteComplete?: () => void;
 }) {
   const router = useRouter();
@@ -2086,16 +2073,9 @@ function CampSettingsPanel({
   const [form, setForm] = useState({
     title: camp.title,
     description: camp.description,
-    tunnelId: camp.tunnelId,
-    startDate: camp.startDate,
-    endDate: camp.endDate,
     registrationDeadline: camp.registrationDeadline ?? "",
-    sessionStart: camp.sessionStart?.slice(0, 5) ?? "18:00",
-    sessionEnd: camp.sessionEnd?.slice(0, 5) ?? "20:00",
     price: String(camp.price),
-    currency: camp.currency,
     totalCapacity: String(camp.totalCapacity),
-    priceAppliesToMinutes: camp.priceAppliesToMinutes,
   });
 
   function updateField(name: keyof typeof form, value: string) {
@@ -2110,16 +2090,16 @@ function CampSettingsPanel({
       type: camp.type,
       bookingMode: "approval_required",
       title: form.title,
-      tunnelId: form.tunnelId,
-      startDate: form.startDate,
-      endDate: camp.type === "huck_jam" ? form.startDate : form.endDate,
+      tunnelId: camp.tunnelId,
+      startDate: camp.startDate,
+      endDate: camp.endDate,
       registrationDeadline: form.registrationDeadline,
-      sessionStart: form.sessionStart,
-      sessionEnd: form.sessionEnd,
+      sessionStart: camp.sessionStart ?? "",
+      sessionEnd: camp.sessionEnd ?? "",
       price: Number(form.price),
-      currency: form.currency,
+      currency: camp.currency,
       totalCapacity: Number(form.totalCapacity),
-      minMinutesOrHours: form.priceAppliesToMinutes,
+      minMinutesOrHours: camp.priceAppliesToMinutes,
       description: form.description,
       languages: "",
       disciplines: "",
@@ -2216,37 +2196,6 @@ function CampSettingsPanel({
             className={`${dashboardInputClass} h-20 py-2`}
           />
         </DashboardField>
-        <DashboardField label="Tunnel">
-          <select
-            value={form.tunnelId}
-            onChange={(event) => updateField("tunnelId", event.target.value)}
-            className={dashboardInputClass}
-          >
-            {tunnels.map((tunnel) => (
-              <option key={tunnel.id} value={tunnel.id}>
-                {tunnel.name} {[tunnel.city, tunnel.country].filter(Boolean).join(", ")}
-              </option>
-            ))}
-          </select>
-        </DashboardField>
-        <div className="grid grid-cols-2 gap-2">
-          <DashboardField label="Start">
-            <input
-              type="date"
-              value={form.startDate}
-              onChange={(event) => updateField("startDate", event.target.value)}
-              className={dashboardInputClass}
-            />
-          </DashboardField>
-          <DashboardField label="End">
-            <input
-              type="date"
-              value={form.endDate}
-              onChange={(event) => updateField("endDate", event.target.value)}
-              className={dashboardInputClass}
-            />
-          </DashboardField>
-        </div>
         <DashboardField label="Registration Deadline">
           <input
             type="date"
@@ -2257,69 +2206,22 @@ function CampSettingsPanel({
             className={dashboardInputClass}
           />
         </DashboardField>
-        {camp.type === "huck_jam" ? (
-          <div className="grid grid-cols-2 gap-2">
-            <DashboardField label="Start Time">
-              <input
-                type="time"
-                value={form.sessionStart}
-                onChange={(event) => updateField("sessionStart", event.target.value)}
-                className={dashboardInputClass}
-              />
-            </DashboardField>
-            <DashboardField label="End Time">
-              <input
-                type="time"
-                value={form.sessionEnd}
-                onChange={(event) => updateField("sessionEnd", event.target.value)}
-                className={dashboardInputClass}
-              />
-            </DashboardField>
-          </div>
-        ) : null}
-        <div className="grid grid-cols-[1fr_5rem] gap-2">
-          <DashboardField label="Price">
-            <input
-              inputMode="decimal"
-              value={form.price}
-              onChange={(event) => updateField("price", event.target.value)}
-              className={dashboardInputClass}
-            />
-          </DashboardField>
-          <DashboardField label="Currency">
-            <select
-              value={form.currency}
-              onChange={(event) => updateField("currency", event.target.value)}
-              className={dashboardInputClass}
-            >
-              {["EUR", "CHF", "USD", "PLN", "GBP"].map((currency) => (
-                <option key={currency} value={currency}>
-                  {currency}
-                </option>
-              ))}
-            </select>
-          </DashboardField>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <DashboardField label="Capacity">
-            <input
-              inputMode="numeric"
-              value={form.totalCapacity}
-              onChange={(event) => updateField("totalCapacity", event.target.value)}
-              className={dashboardInputClass}
-            />
-          </DashboardField>
-          <DashboardField label="Price Minutes">
-            <input
-              inputMode="numeric"
-              value={form.priceAppliesToMinutes}
-              onChange={(event) =>
-                updateField("priceAppliesToMinutes", event.target.value)
-              }
-              className={dashboardInputClass}
-            />
-          </DashboardField>
-        </div>
+        <DashboardField label="Price">
+          <input
+            inputMode="decimal"
+            value={form.price}
+            onChange={(event) => updateField("price", event.target.value)}
+            className={dashboardInputClass}
+          />
+        </DashboardField>
+        <DashboardField label="Capacity">
+          <input
+            inputMode="numeric"
+            value={form.totalCapacity}
+            onChange={(event) => updateField("totalCapacity", event.target.value)}
+            className={dashboardInputClass}
+          />
+        </DashboardField>
       </div>
       <div className="mt-3 grid gap-2">
         <button
@@ -2328,7 +2230,7 @@ function CampSettingsPanel({
           disabled={isPending}
           className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white disabled:bg-slate-300"
         >
-          <Save size={16} /> {isPending ? "Saving..." : "Save immediately"}
+          <Save size={16} /> {isPending ? "Saving..." : "Save Immediately"}
         </button>
         <button
           type="button"
