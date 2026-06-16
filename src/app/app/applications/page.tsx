@@ -8,10 +8,7 @@ import {
   countUnreadByOpportunity,
   participantActivityNotificationTypes,
 } from "@/lib/notifications";
-import {
-  isOpportunityCompleted,
-  isOpportunityCurrent,
-} from "@/lib/opportunity-lifecycle";
+import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
 import {
   formatOpportunityDate,
   formatSessionTimeRange,
@@ -158,11 +155,7 @@ export default async function ApplicationsPage({
 
     return (
       activeStatuses.includes(application.status) &&
-      Boolean(opportunity) &&
-      isOpportunityCurrent(
-        { endDate: opportunity?.end_date ?? "", registrationDeadline: null },
-        now,
-      )
+      Boolean(opportunity)
     );
   });
   const pastRows = allRows.filter((application) => {
@@ -170,6 +163,7 @@ export default async function ApplicationsPage({
 
     return (
       Boolean(opportunity) &&
+      !activeStatuses.includes(application.status) &&
       isOpportunityCompleted(
         { endDate: opportunity?.end_date ?? "", registrationDeadline: null },
         now,

@@ -203,11 +203,13 @@ export default async function AppHomePage({
     )
     .map((item) => item.opportunity)
     .sort((a, b) => Date.parse(a.startDate) - Date.parse(b.startDate));
+  const isDiscoverableStatus = (status: Opportunity["status"]) =>
+    status === "published" || status === "full";
   const joinable = mapped.filter((item) => {
     const viewerStatus = item.opportunity.viewerInterestStatus;
 
     return (
-      item.opportunity.status === "published" &&
+      isDiscoverableStatus(item.opportunity.status) &&
       isOpportunityJoinable(item.opportunity, now) &&
       item.opportunity.createdBy !== user.id &&
       (!viewerStatus || !interactedStatuses.has(viewerStatus))
@@ -224,7 +226,7 @@ export default async function AppHomePage({
   const globalSearchOpportunities = mapped
     .filter(
       (item) =>
-        item.opportunity.status === "published" &&
+        isDiscoverableStatus(item.opportunity.status) &&
         isOpportunityJoinable(item.opportunity, now),
     )
     .map((item) => item.opportunity);
