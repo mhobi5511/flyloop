@@ -6,6 +6,9 @@ import {
   formatOpportunityDate,
   formatPriceAppliesToMinutes,
 } from "@/lib/opportunities";
+import {
+  getFlyloopProfileHistory,
+} from "@/lib/flyloop-history";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { coachNotificationTypes } from "@/lib/notifications";
 import { getTimetableSummary } from "@/lib/timetable";
@@ -116,6 +119,21 @@ type CoachOpportunityRow = {
     | null;
 };
 
+type PublicUserProfileRow = {
+  id: string;
+  full_name: string | null;
+  country: string | null;
+  city: string | null;
+  bio: string | null;
+  profile_image_url: string | null;
+  instagram_handle: string | null;
+  website_url: string | null;
+  youtube_url: string | null;
+  home_tunnel_name: string | null;
+  home_tunnel_city: string | null;
+  home_tunnel_country: string | null;
+};
+
 type PreferenceRow = {
   opportunity_id: string;
   participant_id: string;
@@ -216,9 +234,50 @@ async function toCampWorkspace(
   const interests = (row.opportunity_interests ?? []).filter(
     (interest) => interest.status !== "withdrawn",
   );
+  const participantIds = [
+    ...new Set(
+      interests
+        .map((interest) => firstRelation(interest.profiles)?.id)
+        .filter((userId): userId is string => Boolean(userId)),
+    ),
+  ];
+  const [publicProfilesResult, participantHistoryEntries] = await Promise.all([
+    participantIds.length > 0
+      ? supabase
+          .from("public_user_profiles")
+          .select(
+            "id,full_name,country,city,bio,profile_image_url,instagram_handle,website_url,youtube_url,home_tunnel_name,home_tunnel_city,home_tunnel_country",
+          )
+          .in("id", participantIds)
+      : Promise.resolve({ data: [], error: null }),
+    Promise.all(
+      participantIds.map(
+        async (userId) => [userId, await getFlyloopProfileHistory(supabase, userId)] as const,
+      ),
+    ),
+  ]);
+
+  if (publicProfilesResult.error) {
+    console.error(
+      "Coach workspace public profile lookup failed",
+      publicProfilesResult.error,
+    );
+  }
+
+  const publicProfilesById = new Map(
+    ((publicProfilesResult.data ?? []) as PublicUserProfileRow[]).map((profile) => [
+      profile.id,
+      profile,
+    ]),
+  );
+  const historyByParticipantId = new Map(participantHistoryEntries);
+
   const participants = interests
     .map((interest) => {
       const profile = firstRelation(interest.profiles);
+      const publicProfile = profile?.id ? publicProfilesById.get(profile.id) : null;
+      const profileHistory = profile?.id ? historyByParticipantId.get(profile.id) : null;
+
       return {
         id: profile?.id ?? interest.id,
         interestId: interest.id,
@@ -226,14 +285,23 @@ async function toCampWorkspace(
         name: profile?.full_name?.trim() || "Participant",
         email: "",
         phone: profile?.whatsapp_number ?? profile?.phone ?? "",
-        country: profile?.country ?? "",
-        profileImageUrl: profile?.profile_image_url ?? "",
+        country: publicProfile?.country ?? profile?.country ?? "",
+        city: publicProfile?.city ?? null,
+        bio: publicProfile?.bio ?? null,
+        instagramHandle: publicProfile?.instagram_handle ?? profile?.instagram_handle ?? null,
+        websiteUrl: publicProfile?.website_url ?? null,
+        youtubeUrl: publicProfile?.youtube_url ?? null,
+        homeTunnelName: publicProfile?.home_tunnel_name ?? null,
+        homeTunnelCity: publicProfile?.home_tunnel_city ?? null,
+        homeTunnelCountry: publicProfile?.home_tunnel_country ?? null,
+        profileImageUrl: publicProfile?.profile_image_url ?? profile?.profile_image_url ?? "",
         status: interest.status,
         selfBookingEnabled: interest.self_booking_enabled === true,
         createdAt: interest.created_at ?? new Date().toISOString(),
         removalRequestedAt: interest.removal_requested_at,
         tunnelTimeStatus: interest.tunnel_time_status,
         tunnelAccountEmail: interest.tunnel_account_email,
+        profileStats: profileHistory?.stats ?? null,
       };
     })
     .sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name));

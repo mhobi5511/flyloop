@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   Save,
   Settings,
   Share2,
@@ -33,6 +32,8 @@ import {
 } from "@/app/app/create/actions";
 import { deleteOpportunity } from "@/app/app/opportunities/actions";
 import { saveCampTimetable, type TimetableSlotInput } from "@/app/app/organizer/opportunities/actions";
+import { CampBuilderCopyDayButton } from "@/components/CampBuilderCopyDayButton";
+import { CampBuilderEditDayModal } from "@/components/CampBuilderEditDayModal";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
 import {
   AssignSlotButton,
@@ -59,7 +60,12 @@ import {
   formatCampDayPreferenceLabel,
   formatCampPreferenceMinutes,
 } from "@/lib/camp-days";
-import { setCampParticipantSelfBooking } from "@/app/app/organizer/opportunities/actions";
+import {
+  assignParticipantSlotBooking,
+  releaseParticipantSlotBooking,
+  setCampParticipantSelfBooking,
+} from "@/app/app/organizer/opportunities/actions";
+import type { FlyloopProfileStats } from "@/lib/flyloop-history";
 import type {
   BookingMode,
   InterestStatus,
@@ -75,6 +81,14 @@ type Participant = {
   email: string;
   phone: string;
   country: string;
+  city: string | null;
+  bio: string | null;
+  instagramHandle: string | null;
+  websiteUrl: string | null;
+  youtubeUrl: string | null;
+  homeTunnelName: string | null;
+  homeTunnelCity: string | null;
+  homeTunnelCountry: string | null;
   profileImageUrl: string;
   status: InterestStatus;
   createdAt: string;
@@ -82,6 +96,7 @@ type Participant = {
   tunnelTimeStatus: string | null;
   tunnelAccountEmail: string | null;
   selfBookingEnabled: boolean;
+  profileStats: FlyloopProfileStats | null;
 };
 
 type CampWorkspace = {
@@ -172,6 +187,7 @@ export function CoachDashboardWorkspace({
   selectedCampId,
   camps,
 }: CoachDashboardWorkspaceProps) {
+  const router = useRouter();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<"share" | null>(null);
   const [tabletPanel, setTabletPanel] = useState<TabletPanel>(null);
@@ -180,10 +196,16 @@ export function CoachDashboardWorkspace({
   const [activeBookingAction, setActiveBookingAction] =
     useState<SlotActionPopoverState | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [profileModalParticipantId, setProfileModalParticipantId] = useState("");
+  const [massBookingParticipantId, setMassBookingParticipantId] = useState("");
   const activeCamp = camps.find((camp) => camp.id === selectedCampId) ?? camps[0];
   const participant =
     activeCamp?.participants.find((item) => item.id === selectedParticipantId) ??
     null;
+  const profileModalParticipant =
+    activeCamp?.participants.find((item) => item.id === profileModalParticipantId) ?? null;
+  const massBookingParticipant =
+    activeCamp?.participants.find((item) => item.id === massBookingParticipantId) ?? null;
   const publicUrl = activeCamp ? getPublicOpportunityUrl(activeCamp.id) : "";
   const shareText = activeCamp
     ? getOpportunityShareText(
@@ -302,6 +324,34 @@ export function CoachDashboardWorkspace({
   );
   const showTimetableStatus = hasPublishedTimetable || hasUnpublishedChanges;
   const isHuckJam = activeCamp.type === "huck_jam";
+
+  async function toggleParticipantSelfBooking(
+    participantId: string,
+    nextEnabled: boolean,
+  ) {
+    const targetParticipant = activeCamp.participants.find(
+      (item) => item.id === participantId,
+    );
+
+    if (!targetParticipant || targetParticipant.selfBookingEnabled === nextEnabled) {
+      return;
+    }
+
+    const result = await setCampParticipantSelfBooking(
+      targetParticipant.interestId,
+      nextEnabled,
+    );
+
+    if (!result.ok) {
+      return;
+    }
+
+    router.refresh();
+  }
+
+  function openMassBooking(participantId: string) {
+    setMassBookingParticipantId(participantId);
+  }
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
@@ -491,7 +541,8 @@ export function CoachDashboardWorkspace({
                   selectedParticipantId={selectedParticipantId}
                   onSelectParticipant={setSelectedParticipantId}
                   onSelectApplicants={focusApplicants}
-                  participantColorMap={participantColorMap}
+                  onToggleSelfBooking={toggleParticipantSelfBooking}
+                  onOpenMassBooking={openMassBooking}
                   isCamp={activeCamp.type === "camp"}
                 />
                 {participant ? (
@@ -500,6 +551,7 @@ export function CoachDashboardWorkspace({
                     participant={participant}
                     camp={activeCamp}
                     onClear={() => setSelectedParticipantId("")}
+                    onOpenProfile={() => setProfileModalParticipantId(participant.id)}
                   />
                 ) : (
                   <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -597,10 +649,10 @@ export function CoachDashboardWorkspace({
                           </p>
                         </div>
                         {activeCamp.type === "camp" ? (
-                          <EditDayButton
-                            camp={activeCamp}
-                            date={day.date}
-                          />
+                          <div className="flex flex-col items-end gap-1">
+                            <EditDayButton camp={activeCamp} date={day.date} />
+                            <CampBuilderCopyDayButton camp={activeCamp} date={day.date} />
+                          </div>
                         ) : null}
                       </div>
                     </div>
@@ -917,7 +969,10 @@ export function CoachDashboardWorkspace({
                             </p>
                           </div>
                           {activeCamp.type === "camp" ? (
-                            <EditDayButton camp={activeCamp} date={day.date} />
+                            <div className="flex flex-col items-end gap-1">
+                              <EditDayButton camp={activeCamp} date={day.date} />
+                              <CampBuilderCopyDayButton camp={activeCamp} date={day.date} />
+                            </div>
                           ) : null}
                         </div>
                       </div>
@@ -1066,6 +1121,7 @@ export function CoachDashboardWorkspace({
                 setSelectedParticipantId("");
                 setTabletPanel("participants");
               }}
+              onOpenProfile={() => setProfileModalParticipantId(participant.id)}
             />
           ) : (
             <div className="grid gap-3">
@@ -1082,7 +1138,8 @@ export function CoachDashboardWorkspace({
                   setTabletPanel("participant");
                 }}
                 onSelectApplicants={focusApplicants}
-                participantColorMap={participantColorMap}
+                onToggleSelfBooking={toggleParticipantSelfBooking}
+                onOpenMassBooking={openMassBooking}
                 isCamp={activeCamp.type === "camp"}
               />
             </div>
@@ -1168,6 +1225,20 @@ export function CoachDashboardWorkspace({
           />
         </CenteredModal>
       ) : null}
+          {profileModalParticipant ? (
+        <ParticipantProfileModal
+          participant={profileModalParticipant}
+          onClose={() => setProfileModalParticipantId("")}
+        />
+      ) : null}
+      {massBookingParticipant ? (
+        <MassBookingModal
+          key={massBookingParticipant.id}
+          participant={massBookingParticipant}
+          camp={activeCamp}
+          onClose={() => setMassBookingParticipantId("")}
+        />
+      ) : null}
       </div>
     </div>
   );
@@ -1211,6 +1282,651 @@ function CenteredModal({
       </section>
     </div>
   );
+}
+
+function ParticipantProfileModal({
+  participant,
+  onClose,
+}: {
+  participant: Participant;
+  onClose: () => void;
+}) {
+  return typeof document !== "undefined"
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={onClose}
+        >
+          <section
+            className="grid max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div>
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-sky-700">
+                  Participant Profile
+                </p>
+                <h2 className="mt-1 text-lg font-black tracking-tight text-slate-950">
+                  {participant.name}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500"
+                aria-label="Close profile"
+              >
+                <X size={17} />
+              </button>
+            </div>
+            <div className="grid gap-5 overflow-y-auto p-4 sm:p-6">
+              <div className="flex flex-wrap items-start gap-4 rounded-3xl bg-slate-50 p-4">
+                <Avatar
+                  name={participant.name}
+                  imageUrl={participant.profileImageUrl}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-2xl font-black tracking-tight text-slate-950">
+                    {participant.name}
+                  </h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    {participant.country || "No country provided"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-700">
+                    {participant.instagramHandle ? (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                        Instagram: @{cleanHandle(participant.instagramHandle)}
+                      </span>
+                    ) : null}
+                    {participant.phone ? (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                        Phone: {participant.phone}
+                      </span>
+                    ) : null}
+                    {participant.city ? (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                        City: {participant.city}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+                <div className="grid gap-5">
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Bio
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                      {participant.bio?.trim() || "This participant has not added a bio yet."}
+                    </p>
+                  </section>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Stats
+                    </h3>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <CompactMetric
+                        label="Flyloop Minutes"
+                        value={String(participant.profileStats?.flyloopMinutes ?? 0)}
+                      />
+                      <CompactMetric
+                        label="Flyloop Hours"
+                        value={String(participant.profileStats?.flyloopHours ?? 0)}
+                      />
+                      <CompactMetric
+                        label="Camps Attended"
+                        value={String(participant.profileStats?.campsAttended ?? 0)}
+                      />
+                      <CompactMetric
+                        label="Huck Jams"
+                        value={String(participant.profileStats?.huckJamsAttended ?? 0)}
+                      />
+                    </div>
+                  </section>
+                </div>
+
+                <div className="grid gap-5">
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Application Information
+                    </h3>
+                    <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
+                      <p>Status: {formatInterestStatusLabel(participant.status)}</p>
+                      <p>
+                        Self Booking: {participant.selfBookingEnabled ? "On" : "Off"}
+                      </p>
+                      <p>
+                        Tunnel Time:{" "}
+                        {participant.tunnelTimeStatus === "owns_tunnel_time"
+                          ? "Available"
+                          : participant.tunnelTimeStatus === "needs_tunnel_time"
+                            ? "Not available"
+                            : "Not provided"}
+                      </p>
+                      <p>
+                        Tunnel Account Email: {participant.tunnelAccountEmail || "Not provided"}
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Links
+                    </h3>
+                    <div className="mt-3 grid gap-2">
+                      {participant.instagramHandle ? (
+                        <a
+                          href={`https://instagram.com/${cleanHandle(participant.instagramHandle)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                        >
+                          Instagram
+                        </a>
+                      ) : null}
+                      {participant.websiteUrl ? (
+                        <a
+                          href={participant.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                        >
+                          Website
+                        </a>
+                      ) : null}
+                      {participant.youtubeUrl ? (
+                        <a
+                          href={participant.youtubeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                        >
+                          YouTube
+                        </a>
+                      ) : null}
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>,
+        document.body,
+      )
+    : null;
+}
+
+function MassBookingModal({
+  participant,
+  camp,
+  onClose,
+}: {
+  participant: Participant;
+  camp: CampWorkspace;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const draftBookings = useMemo(
+    () =>
+      camp.timetableSlots.flatMap((slot) =>
+        slot.bookings
+          .filter(
+            (booking) =>
+              booking.userId === participant.userId && booking.isFinal === false,
+          )
+          .map((booking) => ({
+            bookingId: booking.id,
+            slotId: slot.id,
+          })),
+      ),
+    [camp.timetableSlots, participant.userId],
+  );
+  const draftBookingMap = useMemo(
+    () => new Map(draftBookings.map((booking) => [booking.slotId, booking.bookingId])),
+    [draftBookings],
+  );
+  const campDays = useMemo(
+    () =>
+      getDateRange(camp.startDate, camp.endDate).map((date, index) => {
+        const dayId = index + 1;
+        const preference = camp.preferences.find(
+          (item) => item.participantId === participant.userId && item.dayId === dayId,
+        );
+        const slots = camp.timetableSlots
+          .filter((slot) => slot.slotDate === date)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+        return {
+          date,
+          dayId,
+          slots,
+          requestedMinutes: preference?.preferredMinutes ?? 0,
+        };
+      }),
+    [camp.endDate, camp.preferences, camp.startDate, camp.timetableSlots, participant.userId],
+  );
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(() =>
+    draftBookings.map((booking) => booking.slotId),
+  );
+  const [dayWindowStart, setDayWindowStart] = useState(0);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const visibleDayCount = 3;
+
+  const selectedSlotSet = useMemo(() => new Set(selectedSlotIds), [selectedSlotIds]);
+  const dayColumns = useMemo(
+    () =>
+      campDays.map((day) => {
+        const assignedMinutes = day.slots
+          .filter((slot) => selectedSlotSet.has(slot.id))
+          .reduce((total, slot) => total + slot.durationMinutes, 0);
+        const status =
+          day.requestedMinutes > 0
+            ? assignedMinutes === day.requestedMinutes
+              ? 'Fully Matched'
+              : assignedMinutes < day.requestedMinutes
+                ? `${day.requestedMinutes - assignedMinutes} min missing`
+                : `${assignedMinutes - day.requestedMinutes} min extra`
+            : assignedMinutes > 0
+              ? `${assignedMinutes} min assigned`
+              : 'No request';
+
+        return {
+          ...day,
+          assignedMinutes,
+          isMatched: day.requestedMinutes > 0 && assignedMinutes === day.requestedMinutes,
+          status,
+        };
+      }),
+    [campDays, selectedSlotSet],
+  );
+  const summaryTotals = useMemo(() => {
+    const requestedMinutes = dayColumns.reduce((total, day) => total + day.requestedMinutes, 0);
+    const assignedMinutes = dayColumns.reduce((total, day) => total + day.assignedMinutes, 0);
+    const requestedDays = dayColumns.filter((day) => day.requestedMinutes > 0).length;
+    const matchedDays = dayColumns.filter((day) => day.isMatched).length;
+    const difference = assignedMinutes - requestedMinutes;
+    const progressPercent =
+      requestedMinutes > 0 ? Math.round((assignedMinutes / requestedMinutes) * 100) : 0;
+
+    return {
+      requestedMinutes,
+      assignedMinutes,
+      requestedDays,
+      matchedDays,
+      difference,
+      progressPercent,
+    };
+  }, [dayColumns]);
+  const maxDayWindowStart = Math.max(dayColumns.length - visibleDayCount, 0);
+  const clampedDayWindowStart = Math.min(dayWindowStart, maxDayWindowStart);
+  const visibleDays = dayColumns.slice(clampedDayWindowStart, clampedDayWindowStart + visibleDayCount);
+  const canPageBack = clampedDayWindowStart > 0;
+  const canPageForward = clampedDayWindowStart < maxDayWindowStart;
+
+  function toggleSlot(slotId: string, isFinalBooking: boolean) {
+    if (isFinalBooking) {
+      return;
+    }
+
+    setSelectedSlotIds((current) =>
+      current.includes(slotId)
+        ? current.filter((value) => value !== slotId)
+        : [...current, slotId],
+    );
+  }
+
+  function moveDayWindow(direction: number) {
+    setDayWindowStart((current) => {
+      const next = current + direction * visibleDayCount;
+      return Math.min(Math.max(next, 0), maxDayWindowStart);
+    });
+  }
+
+  function saveAsDraft() {
+    setError('');
+    setMessage('');
+
+    startTransition(async () => {
+      const nextSelectedIds = new Set(selectedSlotIds);
+      const removals = draftBookings.filter((booking) => !nextSelectedIds.has(booking.slotId));
+      const additions = selectedSlotIds.filter((slotId) => !draftBookingMap.has(slotId));
+
+      try {
+        for (const booking of removals) {
+          const result = await releaseParticipantSlotBooking(camp.id, booking.bookingId);
+          if (!result.ok) {
+            setError(result.message);
+            return;
+          }
+        }
+
+        for (const slotId of additions) {
+          const result = await assignParticipantSlotBooking(camp.id, slotId, participant.userId);
+          if (!result.ok) {
+            setError(result.message);
+            return;
+          }
+        }
+      } catch (assignmentError) {
+        console.error('Mass booking sync failed', assignmentError);
+        setError('Could not save draft bookings.');
+        return;
+      }
+
+      setMessage('Draft bookings saved.');
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={onClose}
+        >
+          <section
+            className="grid max-h-[calc(100dvh-2rem)] w-full max-w-7xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-sky-700">
+                  Mass Booking
+                </p>
+                <h2 className="mt-1 truncate text-lg font-black tracking-tight text-slate-950">
+                  {participant.name}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => moveDayWindow(-1)}
+                  disabled={!canPageBack}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                >
+                  <ChevronLeft size={14} />
+                  Previous Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveDayWindow(1)}
+                  disabled={!canPageForward}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                >
+                  Next Days
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500"
+                  aria-label="Close mass booking"
+                >
+                  <X size={17} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 gap-4 overflow-y-auto p-4 sm:p-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+              <aside className="grid content-start gap-3">
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                    Athlete
+                  </h3>
+                  <div className="mt-3 flex items-center gap-3">
+                    <Avatar
+                      name={participant.name}
+                      imageUrl={participant.profileImageUrl}
+                      size="sm"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-950">{participant.name}</p>
+                      <p className="text-xs font-semibold text-slate-500">Draft bookings only</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                    Summary
+                  </h3>
+                  <div className="mt-3 grid gap-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
+                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
+                          Requested Time
+                        </p>
+                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
+                          {summaryTotals.requestedMinutes} min
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
+                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
+                          Assigned Time
+                        </p>
+                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
+                          {summaryTotals.assignedMinutes} min
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
+                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
+                          Progress
+                        </p>
+                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
+                          {summaryTotals.progressPercent}%
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
+                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
+                          Days Matched
+                        </p>
+                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
+                          {summaryTotals.matchedDays} / {summaryTotals.requestedDays}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white bg-white px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
+                          Progress Bar
+                        </p>
+                        <p className="text-xs font-black text-slate-500">
+                          {summaryTotals.progressPercent >= 100
+                            ? 'Target reached'
+                            : `${Math.max(0, 100 - summaryTotals.progressPercent)}% remaining`}
+                        </p>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${
+                            summaryTotals.difference === 0
+                              ? 'bg-emerald-500'
+                              : summaryTotals.difference < 0
+                                ? 'bg-amber-500'
+                                : 'bg-sky-600'
+                          }`}
+                          style={{ width: `${Math.min(summaryTotals.progressPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <p className="rounded-2xl border border-white bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                      {summaryTotals.difference === 0
+                        ? 'Fully matched'
+                        : summaryTotals.difference > 0
+                          ? `${summaryTotals.difference} min extra`
+                          : `${Math.abs(summaryTotals.difference)} min missing`}
+                    </p>
+                  </div>
+                </section>
+              </aside>
+
+              <section className="min-h-0">
+                <div className="flex items-end justify-between gap-3 pb-2">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Assigned Days
+                    </h3>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      Showing days {clampedDayWindowStart + 1}
+                      {visibleDays.length > 1 ? `-${clampedDayWindowStart + visibleDays.length}` : ''}
+                      {' '}of {dayColumns.length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {visibleDays.map((day) => (
+                    <article
+                      key={day.date}
+                      className={`rounded-2xl border p-4 ${
+                        day.requestedMinutes > 0
+                          ? 'border-sky-200 bg-sky-50/60'
+                          : 'border-slate-200 bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-950">
+                            {formatLongDay(day.date)}
+                          </h4>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Requested {day.requestedMinutes} min
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500">
+                          {day.slots.filter((slot) => selectedSlotSet.has(slot.id)).length} selected
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
+                        <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
+                          <span>Assigned</span>
+                          <span className="font-black text-slate-950">{day.assignedMinutes} min</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
+                          <span>Status</span>
+                          <span
+                            className={`font-black ${
+                              day.isMatched
+                                ? 'text-emerald-700'
+                                : day.requestedMinutes > day.assignedMinutes
+                                  ? 'text-amber-700'
+                                  : day.requestedMinutes < day.assignedMinutes
+                                    ? 'text-sky-700'
+                                    : 'text-slate-600'
+                            }`}
+                          >
+                            {day.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2">
+                        {day.slots.map((slot) => {
+                          const participantFinalBooking = slot.bookings.find(
+                            (booking) =>
+                              booking.userId === participant.userId && booking.isFinal === true,
+                          );
+                          const isSelected = selectedSlotSet.has(slot.id);
+                          const isUnavailable =
+                            Boolean(participantFinalBooking) ||
+                            (!isSelected && slot.bookings.length >= slot.capacity);
+
+                          return (
+                            <button
+                              key={slot.id}
+                              type="button"
+                              onClick={() =>
+                                toggleSlot(
+                                  slot.id,
+                                  Boolean(participantFinalBooking) ||
+                                    (isUnavailable && !isSelected),
+                                )
+                              }
+                              className={`flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition ${
+                                isSelected
+                                  ? 'border-sky-300 bg-sky-50 text-sky-900 shadow-sm'
+                                  : isUnavailable
+                                    ? 'border-slate-200 bg-slate-200 text-slate-500'
+                                    : 'border-transparent bg-white text-slate-700 hover:border-sky-200 hover:bg-slate-50'
+                              }`}
+                              disabled={isPending || Boolean(participantFinalBooking)}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-black text-slate-950">
+                                  {formatTimetableTime(slot.startTime)}
+                                </p>
+                                <p className="text-xs font-bold text-slate-500">
+                                  {slot.durationMinutes} min
+                                </p>
+                              </div>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] ${
+                                  isSelected
+                                    ? 'bg-sky-600 text-white'
+                                    : isUnavailable
+                                      ? 'bg-white text-slate-500'
+                                      : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {isSelected ? 'Selected' : isUnavailable ? 'Unavailable' : 'Available'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            {error ? (
+              <p className="mx-4 mb-0 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 sm:mx-6">
+                {error}
+              </p>
+            ) : null}
+            {message ? (
+              <p className="mx-4 mb-0 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 sm:mx-6">
+                {message}
+              </p>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={saveAsDraft}
+                disabled={isPending}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+              >
+                <Save size={16} />
+                {isPending ? 'Saving...' : 'Save As Draft'}
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.body,
+      )
+    : null;
 }
 
 function UtilityCard({
@@ -1345,14 +2061,16 @@ function ParticipantColumns({
   selectedParticipantId,
   onSelectParticipant,
   onSelectApplicants,
-  participantColorMap,
+  onToggleSelfBooking,
+  onOpenMassBooking,
   isCamp,
 }: {
   participants: Participant[];
   selectedParticipantId: string;
   onSelectParticipant: (id: string) => void;
   onSelectApplicants: () => void;
-  participantColorMap: Map<string, (typeof participantColors)[number]>;
+  onToggleSelfBooking: (participantId: string, nextEnabled: boolean) => void;
+  onOpenMassBooking: (participantId: string) => void;
   isCamp: boolean;
 }) {
   const pending = participants.filter((participant) => participant.status === "pending");
@@ -1406,8 +2124,6 @@ function ParticipantColumns({
               )}
               <div className="mt-2 grid gap-1.5">
                 {column.participants.map((participant) => {
-                  const colors = participantColorMap.get(participant.userId);
-
                   return (
                     <div
                       key={participant.id}
@@ -1433,41 +2149,63 @@ function ParticipantColumns({
                             imageUrl={participant.profileImageUrl}
                             size="sm"
                           />
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-black text-slate-950">
                               {participant.name}
                             </p>
-                            <p className="truncate text-xs font-semibold text-slate-500">
-                              Select to open sidebar
-                            </p>
-                            {isCamp &&
-                            participant.status === "accepted" &&
-                            participant.selfBookingEnabled ? (
-                              <span className="mt-1 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] text-sky-700">
-                                Self-booking enabled
-                              </span>
+                            {isCamp && participant.status === "accepted" ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onToggleSelfBooking(
+                                    participant.id,
+                                    !participant.selfBookingEnabled,
+                                  );
+                                }}
+                                className={`mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] transition ${
+                                  participant.selfBookingEnabled
+                                    ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                }`}
+                                aria-label={`Toggle self booking for ${participant.name}`}
+                              >
+                                <span>Self Booking</span>
+                                <span
+                                  className={`rounded-full px-1.5 py-0.5 ${
+                                    participant.selfBookingEnabled
+                                      ? "bg-sky-600 text-white"
+                                      : "bg-slate-200 text-slate-600"
+                                  }`}
+                                >
+                                  {participant.selfBookingEnabled ? "ON" : "OFF"}
+                                </span>
+                              </button>
                             ) : null}
                           </div>
                         </div>
-                        <span
-                          className="mt-0.5 size-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: colors?.bg ?? "#cbd5e1" }}
-                          aria-hidden="true"
-                        />
                       </div>
-                      <div
-                        className="mt-2 flex items-center justify-between gap-2"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <span className="truncate text-xs font-bold text-slate-500">
-                          {formatInterestStatusLabel(participant.status)}
-                        </span>
-                        <ApplicantStatusActions
-                          interestId={participant.interestId}
-                          currentStatus={participant.status}
-                          compact
-                        />
-                      </div>
+                      {participant.status === "accepted" ? (
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenMassBooking(participant.id);
+                            }}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-xs font-black text-sky-700 transition hover:bg-sky-100"
+                          >
+                            <CalendarDays size={14} /> Mass Booking
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-2" onClick={(event) => event.stopPropagation()}>
+                          <ApplicantStatusActions
+                            interestId={participant.interestId}
+                            currentStatus={participant.status}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1492,144 +2230,6 @@ function getUnpublishedChangeCount(slots: TimetableSlot[]) {
   }, 0);
 }
 
-function roundTimeToHalfHour(value: string) {
-  if (!/^\d{2}:\d{2}/.test(value)) {
-    return "15:00";
-  }
-
-  const [hourPart, minutePart] = value.split(":");
-  const hours = Number(hourPart);
-  const minutes = Number(minutePart);
-
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return "15:00";
-  }
-
-  const totalMinutes = hours * 60 + minutes;
-  const roundedMinutes = Math.ceil(totalMinutes / 30) * 30;
-  const normalizedMinutes = ((roundedMinutes % 1440) + 1440) % 1440;
-  const roundedHours = Math.floor(normalizedMinutes / 60);
-  const roundedMinutePart = normalizedMinutes % 60;
-
-  return `${String(roundedHours).padStart(2, "0")}:${String(
-    roundedMinutePart,
-  ).padStart(2, "0")}`;
-}
-
-function roundHoursToHalfHour(value: string) {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0;
-  }
-
-  return Math.round(parsed * 2) / 2;
-}
-
-function buildCampBuilderPreview({
-  date,
-  startTime,
-  rotationLength,
-  middayBreakHours,
-  maxTunnelHours,
-}: {
-  date: string;
-  startTime: string;
-  rotationLength: number;
-  middayBreakHours: string;
-  maxTunnelHours: string;
-}): CampBuilderPreviewSlot[] {
-  const capacity = getSlotCapacity(rotationLength);
-  const totalBlocks = Math.max(0, Math.round(roundHoursToHalfHour(maxTunnelHours) * 2));
-  const morningBlocks = Math.ceil(totalBlocks / 2);
-  const afternoonBlocks = totalBlocks - morningBlocks;
-  const middayBreakMinutes = Math.round(roundHoursToHalfHour(middayBreakHours) * 60);
-  const morning = buildCampBuilderSection({
-    date,
-    startMinutes: timeToMinutes(roundTimeToHalfHour(startTime)),
-    blockCount: morningBlocks,
-    durationMinutes: rotationLength,
-    capacity,
-  });
-  const lastMorningStart =
-    morning.length > 0 ? morning[morning.length - 1].startTime : undefined;
-  const afternoonStartMinutes =
-    lastMorningStart === undefined
-      ? timeToMinutes(roundTimeToHalfHour(startTime)) + middayBreakMinutes
-      : timeToMinutes(lastMorningStart) + 30 + middayBreakMinutes;
-  const afternoon = buildCampBuilderSection({
-    date,
-    startMinutes: afternoonStartMinutes,
-    blockCount: afternoonBlocks,
-    durationMinutes: rotationLength,
-    capacity,
-  });
-
-  return [...morning, ...afternoon];
-}
-
-function buildCampBuilderSection({
-  date,
-  startMinutes,
-  blockCount,
-  durationMinutes,
-  capacity,
-}: {
-  date: string;
-  startMinutes: number;
-  blockCount: number;
-  durationMinutes: number;
-  capacity: number;
-}) {
-  const slots: CampBuilderPreviewSlot[] = [];
-  let currentMinutes = startMinutes;
-
-  for (let index = 0; index < blockCount; index += 1) {
-    slots.push({
-      slotDate: date,
-      startTime: minutesToTime(currentMinutes),
-      durationMinutes,
-      capacity,
-    });
-
-    if (index < blockCount - 1) {
-      currentMinutes += index % 2 === 0 ? 30 : 90;
-    }
-  }
-
-  return slots;
-}
-
-function timeToMinutes(value: string) {
-  const normalized = value.slice(0, 5);
-  const [hourPart, minutePart] = normalized.split(":");
-  const hours = Number(hourPart);
-  const minutes = Number(minutePart);
-
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return 0;
-  }
-
-  return hours * 60 + minutes;
-}
-
-function minutesToTime(value: number) {
-  const normalizedMinutes = ((value % 1440) + 1440) % 1440;
-  const hours = Math.floor(normalizedMinutes / 60);
-  const minutes = normalizedMinutes % 60;
-
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
-type EditDayTab = "manual" | "camp-builder";
-
-type CampBuilderPreviewSlot = {
-  slotDate: string;
-  startTime: string;
-  durationMinutes: number;
-  capacity: number;
-};
-
 function EditDayButton({
   camp,
   date,
@@ -1637,379 +2237,8 @@ function EditDayButton({
   camp: CampWorkspace;
   date: string;
 }) {
-  const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<EditDayTab>("camp-builder");
-  const [startTime, setStartTime] = useState("15:00");
-  const [durationMinutes, setDurationMinutes] = useState(15);
-  const [builderStartTime, setBuilderStartTime] = useState("09:00");
-  const [builderRotationLength, setBuilderRotationLength] = useState(15);
-  const [builderMiddayBreak, setBuilderMiddayBreak] = useState("2");
-  const [builderMaxTunnelHours, setBuilderMaxTunnelHours] = useState("4");
-  const [builderPreview, setBuilderPreview] =
-    useState<CampBuilderPreviewSlot[] | null>(null);
-  const [error, setError] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const capacity = getSlotCapacity(durationMinutes);
-
-  function getExistingSlots(): TimetableSlotInput[] {
-    return camp.timetableSlots.map((slot) => ({
-      id: slot.id,
-      slotDate: slot.slotDate,
-      startTime: slot.startTime.slice(0, 5),
-      durationMinutes: slot.durationMinutes,
-      capacity: slot.capacity,
-    }));
-  }
-
-  function getExistingSlotsOutsideDay(): TimetableSlotInput[] {
-    return getExistingSlots().filter((slot) => slot.slotDate !== date);
-  }
-
-  function generateCampBuilderSlots() {
-    const generatedSlots = buildCampBuilderPreview({
-      date,
-      startTime: builderStartTime,
-      rotationLength: builderRotationLength,
-      middayBreakHours: builderMiddayBreak,
-      maxTunnelHours: builderMaxTunnelHours,
-    });
-
-    if (generatedSlots.length === 0) {
-      setError("Add at least 30 minutes of tunnel time.");
-      setBuilderPreview(null);
-      return null;
-    }
-
-    return generatedSlots;
-  }
-
-  function save() {
-    setError("");
-
-    const existingSlots = getExistingSlots();
-    const nextSlots: TimetableSlotInput[] = [
-      ...existingSlots,
-      {
-        slotDate: date,
-        startTime: roundTimeToHalfHour(startTime),
-        durationMinutes,
-        capacity,
-      },
-    ];
-
-    startTransition(async () => {
-      const result = await saveCampTimetable(camp.id, nextSlots, false, {
-        redirectOnPublish: false,
-      });
-
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      setIsOpen(false);
-      router.refresh();
-    });
-  }
-
-  function previewCampBuilder() {
-    setError("");
-
-    const preview = generateCampBuilderSlots();
-
-    if (!preview) {
-      return;
-    }
-
-    setBuilderPreview(preview);
-  }
-
-  function createCampBuilderDay() {
-    setError("");
-
-    const generatedSlots = generateCampBuilderSlots();
-
-    if (!generatedSlots) {
-      return;
-    }
-
-    setBuilderPreview(generatedSlots);
-
-    const nextSlots: TimetableSlotInput[] = [
-      ...getExistingSlotsOutsideDay(),
-      ...generatedSlots,
-    ];
-
-    startTransition(async () => {
-      const result = await saveCampTimetable(camp.id, nextSlots, false, {
-        redirectOnPublish: false,
-      });
-
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      setIsOpen(false);
-      setBuilderPreview(null);
-      router.refresh();
-    });
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          setActiveTab("camp-builder");
-          setError("");
-          setBuilderPreview(null);
-          setIsOpen(true);
-        }}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sky-600 px-2.5 text-xs font-black text-white transition hover:bg-sky-700"
-      >
-        <Plus size={14} /> Edit Day
-      </button>
-      {isOpen && typeof document !== "undefined"
-        ? createPortal(
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4">
-          <div className="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
-                {formatLongDay(date)}
-              </p>
-              <h3 className="mt-1 text-lg font-black tracking-tight">
-                Edit Day
-              </h3>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("manual");
-                  setError("");
-                }}
-                className={`h-10 rounded-lg text-sm font-black transition ${
-                  activeTab === "manual"
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Manual Slots
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("camp-builder");
-                  setError("");
-                }}
-                className={`h-10 rounded-lg text-sm font-black transition ${
-                  activeTab === "camp-builder"
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Camp Builder
-              </button>
-            </div>
-
-            {activeTab === "manual" ? (
-              <div className="mt-4 grid gap-3">
-                <DashboardField label="Time">
-                  <input
-                    type="time"
-                    step="1800"
-                    value={startTime}
-                    onChange={(event) =>
-                      setStartTime(roundTimeToHalfHour(event.target.value))
-                    }
-                    onBlur={(event) =>
-                      setStartTime(roundTimeToHalfHour(event.target.value))
-                    }
-                    className={dashboardInputClass}
-                  />
-                </DashboardField>
-                <DashboardField label="Duration">
-                  <select
-                    value={durationMinutes}
-                    onChange={(event) => setDurationMinutes(Number(event.target.value))}
-                    className={dashboardInputClass}
-                  >
-                    <option value={10}>10 minutes</option>
-                    <option value={15}>15 minutes</option>
-                  </select>
-                </DashboardField>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                    Capacity
-                  </p>
-                  <p className="mt-1 text-sm font-black text-slate-950">
-                    {capacity} athletes
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <DashboardField label="Start Time">
-                    <input
-                      type="time"
-                      step="1800"
-                      value={builderStartTime}
-                      onChange={(event) => {
-                        setBuilderStartTime(roundTimeToHalfHour(event.target.value));
-                        setBuilderPreview(null);
-                      }}
-                      onBlur={(event) => {
-                        setBuilderStartTime(roundTimeToHalfHour(event.target.value));
-                        setBuilderPreview(null);
-                      }}
-                      className={dashboardInputClass}
-                    />
-                  </DashboardField>
-                  <DashboardField label="Rotation Length">
-                    <select
-                      value={builderRotationLength}
-                      onChange={(event) => {
-                        setBuilderRotationLength(Number(event.target.value));
-                        setBuilderPreview(null);
-                      }}
-                      className={dashboardInputClass}
-                    >
-                      <option value={10}>10 minutes</option>
-                      <option value={15}>15 minutes</option>
-                    </select>
-                  </DashboardField>
-                  <DashboardField label="Midday Break Duration (hours)">
-                    <input
-                      type="number"
-                      min="0"
-                      max="3"
-                      step="0.5"
-                      value={builderMiddayBreak}
-                      onChange={(event) => {
-                        setBuilderMiddayBreak(event.target.value);
-                        setBuilderPreview(null);
-                      }}
-                      onBlur={(event) =>
-                        setBuilderMiddayBreak(
-                          String(roundHoursToHalfHour(event.target.value)),
-                        )
-                      }
-                      className={dashboardInputClass}
-                    />
-                  </DashboardField>
-                  <DashboardField label="Maximum Tunnel Time (hours)">
-                    <input
-                      type="number"
-                      min="0.5"
-                      max="12"
-                      step="0.5"
-                      value={builderMaxTunnelHours}
-                      onChange={(event) => {
-                        setBuilderMaxTunnelHours(event.target.value);
-                        setBuilderPreview(null);
-                      }}
-                      onBlur={(event) =>
-                        setBuilderMaxTunnelHours(
-                          String(roundHoursToHalfHour(event.target.value)),
-                        )
-                      }
-                      className={dashboardInputClass}
-                    />
-                  </DashboardField>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                      Camp Builder
-                    </p>
-                    <p className="mt-1 text-sm font-black text-slate-950">
-                      Hour In – Hour Out
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-slate-600">
-                      Maximum tunnel time is the total operating hours for this day.
-                      Create Day replaces the existing schedule for this day with draft
-                      slots.
-                    </p>
-                  </div>
-                  {builderPreview ? (
-                    <div className="mt-3 grid gap-2">
-                      <div className="grid max-h-56 gap-1 overflow-y-auto rounded-lg bg-white p-2">
-                        {builderPreview.map((slot) => (
-                          <div
-                            key={`${slot.slotDate}-${slot.startTime}`}
-                            className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm"
-                          >
-                            <span className="font-black text-slate-950">
-                              {formatTimetableTime(slot.startTime)}
-                            </span>
-                            <span className="font-bold text-slate-500">
-                              {slot.capacity} slots
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            )}
-            {error ? (
-              <p className="mt-3 rounded-xl bg-rose-50 p-2 text-sm font-bold text-rose-700">
-                {error}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="h-10 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700"
-              >
-                Cancel
-              </button>
-              {activeTab === "manual" ? (
-                <button
-                  type="button"
-                  onClick={save}
-                  disabled={isPending}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white disabled:bg-slate-300"
-                >
-                  <Save size={16} /> {isPending ? "Saving..." : "Save Draft"}
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={previewCampBuilder}
-                    disabled={isPending}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 disabled:text-slate-300"
-                  >
-                    <Clock3 size={16} /> Preview Day
-                  </button>
-                  <button
-                    type="button"
-                    onClick={createCampBuilderDay}
-                    disabled={isPending}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white disabled:bg-slate-300"
-                  >
-                    <Save size={16} /> {isPending ? "Creating..." : "Create Day"}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )
-        : null}
-    </>
-  );
+  return <CampBuilderEditDayModal camp={camp} date={date} />;
 }
-
 function PublishTimetableButton({
   camp,
   compact = false,
@@ -2305,10 +2534,12 @@ function ParticipantPanel({
   participant,
   camp,
   onClear,
+  onOpenProfile,
 }: {
   participant: Participant;
   camp: CampWorkspace;
   onClear: () => void;
+  onOpenProfile: () => void;
 }) {
   const router = useRouter();
   const [selfBookingEnabled, setSelfBookingEnabled] = useState(
@@ -2335,7 +2566,6 @@ function ParticipantPanel({
   const preferencesByDay = camp.preferences
     .filter((preference) => preference.participantId === participant.userId)
     .sort((a, b) => a.dayId - b.dayId);
-  const profileHref = participant.userId ? `/app/users/${participant.userId}` : null;
 
   function updateSelfBooking(nextEnabled: boolean) {
     if (isTogglePending || selfBookingEnabled === nextEnabled) {
@@ -2365,40 +2595,23 @@ function ParticipantPanel({
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
-        {profileHref ? (
-          <Link
-            href={profileHref}
-            className="flex min-w-0 items-center gap-3 rounded-2xl px-1 py-1 transition hover:bg-slate-50"
-          >
-            <Avatar
-              name={participant.name}
-              imageUrl={participant.profileImageUrl}
-              size="md"
-            />
-            <div className="min-w-0">
-              <h2 className="truncate text-lg font-black text-slate-950">
-                {participant.name}
-              </h2>
-              <p className="truncate text-sm font-bold text-sky-700">View profile</p>
-            </div>
-          </Link>
-        ) : (
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar
-              name={participant.name}
-              imageUrl={participant.profileImageUrl}
-              size="md"
-            />
-            <div className="min-w-0">
-              <h2 className="truncate text-lg font-black text-slate-950">
-                {participant.name}
-              </h2>
-              <p className="truncate text-sm font-bold text-slate-500">
-                No profile available
-              </p>
-            </div>
+        <button
+          type="button"
+          onClick={onOpenProfile}
+          className="flex min-w-0 items-center gap-3 rounded-2xl px-1 py-1 text-left transition hover:bg-slate-50"
+        >
+          <Avatar
+            name={participant.name}
+            imageUrl={participant.profileImageUrl}
+            size="md"
+          />
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-black text-slate-950">
+              {participant.name}
+            </h2>
+            <p className="truncate text-sm font-bold text-sky-700">View profile</p>
           </div>
-        )}
+        </button>
         <button
           type="button"
           onClick={onClear}
@@ -2407,23 +2620,16 @@ function ParticipantPanel({
           Close
         </button>
       </div>
-      <div className="mt-3 grid grid-cols-2 items-stretch gap-2">
-        <SummaryMetricCard
-          label="Status"
-          value={formatInterestStatusLabel(participant.status)}
-        />
-        <SummaryMetricCard
-          label="Booked Time"
-          value={formatBookedTimeSummary(bookedMinutes)}
-        />
-        <SummaryMetricCard
-          label="Tunnel Time"
-          value={participant.tunnelTimeStatus === "owns_tunnel_time" ? "✅ Available" : "❌ Not Available"}
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <CompactMetric label="Booked" value={formatBookedTimeSummary(bookedMinutes)} />
+        <CompactMetric
+          label="Tunnel"
+          value={
+            participant.tunnelTimeStatus === "owns_tunnel_time"
+              ? "Available"
+              : "Not available"
+          }
           tone={participant.tunnelTimeStatus === "owns_tunnel_time" ? "success" : "slate"}
-        />
-        <SummaryMetricCard
-          label="Country"
-          value={participant.country || "Not provided"}
         />
       </div>
       {camp.type === "camp" && participant.status === "accepted" ? (
@@ -2605,20 +2811,6 @@ function ParticipantPanel({
           </details>
         ) : null}
       </div>
-      {camp.type === "camp" &&
-      participant.status === "accepted" &&
-      bookedSlots.length === 0 &&
-      participant.userId ? (
-        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-amber-700">
-            Requires attention
-          </p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-amber-900">
-            This athlete has no booked times yet. The task now lives in the
-            Command Center instead of generating a reminder notification.
-          </p>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -2914,29 +3106,26 @@ function FlightCapacityCard({
   );
 }
 
-function SummaryMetricCard({
+function CompactMetric({
   label,
   value,
-  detail,
   tone = "slate",
 }: {
   label: string;
   value: string;
-  detail?: React.ReactNode;
   tone?: "slate" | "success";
 }) {
   const toneStyles =
     tone === "success"
-      ? "border-emerald-200 bg-emerald-50"
-      : "border-slate-200 bg-slate-50";
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <div className={`flex h-full min-h-28 flex-col justify-between rounded-2xl border p-3 ${toneStyles}`}>
-      <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-400">
+    <div className={`rounded-xl border px-3 py-2 ${toneStyles}`}>
+      <p className="text-[0.64rem] font-black uppercase tracking-[0.12em] text-slate-400">
         {label}
       </p>
-      <p className="mt-1 break-words text-sm font-black text-slate-950">{value}</p>
-      {detail ? <div className="mt-1.5">{detail}</div> : null}
+      <p className="mt-1 text-sm font-black text-slate-950">{value}</p>
     </div>
   );
 }
@@ -2958,10 +3147,6 @@ function DashboardField({
 
 const dashboardInputClass =
   "min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-sky-400";
-
-function getSlotCapacity(durationMinutes: number) {
-  return durationMinutes === 10 ? 3 : 2;
-}
 
 function getVisibleTimetableDays(
   camp: CampWorkspace,
@@ -3364,5 +3549,13 @@ function formatLongDay(value: string) {
     day: "numeric",
   }).format(new Date(`${value}T00:00:00`));
 }
+
+function cleanHandle(value: string) {
+  return value.replace(/^@/, "").trim();
+}
+
+
+
+
 
 

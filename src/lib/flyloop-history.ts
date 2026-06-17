@@ -7,8 +7,10 @@ type OpportunityRelation = {
   id: string;
   title: string;
   type: "camp" | "huck_jam";
+  status: "draft" | "published" | "full" | "cancelled";
   start_date: string;
   end_date: string;
+  registration_deadline: string | null;
   created_by: string;
   tunnel_profiles:
     | { id: string; name: string | null; country: string | null }
@@ -82,17 +84,17 @@ export async function getFlyloopProfileHistory(
     await Promise.all([
       supabase
         .from("opportunity_slot_bookings")
-        .select("minutes,opportunities(id,title,type,start_date,end_date,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
+        .select("minutes,opportunities(id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
         .eq("user_id", userId),
       supabase
         .from("opportunity_interests")
-        .select("opportunities(id,title,type,start_date,end_date,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
+        .select("opportunities(id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
         .eq("athlete_id", userId)
         .eq("status", "accepted")
         .neq("interest_type", "timetable_reminder"),
       supabase
         .from("opportunities")
-        .select("id,title,type,start_date,end_date,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name),opportunity_slot_bookings(minutes,user_id)")
+        .select("id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name),opportunity_slot_bookings(minutes,user_id)")
         .eq("created_by", userId),
     ]);
 
@@ -109,21 +111,35 @@ export async function getFlyloopProfileHistory(
   }
 
   const entriesByOpportunity = new Map<string, FlyloopHistoryEntry>();
+  const countableEntriesByOpportunity = new Map<string, FlyloopHistoryEntry>();
 
   for (const row of (campBookingsResult.data ?? []) as CampBookingRow[]) {
     const opportunity = firstRelation(row.opportunities);
 
     if (
       !opportunity ||
-      opportunity.type !== "camp" ||
-      !isOpportunityCompleted({ endDate: opportunity.end_date }, now)
+      opportunity.type !== "camp"
     ) {
       continue;
     }
 
-    const current = entriesByOpportunity.get(opportunity.id);
-    const nextMinutes = (current?.flyloopMinutes ?? 0) + Number(row.minutes ?? 0);
-    entriesByOpportunity.set(opportunity.id, toHistoryEntry(opportunity, nextMinutes));
+    if (isOpportunityCompleted({ endDate: opportunity.end_date }, now)) {
+      const current = entriesByOpportunity.get(opportunity.id);
+      const nextMinutes = (current?.flyloopMinutes ?? 0) + Number(row.minutes ?? 0);
+      entriesByOpportunity.set(opportunity.id, toHistoryEntry(opportunity, nextMinutes));
+    }
+
+    if (
+      isRegistrationCycleCounted(opportunity, now) &&
+      isCountableOpportunityStatus(opportunity.status)
+    ) {
+      const current = countableEntriesByOpportunity.get(opportunity.id);
+      const nextMinutes = (current?.flyloopMinutes ?? 0) + Number(row.minutes ?? 0);
+      countableEntriesByOpportunity.set(
+        opportunity.id,
+        toHistoryEntry(opportunity, nextMinutes),
+      );
+    }
   }
 
   for (const row of (huckJamInterestsResult.data ?? []) as InterestRow[]) {
@@ -131,23 +147,38 @@ export async function getFlyloopProfileHistory(
 
     if (
       !opportunity ||
-      opportunity.type !== "huck_jam" ||
-      !isOpportunityCompleted({ endDate: opportunity.end_date }, now)
+      opportunity.type !== "huck_jam"
     ) {
       continue;
     }
 
-    if (!entriesByOpportunity.has(opportunity.id)) {
-      entriesByOpportunity.set(opportunity.id, toHistoryEntry(opportunity, 0));
+    if (isOpportunityCompleted({ endDate: opportunity.end_date }, now)) {
+      if (!entriesByOpportunity.has(opportunity.id)) {
+        entriesByOpportunity.set(opportunity.id, toHistoryEntry(opportunity, 0));
+      }
+    }
+
+    if (
+      isRegistrationCycleCounted(opportunity, now) &&
+      isCountableOpportunityStatus(opportunity.status)
+    ) {
+      if (!countableEntriesByOpportunity.has(opportunity.id)) {
+        countableEntriesByOpportunity.set(opportunity.id, toHistoryEntry(opportunity, 0));
+      }
     }
   }
 
+  const countableHistoryEntries = [...countableEntriesByOpportunity.values()].sort((a, b) =>
+    `${b.completedDate} ${b.title}`.localeCompare(`${a.completedDate} ${a.title}`),
+  );
   const historyEntries = [...entriesByOpportunity.values()].sort((a, b) =>
     `${b.completedDate} ${b.title}`.localeCompare(`${a.completedDate} ${a.title}`),
   );
   const completedOrganized = ((organizedResult.data ?? []) as OrganizedOpportunityRow[])
-    .filter((opportunity) =>
-      isOpportunityCompleted({ endDate: opportunity.end_date }, now),
+    .filter(
+      (opportunity) =>
+        isRegistrationCycleCounted(opportunity, now) &&
+        isCountableOpportunityStatus(opportunity.status),
     );
   const athleteMinutesCoached = completedOrganized.reduce((total, opportunity) => {
     if (opportunity.type !== "camp") {
@@ -160,22 +191,26 @@ export async function getFlyloopProfileHistory(
       bookings.reduce((bookingTotal, booking) => bookingTotal + Number(booking.minutes ?? 0), 0)
     );
   }, 0);
-  const flyloopMinutes = historyEntries.reduce(
+  const countableFlyloopMinutes = countableHistoryEntries.reduce(
     (total, entry) => total + entry.flyloopMinutes,
     0,
   );
-  const entriesWithMinutes = historyEntries.filter((entry) => entry.flyloopMinutes > 0);
+  const entriesWithMinutes = countableHistoryEntries.filter(
+    (entry) => entry.flyloopMinutes > 0,
+  );
 
   return {
     stats: {
-      flyloopMinutes,
-      flyloopHours: Number((flyloopMinutes / 60).toFixed(1)),
-      campsAttended: historyEntries.filter((entry) => entry.type === "camp").length,
-      huckJamsAttended: historyEntries.filter((entry) => entry.type === "huck_jam").length,
-      visitedTunnels: new Set(historyEntries.map((entry) => entry.tunnelId).filter(Boolean))
+      flyloopMinutes: countableFlyloopMinutes,
+      flyloopHours: Number((countableFlyloopMinutes / 60).toFixed(1)),
+      campsAttended: countableHistoryEntries.filter((entry) => entry.type === "camp").length,
+      huckJamsAttended: countableHistoryEntries.filter((entry) => entry.type === "huck_jam").length,
+      visitedTunnels: new Set(
+        countableHistoryEntries.map((entry) => entry.tunnelId).filter(Boolean),
+      )
         .size,
       visitedCountries: new Set(
-        historyEntries.map((entry) => entry.tunnelCountry).filter(Boolean),
+        countableHistoryEntries.map((entry) => entry.tunnelCountry).filter(Boolean),
       ).size,
       favoriteCoach: topByMinutes(entriesWithMinutes, (entry) => entry.coachName),
       favoriteTunnel: topByMinutes(entriesWithMinutes, (entry) => entry.tunnelName),
@@ -254,6 +289,26 @@ function topByMinutes(
 
 function firstRelation<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isRegistrationCycleCounted(
+  opportunity: {
+    registration_deadline: string | null;
+  },
+  now: Date,
+) {
+  if (!opportunity.registration_deadline) {
+    return false;
+  }
+
+  const deadline = new Date(opportunity.registration_deadline);
+  return Number.isFinite(deadline.getTime()) && deadline.getTime() < now.getTime();
+}
+
+function isCountableOpportunityStatus(
+  status: "draft" | "published" | "full" | "cancelled",
+) {
+  return status !== "draft" && status !== "cancelled";
 }
 
 function normalizeArray<T>(value: T | T[] | null | undefined) {

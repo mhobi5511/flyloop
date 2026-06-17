@@ -662,6 +662,31 @@ export async function saveCampTimetable(
     }
   }
 
+  if (publish) {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (adminSupabase) {
+      const { error: finalizeError } = await adminSupabase
+        .from("opportunity_slot_bookings")
+        .update({
+          is_final: true,
+          finalized_at: timestamp,
+        })
+        .eq("opportunity_id", opportunityId)
+        .eq("is_final", false);
+
+      if (finalizeError) {
+        console.error("Timetable booking finalization failed", {
+          opportunityId,
+          code: finalizeError.code,
+          message: finalizeError.message,
+          details: finalizeError.details,
+          hint: finalizeError.hint,
+        });
+      }
+    }
+  }
+
   if (publish && options.redirectOnPublish !== false) {
     const searchParams = new URLSearchParams({ timetablePublished: "1" });
 
