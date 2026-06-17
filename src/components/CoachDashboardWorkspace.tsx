@@ -59,6 +59,7 @@ import {
   formatCampDayPreferenceLabel,
   formatCampPreferenceMinutes,
 } from "@/lib/camp-days";
+import { setCampParticipantSelfBooking } from "@/app/app/organizer/opportunities/actions";
 import type {
   BookingMode,
   InterestStatus,
@@ -80,6 +81,7 @@ type Participant = {
   removalRequestedAt: string | null;
   tunnelTimeStatus: string | null;
   tunnelAccountEmail: string | null;
+  selfBookingEnabled: boolean;
 };
 
 type CampWorkspace = {
@@ -490,9 +492,11 @@ export function CoachDashboardWorkspace({
                   onSelectParticipant={setSelectedParticipantId}
                   onSelectApplicants={focusApplicants}
                   participantColorMap={participantColorMap}
+                  isCamp={activeCamp.type === "camp"}
                 />
                 {participant ? (
                   <ParticipantPanel
+                    key={participant.id}
                     participant={participant}
                     camp={activeCamp}
                     onClear={() => setSelectedParticipantId("")}
@@ -740,7 +744,7 @@ export function CoachDashboardWorkspace({
                                           ) : null}
                                           {releaseRequested ? (
                                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-black uppercase text-amber-800">
-                                              Release requested
+                                              Pending Coach Approval
                                             </span>
                                           ) : null}
                                         </span>
@@ -1079,6 +1083,7 @@ export function CoachDashboardWorkspace({
                 }}
                 onSelectApplicants={focusApplicants}
                 participantColorMap={participantColorMap}
+                isCamp={activeCamp.type === "camp"}
               />
             </div>
           )}
@@ -1341,12 +1346,14 @@ function ParticipantColumns({
   onSelectParticipant,
   onSelectApplicants,
   participantColorMap,
+  isCamp,
 }: {
   participants: Participant[];
   selectedParticipantId: string;
   onSelectParticipant: (id: string) => void;
   onSelectApplicants: () => void;
   participantColorMap: Map<string, (typeof participantColors)[number]>;
+  isCamp: boolean;
 }) {
   const pending = participants.filter((participant) => participant.status === "pending");
   const accepted = participants.filter((participant) => participant.status === "accepted");
@@ -1433,6 +1440,13 @@ function ParticipantColumns({
                             <p className="truncate text-xs font-semibold text-slate-500">
                               Select to open sidebar
                             </p>
+                            {isCamp &&
+                            participant.status === "accepted" &&
+                            participant.selfBookingEnabled ? (
+                              <span className="mt-1 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] text-sky-700">
+                                Self-booking enabled
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         <span
@@ -2296,6 +2310,14 @@ function ParticipantPanel({
   camp: CampWorkspace;
   onClear: () => void;
 }) {
+  const router = useRouter();
+  const [selfBookingEnabled, setSelfBookingEnabled] = useState(
+    participant.selfBookingEnabled,
+  );
+  const [toggleMessage, setToggleMessage] = useState("");
+  const [toggleError, setToggleError] = useState("");
+  const [isTogglePending, startToggleTransition] = useTransition();
+
   const bookedSlots = camp.timetableSlots.flatMap((slot) =>
     slot.bookings
       .filter((booking) => booking.userId === participant.userId)
@@ -2314,6 +2336,31 @@ function ParticipantPanel({
     .filter((preference) => preference.participantId === participant.userId)
     .sort((a, b) => a.dayId - b.dayId);
   const profileHref = participant.userId ? `/app/users/${participant.userId}` : null;
+
+  function updateSelfBooking(nextEnabled: boolean) {
+    if (isTogglePending || selfBookingEnabled === nextEnabled) {
+      return;
+    }
+
+    setToggleMessage("");
+    setToggleError("");
+
+    startToggleTransition(async () => {
+      const result = await setCampParticipantSelfBooking(
+        participant.interestId,
+        nextEnabled,
+      );
+
+      if (!result.ok) {
+        setToggleError(result.message);
+        return;
+      }
+
+      setSelfBookingEnabled(nextEnabled);
+      setToggleMessage(result.message);
+      router.refresh();
+    });
+  }
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -2379,6 +2426,65 @@ function ParticipantPanel({
           value={participant.country || "Not provided"}
         />
       </div>
+      {camp.type === "camp" && participant.status === "accepted" ? (
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-400">
+                Self-booking
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                Allow this accepted athlete to choose their own flight times.
+              </p>
+            </div>
+            <span
+              className={`inline-flex h-8 shrink-0 items-center rounded-full px-3 text-[0.68rem] font-black uppercase tracking-[0.08em] ${
+                selfBookingEnabled
+                  ? "bg-sky-100 text-sky-700"
+                  : "bg-white text-slate-500"
+              }`}
+            >
+              {selfBookingEnabled ? "Enabled" : "Off"}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={isTogglePending || selfBookingEnabled}
+              onClick={() => updateSelfBooking(true)}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+            >
+              {isTogglePending && !selfBookingEnabled ? "Enabling..." : "Enable"}
+            </button>
+            <button
+              type="button"
+              disabled={isTogglePending || !selfBookingEnabled}
+              onClick={() => updateSelfBooking(false)}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:text-slate-400"
+            >
+              {isTogglePending && selfBookingEnabled ? "Disabling..." : "Disable"}
+            </button>
+          </div>
+          <p className="mt-2 text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-400">
+            When enabled, the athlete can select published slots themselves.
+          </p>
+          {selfBookingEnabled ? (
+            <span className="mt-2 inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-[0.64rem] font-black uppercase tracking-[0.08em] text-sky-700">
+              SELF-BOOKING ENABLED
+            </span>
+          ) : null}
+          {toggleMessage ? (
+            <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+              {toggleMessage}
+            </p>
+          ) : null}
+          {toggleError ? (
+            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+              {toggleError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {participant.status !== "accepted" ? (
         <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2977,6 +3083,8 @@ function getAttentionItems(camp: CampWorkspace) {
     ),
   );
   const participantsMissingSlots = accepted.filter(
+    (item) => !item.selfBookingEnabled,
+  ).filter(
     (item) => item.userId && !participantsWithSlots.has(item.userId),
   );
   const participantsMissingTunnelTime = accepted.filter(

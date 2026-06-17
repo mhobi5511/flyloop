@@ -23,6 +23,7 @@ type SlotOption = {
   bookedCount: number;
   remainingCapacity: number;
   userHasBooking: boolean;
+  releaseRequestedAt?: string | null;
 };
 
 type SlotBookingSelectorProps = {
@@ -34,6 +35,7 @@ type SlotBookingSelectorProps = {
   initialTunnelTimeStatus?: TunnelTimeStatus | null;
   initialTunnelAccountEmail?: string | null;
   changesClosed?: boolean;
+  selfBookingEnabled?: boolean;
 };
 
 export function SlotBookingSelector({
@@ -45,6 +47,7 @@ export function SlotBookingSelector({
   initialTunnelTimeStatus = null,
   initialTunnelAccountEmail = null,
   changesClosed = false,
+  selfBookingEnabled = false,
 }: SlotBookingSelectorProps) {
   const router = useRouter();
   const bookedSlotIds = useMemo(
@@ -61,7 +64,9 @@ export function SlotBookingSelector({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isTunnelTimeModalOpen, setIsTunnelTimeModalOpen] = useState(false);
+  const [isReleaseRequestModalOpen, setIsReleaseRequestModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [pendingReleaseSlotIds, setPendingReleaseSlotIds] = useState<string[]>([]);
   const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
   const newSelectedSlotIds = selectedSlotIds.filter(
     (slotId) => !bookedSlotIds.includes(slotId),
@@ -86,9 +91,11 @@ export function SlotBookingSelector({
     priceBasisMinutes,
   );
   const groupedSlots = useMemo(() => groupSlotsByDay(slots), [slots]);
+  const bookingLocked = changesClosed && !selfBookingEnabled;
+  const hasReleaseRequestDraft = selfBookingEnabled && removedBookedSlotIds.length > 0;
 
   function toggleSlot(slot: SlotOption) {
-    if (changesClosed || isPending) {
+    if (bookingLocked || isPending) {
       return;
     }
 
@@ -109,6 +116,11 @@ export function SlotBookingSelector({
     setMessage("");
     setError("");
 
+    if (hasReleaseRequestDraft) {
+      setIsReleaseRequestModalOpen(true);
+      return;
+    }
+
     if (needsTunnelTimePrompt) {
       setIsTunnelTimeModalOpen(true);
       return;
@@ -117,9 +129,14 @@ export function SlotBookingSelector({
     saveSlotChanges();
   }
 
-  function saveSlotChanges() {
+  function saveSlotChanges(skipReleaseRequestPrompt = false) {
     setMessage("");
     setError("");
+
+    if (hasReleaseRequestDraft && !skipReleaseRequestPrompt) {
+      setIsReleaseRequestModalOpen(true);
+      return;
+    }
 
     if (needsTunnelTimePrompt) {
       const tunnelTimeError = getTunnelTimeError(
@@ -171,12 +188,33 @@ export function SlotBookingSelector({
         return;
       }
 
+      if (removedBookedSlotIds.length > 0 && selfBookingEnabled) {
+        setSelectedSlotIds((current) => {
+          const merged = new Set<string>([
+            ...current,
+            ...bookedSlotIds,
+            ...newSelectedSlotIds,
+          ]);
+          return [...merged];
+        });
+        setPendingReleaseSlotIds((current) => [
+          ...new Set([...current, ...removedBookedSlotIds]),
+        ]);
+      }
+
       setIsTunnelTimeModalOpen(false);
-      setMessage(
-        removedBookedSlotIds.length > 0 && newSelectedSlotIds.length === 0
-          ? "Slot released."
-          : result.message,
-      );
+      setIsReleaseRequestModalOpen(false);
+      if (selfBookingEnabled && removedBookedSlotIds.length > 0) {
+        setMessage(
+          [
+            "Release request submitted.",
+            "Your booked flight time is still reserved for you.",
+            "The coach must approve this request before the slot becomes available again.",
+          ].join("\n"),
+        );
+      } else {
+        setMessage(result.message);
+      }
       window.setTimeout(() => {
         router.refresh();
       }, 700);
@@ -200,8 +238,15 @@ export function SlotBookingSelector({
               {day.slots.map((slot) => {
                 const isSelected = selectedSlotIds.includes(slot.id);
                 const isFull = slot.remainingCapacity <= 0;
+                const isReleaseRequested =
+                  Boolean(slot.releaseRequestedAt) ||
+                  pendingReleaseSlotIds.includes(slot.id);
                 const disabled =
-                  changesClosed || isPending || (!slot.userHasBooking && isFull);
+                  bookingLocked ||
+                  isPending ||
+                  (!slot.userHasBooking && isFull) ||
+                  isReleaseRequested;
+                const actionLabel = slot.userHasBooking ? "Release Slot" : "Select Slot";
 
                 return (
                   <button
@@ -229,6 +274,14 @@ export function SlotBookingSelector({
                         <span className="mt-1 block text-xs font-black text-slate-600">
                           {slot.durationMinutes} min
                         </span>
+                        <span className="mt-1 block text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
+                          {actionLabel}
+                        </span>
+                        {isReleaseRequested ? (
+                          <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-amber-800">
+                            Pending Coach Approval
+                          </span>
+                        ) : null}
                       </span>
                       <span
                         className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${
@@ -266,7 +319,11 @@ export function SlotBookingSelector({
       )}
 
       <section className="sticky bottom-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-        {changesClosed ? (
+        {selfBookingEnabled ? (
+          <p className="mb-3 rounded-xl bg-sky-50 p-3 text-center text-sm font-black text-sky-700">
+            You may choose your own available flight times.
+          </p>
+        ) : changesClosed ? (
           <p className="mb-3 rounded-xl bg-slate-100 p-3 text-center text-sm font-black text-slate-600">
             Booking changes are no longer available.
           </p>
@@ -284,14 +341,14 @@ export function SlotBookingSelector({
         </div>
         <button
           type="button"
-          disabled={changesClosed || isPending || !canSave}
+          disabled={bookingLocked || isPending || !canSave}
           onClick={handleSaveRequest}
           className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
         >
           <Send size={17} /> {isPending ? "Saving..." : "Save Times"}
         </button>
         {message ? (
-          <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+          <p className="mt-3 whitespace-pre-line rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
             {message}
           </p>
         ) : null}
@@ -400,10 +457,71 @@ export function SlotBookingSelector({
               <button
                 type="button"
                 disabled={isPending}
-                onClick={saveSlotChanges}
+                onClick={() => saveSlotChanges()}
                 className="h-11 rounded-xl bg-sky-600 px-4 text-sm font-black text-white hover:bg-sky-700 disabled:bg-slate-300"
               >
                 {isPending ? "Booking..." : "Confirm Booking"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isReleaseRequestModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="release-request-title"
+        >
+          <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2
+                  id="release-request-title"
+                  className="text-lg font-black text-slate-950"
+                >
+                  Request Slot Release
+                </h2>
+                <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                  You are requesting to release your booked flight time.
+                  <br />
+                  <br />
+                  Your slot will remain booked until the coach reviews and approves
+                  this request.
+                  <br />
+                  <br />
+                  Once approved, the slot will become available again.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReleaseRequestModalOpen(false)}
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+                aria-label="Close"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsReleaseRequestModalOpen(false)}
+                className="h-11 rounded-xl bg-slate-100 px-4 text-sm font-black text-slate-700 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setIsReleaseRequestModalOpen(false);
+                  saveSlotChanges(true);
+                }}
+                className="h-11 rounded-xl bg-rose-600 px-4 text-sm font-black text-white hover:bg-rose-700 disabled:bg-slate-300"
+              >
+                {isPending ? "Requesting..." : "Request Release"}
               </button>
             </div>
           </section>

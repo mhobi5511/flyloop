@@ -51,8 +51,8 @@ export function SlotReleaseRequestActions({
           type="button"
           disabled={isPending}
           onClick={() => resolve("approve")}
-          aria-label="Approve"
-          title="Approve"
+          aria-label="Approve Release"
+          title="Approve Release"
           className={`inline-flex items-center justify-center rounded-lg border font-black transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${
             compact
               ? "size-8 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -60,14 +60,14 @@ export function SlotReleaseRequestActions({
           }`}
         >
           <Check size={14} />
-          <span className={compact ? "sr-only" : ""}>Approve</span>
+          <span className={compact ? "sr-only" : ""}>Approve Release</span>
         </button>
         <button
           type="button"
           disabled={isPending}
           onClick={() => resolve("reject")}
-          aria-label="Reject"
-          title="Reject"
+          aria-label="Decline Release"
+          title="Decline Release"
           className={`inline-flex items-center justify-center rounded-lg border font-black transition disabled:cursor-not-allowed disabled:text-slate-400 ${
             compact
               ? "size-8 border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -75,7 +75,7 @@ export function SlotReleaseRequestActions({
           }`}
         >
           <X size={14} />
-          <span className={compact ? "sr-only" : ""}>Reject</span>
+          <span className={compact ? "sr-only" : ""}>Decline Release</span>
         </button>
       </div>
       {message ? (

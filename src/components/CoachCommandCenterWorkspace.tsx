@@ -54,6 +54,7 @@ export type CoachWorkspaceApplicant = {
   interestId: string;
   name: string;
   status: InterestStatus;
+  selfBookingEnabled: boolean;
   removalRequestedAt: string | null;
   tunnelTimeStatus: string | null;
   campTitle: string;
@@ -73,7 +74,7 @@ export type CoachWorkspaceAttentionItem = {
     | "Waitlist"
     | "Tunnel Not Informed"
     | "Draft Changes Pending"
-    | "Release Requests"
+    | "Slot Removal Requests"
     | "Unassigned Athletes";
   kind: "application" | "waitlist" | "tunnel" | "draft" | "release" | "unassigned";
   title: string;
@@ -115,7 +116,7 @@ const attentionGroupOrder: CoachWorkspaceAttentionItem["group"][] = [
   "Waitlist",
   "Tunnel Not Informed",
   "Draft Changes Pending",
-  "Release Requests",
+  "Slot Removal Requests",
   "Unassigned Athletes",
 ];
 

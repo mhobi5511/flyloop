@@ -1115,6 +1115,37 @@ export async function approveSlotReleaseRequest(
     });
   }
 
+  const approvalNotificationSupabase = createSupabaseAdminClient();
+  if (approvalNotificationSupabase) {
+    const shouldPushApproval = !(await hasUnreadNotification(
+      approvalNotificationSupabase,
+      {
+        userId: booking.user_id,
+        type: "slot_booking_removal_approved",
+        opportunityId,
+      },
+    ));
+
+    const { error: approvalNotificationError } = await approvalNotificationSupabase
+      .from("notifications")
+      .insert({
+        user_id: booking.user_id,
+        title: "Your slot release request was approved.",
+        body: "Your slot release request was approved.",
+        type: "slot_booking_removal_approved",
+        opportunity_id: opportunityId,
+      });
+
+    if (approvalNotificationError) {
+      console.error("Approve release request notification failed", approvalNotificationError);
+    } else if (shouldPushApproval) {
+      await sendServerPush([booking.user_id], "slot_booking_removal_approved", {
+        opportunityId,
+        types: ["slot_booking_removal_approved"],
+      });
+    }
+  }
+
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}`);
   revalidatePath(`/app/opportunities/${opportunityId}/times`);
@@ -1141,7 +1172,7 @@ export async function rejectSlotReleaseRequest(
 
   const { data: booking, error: lookupError } = await supabase
     .from("opportunity_slot_bookings")
-    .select("id,opportunity_id,release_requested_at,opportunities(created_by)")
+    .select("id,user_id,opportunity_id,release_requested_at,opportunities(created_by)")
     .eq("id", bookingId)
     .eq("opportunity_id", opportunityId)
     .maybeSingle();
@@ -1181,6 +1212,37 @@ export async function rejectSlotReleaseRequest(
   if (error) {
     console.error("Reject release request failed", error);
     return { ok: false, message: "Could not update release request." };
+  }
+
+  const rejectionNotificationSupabase = createSupabaseAdminClient();
+  if (rejectionNotificationSupabase) {
+    const shouldPushRejection = !(await hasUnreadNotification(
+      rejectionNotificationSupabase,
+      {
+        userId: booking.user_id,
+        type: "slot_booking_removal_declined",
+        opportunityId,
+      },
+    ));
+
+    const { error: rejectionNotificationError } = await rejectionNotificationSupabase
+      .from("notifications")
+      .insert({
+        user_id: booking.user_id,
+        title: "Your slot release request was declined.",
+        body: "Your slot release request was declined.",
+        type: "slot_booking_removal_declined",
+        opportunity_id: opportunityId,
+      });
+
+    if (rejectionNotificationError) {
+      console.error("Reject release request notification failed", rejectionNotificationError);
+    } else if (shouldPushRejection) {
+      await sendServerPush([booking.user_id], "slot_booking_removal_declined", {
+        opportunityId,
+        types: ["slot_booking_removal_declined"],
+      });
+    }
   }
 
   revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
@@ -1273,6 +1335,126 @@ export async function assignParticipantSlotBooking(
   revalidatePath("/app/applications");
 
   return { ok: true, message: "Slot assigned." };
+}
+
+export async function setCampParticipantSelfBooking(
+  interestId: string,
+  selfBookingEnabled: boolean,
+): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: interest, error: interestLookupError } = await supabase
+    .from("opportunity_interests")
+    .select(
+      "id,opportunity_id,athlete_id,status,self_booking_enabled,opportunities(id,title,type,created_by)",
+    )
+    .eq("id", interestId)
+    .maybeSingle();
+
+  if (interestLookupError) {
+    console.error("Self-booking lookup failed", {
+      interestId,
+      selfBookingEnabled,
+      organizerId: user.id,
+      code: interestLookupError.code,
+      message: interestLookupError.message,
+      details: interestLookupError.details,
+      hint: interestLookupError.hint,
+    });
+    return { ok: false, message: "Could not update self-booking." };
+  }
+
+  const opportunity = Array.isArray(interest?.opportunities)
+    ? interest?.opportunities[0]
+    : interest?.opportunities;
+
+  if (!interest || !opportunity || opportunity.created_by !== user.id) {
+    return { ok: false, message: "Participant not found." };
+  }
+
+  if (opportunity.type !== "camp") {
+    return { ok: false, message: "Self-booking is only available for Camps." };
+  }
+
+  if (interest.status !== "accepted") {
+    return { ok: false, message: "Only accepted participants can use self-booking." };
+  }
+
+  const nextEnabled = Boolean(selfBookingEnabled);
+  const currentEnabled = interest.self_booking_enabled === true;
+
+  if (currentEnabled === nextEnabled) {
+    return {
+      ok: true,
+      message: nextEnabled
+        ? "Self-booking is already enabled."
+        : "Self-booking is already disabled.",
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from("opportunity_interests")
+    .update({ self_booking_enabled: nextEnabled })
+    .eq("id", interestId)
+    .eq("opportunity_id", opportunity.id)
+    .eq("athlete_id", interest.athlete_id);
+
+  if (updateError) {
+    console.error("Self-booking update failed", {
+      interestId,
+      opportunityId: opportunity.id,
+      athleteId: interest.athlete_id,
+      organizerId: user.id,
+      selfBookingEnabled: nextEnabled,
+      code: updateError.code,
+      message: updateError.message,
+      details: updateError.details,
+      hint: updateError.hint,
+    });
+    return { ok: false, message: "Could not update self-booking." };
+  }
+
+  if (nextEnabled) {
+    const adminSupabase = createSupabaseAdminClient();
+
+    if (adminSupabase) {
+      const { error: notificationError } = await adminSupabase.from("notifications").insert({
+        user_id: interest.athlete_id,
+        title: "Self-booking enabled",
+        body: "You can now choose your own flight times for this opportunity.",
+        type: "self_booking_enabled",
+        opportunity_id: opportunity.id,
+      });
+
+      if (notificationError) {
+        console.error("Self-booking notification failed", {
+          interestId,
+          opportunityId: opportunity.id,
+          athleteId: interest.athlete_id,
+          error: notificationError,
+        });
+      }
+    }
+  }
+
+  revalidatePath(`/app/coach-dashboard/${opportunity.id}`);
+  revalidatePath("/app/coach-dashboard");
+  revalidatePath(`/app/opportunities/${opportunity.id}`);
+  revalidatePath(`/app/opportunities/${opportunity.id}/times`);
+  revalidatePath(`/app/organizer/opportunities/${opportunity.id}`);
+
+  return {
+    ok: true,
+    message: nextEnabled ? "Self-booking enabled." : "Self-booking disabled.",
+  };
 }
 
 function normalizeTimetableSlots(slots: TimetableSlotInput[]) {

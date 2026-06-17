@@ -51,6 +51,7 @@ type CoachOpportunityRow = {
     | Array<{
         id: string;
         status: InterestStatus;
+        self_booking_enabled: boolean | null;
         created_at: string | null;
         removal_requested_at: string | null;
         profiles:
@@ -107,7 +108,7 @@ export default async function CoachDashboardPage() {
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
+          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
         )
         .eq("created_by", user.id)
         .neq("status", "cancelled")
@@ -273,6 +274,7 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
         interestId: interest.id,
         name: profile?.full_name?.trim() || "Participant",
         status: interest.status,
+        selfBookingEnabled: interest.self_booking_enabled === true,
         removalRequestedAt: interest.removal_requested_at,
         tunnelTimeStatus: null,
         campTitle: row.title,
@@ -306,11 +308,8 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
         .filter(Boolean),
     ),
   );
-  const acceptedUserIds = acceptedApplicants
-    .map((applicant) => applicant.id)
-    .filter(Boolean);
-  const unassignedAthletes = acceptedUserIds.filter(
-    (userId) => !bookedUserIds.has(userId),
+  const unassignedAthletes = acceptedApplicants.filter(
+    (applicant) => !applicant.selfBookingEnabled && !bookedUserIds.has(applicant.id),
   ).length;
   const releaseRequests = buildReleaseRequests(row);
   const actionScore =
@@ -366,6 +365,7 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
         interestId: interest.id,
         name: profile?.full_name?.trim() || "An athlete",
         status: interest.status,
+        selfBookingEnabled: interest.self_booking_enabled === true,
       };
     });
 
@@ -424,10 +424,10 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
     for (const request of buildReleaseRequests(row)) {
       items.push({
         id: `release-${request.bookingId}`,
-        group: "Release Requests",
+        group: "Slot Removal Requests",
         kind: "release",
-        title: `${request.name} requested slot release`,
-        description: `A booked slot needs a decision for ${campTitle}.`,
+        title: "Slot Removal Request",
+        description: `${request.name} wants to release a booked slot.\nOpportunity: ${campTitle}`,
         campId,
         campTitle,
         bookingId: request.bookingId,
@@ -450,7 +450,6 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
     }
 
     const acceptedApplicants = applicants.filter((item) => item.status === "accepted");
-    const acceptedIds = new Set(acceptedApplicants.map((applicant) => applicant.id));
     const bookedIds = new Set(
       (row.opportunity_time_slots ?? []).flatMap((slot) =>
         (slot.opportunity_slot_bookings ?? [])
@@ -458,7 +457,9 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
           .filter(Boolean),
       ),
     );
-    const unassignedCount = [...acceptedIds].filter((id) => !bookedIds.has(id)).length;
+    const unassignedCount = acceptedApplicants.filter(
+      (applicant) => !applicant.selfBookingEnabled && !bookedIds.has(applicant.id),
+    ).length;
 
     if (unassignedCount > 0) {
       items.push({

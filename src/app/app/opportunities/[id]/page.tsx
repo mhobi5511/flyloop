@@ -86,7 +86,7 @@ export default async function OpportunityDetailPage({
     user && user.id !== opportunity.createdBy
       ? await supabase
           .from("opportunity_interests")
-          .select("id,status,interest_type,removal_requested_at,tunnel_time_status,tunnel_account_email")
+          .select("id,status,interest_type,self_booking_enabled,removal_requested_at,tunnel_time_status,tunnel_account_email")
           .eq("opportunity_id", opportunity.id)
           .eq("athlete_id", user.id)
           .maybeSingle()
@@ -95,6 +95,8 @@ export default async function OpportunityDetailPage({
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
     viewerInterest?.interest_type === "timetable_reminder";
+  const viewerSelfBookingEnabled =
+    viewerInterest?.self_booking_enabled === true;
   const viewerTunnelTimeStatus =
     (viewerInterest?.tunnel_time_status as TunnelTimeStatus | null | undefined) ??
     null;
@@ -196,11 +198,13 @@ export default async function OpportunityDetailPage({
     (!viewerApplicationStatus ||
       viewerApplicationStatus === "accepted" ||
       viewerHasTimetableReminder);
-  const canSelectTimes =
-    !isHuckJam &&
-    !isCamp &&
+  const canCampSelfBook =
+    isCamp &&
     hasPublishedTimetable &&
-    (isAccepted || (canDirectBook && !isUnavailable));
+    viewerApplicationStatus === "accepted" &&
+    viewerSelfBookingEnabled;
+  const canSelectTimes =
+    (!isHuckJam && !isCamp && canDirectBook && !isUnavailable) || canCampSelfBook;
   const bookedTimes = ((bookingRows ?? []) as BookingRow[])
     .map((booking) => {
       const slot = Array.isArray(booking.opportunity_time_slots)

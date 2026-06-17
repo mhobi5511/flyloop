@@ -25,6 +25,7 @@ type SlotAvailabilityRow = {
   booked_count: number;
   remaining_capacity: number;
   user_has_booking: boolean;
+  release_requested_at: string | null;
 };
 
 export default async function SlotBookingPage({
@@ -50,7 +51,7 @@ export default async function SlotBookingPage({
       .maybeSingle(),
     supabase
       .from("opportunity_interests")
-      .select("status,interest_type,tunnel_time_status,tunnel_account_email")
+      .select("status,interest_type,self_booking_enabled,tunnel_time_status,tunnel_account_email")
       .eq("opportunity_id", id)
       .eq("athlete_id", user.id)
       .maybeSingle(),
@@ -66,6 +67,8 @@ export default async function SlotBookingPage({
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
     viewerInterest?.interest_type === "timetable_reminder";
+  const viewerSelfBookingEnabled =
+    viewerInterest?.self_booking_enabled === true;
   const viewerApplicationStatus =
     viewerHasTimetableReminder || viewerInterestStatus === "withdrawn"
       ? undefined
@@ -79,6 +82,12 @@ export default async function SlotBookingPage({
           .eq("participant_id", user.id)
           .order("day_id", { ascending: true })
       : { data: [] };
+  const { count: publishedSlotCount } = await supabase
+    .from("opportunity_time_slots")
+    .select("id", { count: "exact", head: true })
+    .eq("opportunity_id", opportunity.id)
+    .eq("is_published", true);
+  const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
 
   await supabase
     .from("notifications")
@@ -89,6 +98,52 @@ export default async function SlotBookingPage({
     .eq("read", false);
 
   if (opportunity.type === "camp") {
+    const shouldShowSelfBookingSlots =
+      viewerApplicationStatus === "accepted" &&
+      viewerSelfBookingEnabled &&
+      hasPublishedTimetable;
+    const { data: bookingRows } = shouldShowSelfBookingSlots
+      ? await supabase
+          .from("opportunity_slot_bookings")
+          .select("slot_id,release_requested_at")
+          .eq("opportunity_id", opportunity.id)
+          .eq("user_id", user.id)
+      : { data: [] };
+    const { data: slotRows, error: slotError } = shouldShowSelfBookingSlots
+      ? await supabase.rpc("get_published_opportunity_slots", {
+          target_opportunity_id: opportunity.id,
+        })
+      : { data: null, error: null };
+
+    if (slotError) {
+      console.error("Camp self-booking slot lookup failed", slotError);
+      notFound();
+    }
+
+    const releaseRequestBySlotId = new Map(
+      ((bookingRows ?? []) as Array<{
+        slot_id: string;
+        release_requested_at: string | null;
+      }>).map((booking) => [booking.slot_id, booking.release_requested_at]),
+    );
+
+    const slots =
+      ((slotRows ?? []) as SlotAvailabilityRow[]).map((slot) => ({
+        id: slot.id,
+        slotDate: slot.slot_date,
+        startTime: slot.start_time,
+        durationMinutes: slot.duration_minutes,
+        capacity: slot.capacity,
+        bookedCount: slot.booked_count,
+        remainingCapacity: slot.remaining_capacity,
+        userHasBooking: slot.user_has_booking,
+        releaseRequestedAt: releaseRequestBySlotId.get(slot.id) ?? slot.release_requested_at,
+      })) ?? [];
+    const changesClosed = areBookingChangesClosed(
+      opportunity.registrationDeadline,
+      opportunity.startDate,
+    );
+
     return (
       <AppShell active="home">
         <NotificationReadSignal />
@@ -117,15 +172,35 @@ export default async function SlotBookingPage({
                 <div>
                   <p className="text-sm font-black text-slate-950">
                     {viewerApplicationStatus === "accepted"
-                      ? "Your spot is confirmed."
+                      ? viewerSelfBookingEnabled
+                        ? "Your spot is confirmed."
+                        : "Your coach will assign your flight times."
                       : "Application sent"}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
                     {viewerApplicationStatus === "accepted"
-                      ? "The timetable will be available later."
+                      ? viewerSelfBookingEnabled
+                        ? "Choose from the published slots below."
+                        : "Your coach will publish or assign your timetable manually."
                       : "Your preferences were sent to the coach."}
                   </p>
                 </div>
+                {shouldShowSelfBookingSlots ? (
+                  <SlotBookingSelector
+                    opportunityId={opportunity.id}
+                    price={opportunity.price}
+                    priceAppliesToMinutes={opportunity.minMinutesOrHours}
+                    currency={opportunity.currency}
+                    slots={slots}
+                    selfBookingEnabled={viewerSelfBookingEnabled}
+                    initialTunnelTimeStatus={
+                      (viewerInterest?.tunnel_time_status as TunnelTimeStatus | null) ??
+                      null
+                    }
+                    initialTunnelAccountEmail={viewerInterest?.tunnel_account_email ?? null}
+                    changesClosed={changesClosed}
+                  />
+                ) : null}
                 <CampPreferencesSummary
                   campStartDate={opportunity.startDate}
                   campEndDate={opportunity.endDate}
@@ -154,7 +229,7 @@ export default async function SlotBookingPage({
   }
 
   const canBook =
-    viewerApplicationStatus === "accepted" ||
+    (viewerApplicationStatus === "accepted" && viewerSelfBookingEnabled) ||
     (opportunity.bookingMode === "direct_time_booking" &&
       (!viewerApplicationStatus || viewerHasTimetableReminder) &&
       opportunity.status === "published" &&
