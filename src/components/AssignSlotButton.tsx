@@ -13,7 +13,14 @@ export type AssignSlotParticipant = {
   dayAssignedMinutes?: number;
   dayPreferredMinutes?: number | null;
   dayRemainingMinutes?: number | null;
-  dayStatus?: "complete" | "needs_time" | "no_flying" | "no_preference";
+  dayOverAssignedMinutes?: number | null;
+  dayProgressPercent?: number | null;
+  dayStatus?:
+    | "complete"
+    | "needs_time"
+    | "over_assigned"
+    | "no_flying"
+    | "no_preference";
 };
 
 type AssignSlotButtonProps = {
@@ -33,6 +40,7 @@ export function AssignSlotButton({
   const [error, setError] = useState("");
   const [pendingParticipantId, setPendingParticipantId] = useState("");
   const [isPending, startTransition] = useTransition();
+  const dayLabel = participants[0]?.dayLabel ?? "Selected day";
 
   function openModal() {
     setError("");
@@ -88,14 +96,17 @@ export function AssignSlotButton({
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-black tracking-tight text-slate-950">
+          <div className="grid w-full max-w-6xl max-h-[calc(100dvh-2rem)] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-emerald-700">
                   Assign Slot
+                </p>
+                <h3 className="mt-1 text-lg font-black tracking-tight text-slate-950">
+                  Compare athlete progress before assigning
                 </h3>
                 <p className="mt-1 text-sm font-bold text-slate-500">
-                  Select one accepted camp participant.
+                  Tap a card to assign the slot. {dayLabel}
                 </p>
               </div>
               <button
@@ -108,84 +119,161 @@ export function AssignSlotButton({
               </button>
             </div>
 
-            <div className="mt-4 grid gap-2">
-              {participants.map((participant) => {
-                const isAssigning = pendingParticipantId === participant.id;
+            <div className="grid min-h-0 gap-4 overflow-y-auto p-4 sm:p-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+              <aside className="grid content-start gap-3">
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                    Athletes
+                  </h4>
+                  <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+                    {participants.length}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Available for this slot
+                  </p>
+                </section>
 
-                return (
-                  <button
-                    key={participant.id}
-                    type="button"
-                    onClick={() => assignSlot(participant.id)}
-                    disabled={isPending}
-                    className="grid gap-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50"
-                  >
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="truncate text-sm font-black text-slate-950">
-                        {participant.name}
-                      </span>
-                      {isAssigning ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.68rem] font-black text-emerald-700">
-                          Assigning...
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-xs font-bold text-slate-500">
-                      {participant.bookedMinutes} min booked
-                    </span>
-                    {participant.dayStatus ? (
-                      <span className="mt-1 grid gap-1 rounded-lg bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-600">
-                        {participant.dayLabel ? (
-                          <span className="font-black text-slate-950">
-                            {participant.dayLabel}
+                {participants.length > 1 ? (
+                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <h4 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                      Quick Read
+                    </h4>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                      Review the cards on the right. The status badge is the fastest cue.
+                    </p>
+                  </section>
+                ) : null}
+              </aside>
+
+              <section className="min-h-0">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {participants.map((participant) => {
+                    const isAssigning = pendingParticipantId === participant.id;
+                    const preferredMinutes = participant.dayPreferredMinutes ?? 0;
+                    const assignedMinutes = participant.dayAssignedMinutes ?? 0;
+                    const progressPercent = participant.dayProgressPercent ?? 0;
+                    const safeProgressPercent = Math.min(Math.max(progressPercent, 0), 999);
+                    const barWidth =
+                      participant.dayStatus === "no_preference" ||
+                      participant.dayStatus === "no_flying"
+                        ? 0
+                        : Math.min(safeProgressPercent, 100);
+                    const statusTone =
+                      participant.dayStatus === "complete"
+                        ? "emerald"
+                        : participant.dayStatus === "needs_time"
+                          ? "amber"
+                          : participant.dayStatus === "over_assigned"
+                            ? "sky"
+                            : "slate";
+                    const statusMessage =
+                      participant.dayStatus === "complete"
+                        ? "Fully matched"
+                        : participant.dayStatus === "needs_time"
+                          ? `${participant.dayRemainingMinutes ?? 0} min remaining`
+                          : participant.dayStatus === "over_assigned"
+                            ? `${participant.dayOverAssignedMinutes ?? 0} min extra assigned`
+                            : participant.dayStatus === "no_flying"
+                              ? "No flying requested"
+                              : "No preference submitted";
+                    const cardTone =
+                      participant.dayStatus === "complete"
+                        ? "border-emerald-200 bg-emerald-50/80"
+                        : participant.dayStatus === "needs_time"
+                          ? "border-amber-200 bg-amber-50/80"
+                          : participant.dayStatus === "over_assigned"
+                            ? "border-sky-200 bg-sky-50/80"
+                            : "border-slate-200 bg-slate-50";
+
+                    return (
+                      <button
+                        key={participant.id}
+                        type="button"
+                        onClick={() => assignSlot(participant.id)}
+                        disabled={isPending}
+                        className={`grid gap-3 rounded-2xl border p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-80 ${cardTone} hover:border-slate-300`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-base font-black leading-5 tracking-tight text-slate-950">
+                              {participant.name}
+                            </p>
+                            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              {participant.dayLabel ?? dayLabel}
+                            </p>
+                            <p className="mt-2 text-xs font-semibold text-slate-500">
+                              Total camp assigned: {participant.bookedMinutes} min
+                            </p>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black shadow-sm ${
+                              participant.dayStatus === "complete"
+                                ? "bg-emerald-600 text-white"
+                                : participant.dayStatus === "needs_time"
+                                  ? "bg-amber-500 text-white"
+                                  : participant.dayStatus === "over_assigned"
+                                    ? "bg-sky-600 text-white"
+                                    : "bg-slate-200 text-slate-600"
+                            }`}
+                          >
+                            {participant.dayStatus === "complete"
+                              ? "Fully Matched"
+                              : participant.dayStatus === "needs_time"
+                                ? "Needs More Time"
+                                : participant.dayStatus === "over_assigned"
+                                  ? "Over Assigned"
+                                  : participant.dayStatus === "no_flying"
+                                    ? "No Flying Requested"
+                                    : "No Preference"}
                           </span>
-                        ) : null}
-                        {participant.dayStatus === "no_flying" ? (
-                          <span className="font-black text-amber-700">
-                            No flying requested
-                          </span>
-                        ) : participant.dayStatus === "no_preference" ? (
-                          <span className="font-black text-slate-500">
-                            No preference submitted
-                          </span>
-                        ) : (
-                          <>
-                            <span>
-                              Preferred: {participant.dayPreferredMinutes ?? 0} min
-                            </span>
-                            <span>
-                              Assigned: {participant.dayAssignedMinutes ?? 0} min
-                            </span>
-                            {participant.dayStatus === "complete" ? (
-                              <span className="font-black text-emerald-700">
-                                Complete
-                              </span>
-                            ) : (
-                              <span>
-                                Remaining: {participant.dayRemainingMinutes ?? 0} min
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-              {participants.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm font-bold text-slate-500">
-                  No accepted participants available for this slot.
-                </p>
-              ) : null}
+                        </div>
+
+                        <div className="grid gap-2">
+                          <div className="text-2xl font-black tracking-tight text-slate-950">
+                            {preferredMinutes > 0
+                              ? `${assignedMinutes} / ${preferredMinutes} min`
+                              : `${assignedMinutes} min assigned`}
+                          </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-white/80">
+                            <div
+                              className={`h-full rounded-full ${
+                                statusTone === "emerald"
+                                  ? "bg-emerald-500"
+                                  : statusTone === "amber"
+                                    ? "bg-amber-500"
+                                    : statusTone === "sky"
+                                      ? "bg-sky-600"
+                                      : "bg-slate-300"
+                              }`}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-600">
+                            <span>{statusMessage}</span>
+                            {isAssigning ? <span>Assigning...</span> : null}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {participants.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm font-bold text-slate-500">
+                      No accepted participants available for this slot.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
             </div>
 
             {error ? (
-              <p className="mt-3 rounded-lg bg-rose-50 p-2 text-sm font-semibold text-rose-700">
+              <p className="mx-4 mb-0 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 sm:mx-6">
                 {error}
               </p>
             ) : null}
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-4 sm:px-6">
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}

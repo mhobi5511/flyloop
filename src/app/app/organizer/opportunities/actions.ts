@@ -701,11 +701,7 @@ export async function saveCampTimetable(
 
   return {
     ok: true,
-    message: publish
-      ? notificationWarning
-        ? "Timetable published successfully. Some notifications could not be delivered."
-        : "Schedule published."
-      : "Timetable draft saved.",
+    message: publish ? "Timetable published." : "Timetable draft saved.",
   };
 }
 

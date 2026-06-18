@@ -1471,14 +1471,11 @@ function MassBookingModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const draftBookings = useMemo(
+  const participantBookings = useMemo(
     () =>
       camp.timetableSlots.flatMap((slot) =>
         slot.bookings
-          .filter(
-            (booking) =>
-              booking.userId === participant.userId && booking.isFinal === false,
-          )
+          .filter((booking) => booking.userId === participant.userId)
           .map((booking) => ({
             bookingId: booking.id,
             slotId: slot.id,
@@ -1486,9 +1483,9 @@ function MassBookingModal({
       ),
     [camp.timetableSlots, participant.userId],
   );
-  const draftBookingMap = useMemo(
-    () => new Map(draftBookings.map((booking) => [booking.slotId, booking.bookingId])),
-    [draftBookings],
+  const participantBookingMap = useMemo(
+    () => new Map(participantBookings.map((booking) => [booking.slotId, booking.bookingId])),
+    [participantBookings],
   );
   const campDays = useMemo(
     () =>
@@ -1511,7 +1508,7 @@ function MassBookingModal({
     [camp.endDate, camp.preferences, camp.startDate, camp.timetableSlots, participant.userId],
   );
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(() =>
-    draftBookings.map((booking) => booking.slotId),
+    participantBookings.map((booking) => booking.slotId),
   );
   const [dayWindowStart, setDayWindowStart] = useState(0);
   const [message, setMessage] = useState('');
@@ -1570,8 +1567,8 @@ function MassBookingModal({
   const canPageBack = clampedDayWindowStart > 0;
   const canPageForward = clampedDayWindowStart < maxDayWindowStart;
 
-  function toggleSlot(slotId: string, isFinalBooking: boolean) {
-    if (isFinalBooking) {
+  function toggleSlot(slotId: string, isUnavailable: boolean) {
+    if (isUnavailable) {
       return;
     }
 
@@ -1595,8 +1592,8 @@ function MassBookingModal({
 
     startTransition(async () => {
       const nextSelectedIds = new Set(selectedSlotIds);
-      const removals = draftBookings.filter((booking) => !nextSelectedIds.has(booking.slotId));
-      const additions = selectedSlotIds.filter((slotId) => !draftBookingMap.has(slotId));
+      const removals = participantBookings.filter((booking) => !nextSelectedIds.has(booking.slotId));
+      const additions = selectedSlotIds.filter((slotId) => !participantBookingMap.has(slotId));
 
       try {
         for (const booking of removals) {
@@ -1835,53 +1832,44 @@ function MassBookingModal({
 
                       <div className="mt-3 grid gap-2">
                         {day.slots.map((slot) => {
-                          const participantFinalBooking = slot.bookings.find(
-                            (booking) =>
-                              booking.userId === participant.userId && booking.isFinal === true,
+                          const hasOtherAthleteBooking = slot.bookings.some(
+                            (booking) => booking.userId !== participant.userId,
                           );
-                          const isSelected = selectedSlotSet.has(slot.id);
-                          const isUnavailable =
-                            Boolean(participantFinalBooking) ||
-                            (!isSelected && slot.bookings.length >= slot.capacity);
+                          const isAssigned = selectedSlotSet.has(slot.id);
+                          const isUnavailable = !isAssigned && hasOtherAthleteBooking;
 
                           return (
                             <button
                               key={slot.id}
                               type="button"
-                              onClick={() =>
-                                toggleSlot(
-                                  slot.id,
-                                  Boolean(participantFinalBooking) ||
-                                    (isUnavailable && !isSelected),
-                                )
-                              }
+                              onClick={() => toggleSlot(slot.id, isUnavailable)}
                               className={`flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition ${
-                                isSelected
+                                isAssigned
                                   ? 'border-sky-300 bg-sky-50 text-sky-900 shadow-sm'
                                   : isUnavailable
                                     ? 'border-slate-200 bg-slate-200 text-slate-500'
                                     : 'border-transparent bg-white text-slate-700 hover:border-sky-200 hover:bg-slate-50'
                               }`}
-                              disabled={isPending || Boolean(participantFinalBooking)}
+                              disabled={isPending || isUnavailable}
                             >
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-black text-slate-950">
-                                  {formatTimetableTime(slot.startTime)}
-                                </p>
-                                <p className="text-xs font-bold text-slate-500">
-                                  {slot.durationMinutes} min
-                                </p>
-                              </div>
+                                {formatTimetableTime(slot.startTime)}
+                              </p>
+                              <p className="text-xs font-bold text-slate-500">
+                                {slot.durationMinutes} min
+                              </p>
+                            </div>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] ${
-                                  isSelected
+                                  isAssigned
                                     ? 'bg-sky-600 text-white'
                                     : isUnavailable
                                       ? 'bg-white text-slate-500'
                                       : 'bg-slate-100 text-slate-500'
                                 }`}
                               >
-                                {isSelected ? 'Selected' : isUnavailable ? 'Unavailable' : 'Available'}
+                                {isAssigned ? 'Assigned' : isUnavailable ? 'Unavailable' : 'Available'}
                               </span>
                             </button>
                           );
@@ -2153,40 +2141,40 @@ function ParticipantColumns({
                             <p className="truncate text-sm font-black text-slate-950">
                               {participant.name}
                             </p>
-                            {isCamp && participant.status === "accepted" ? (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onToggleSelfBooking(
-                                    participant.id,
-                                    !participant.selfBookingEnabled,
-                                  );
-                                }}
-                                className={`mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] transition ${
-                                  participant.selfBookingEnabled
-                                    ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-                                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                                }`}
-                                aria-label={`Toggle self booking for ${participant.name}`}
-                              >
-                                <span>Self Booking</span>
-                                <span
-                                  className={`rounded-full px-1.5 py-0.5 ${
-                                    participant.selfBookingEnabled
-                                      ? "bg-sky-600 text-white"
-                                      : "bg-slate-200 text-slate-600"
-                                  }`}
-                                >
-                                  {participant.selfBookingEnabled ? "ON" : "OFF"}
-                                </span>
-                              </button>
-                            ) : null}
                           </div>
                         </div>
                       </div>
                       {participant.status === "accepted" ? (
-                        <div className="mt-2 flex justify-end">
+                        <div className="mt-2 grid justify-items-center gap-1.5">
+                          {isCamp ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onToggleSelfBooking(
+                                  participant.id,
+                                  !participant.selfBookingEnabled,
+                                );
+                              }}
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] transition ${
+                                participant.selfBookingEnabled
+                                  ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                                  : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                              }`}
+                              aria-label={`Toggle self booking for ${participant.name}`}
+                            >
+                              <span>Self Booking</span>
+                              <span
+                                className={`rounded-full px-1.5 py-0.5 ${
+                                  participant.selfBookingEnabled
+                                    ? "bg-sky-600 text-white"
+                                    : "bg-slate-200 text-slate-600"
+                                }`}
+                              >
+                                {participant.selfBookingEnabled ? "ON" : "OFF"}
+                              </span>
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={(event) => {
@@ -2247,12 +2235,12 @@ function PublishTimetableButton({
   compact?: boolean;
 }) {
   const router = useRouter();
-  const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function publish() {
-    setMessage("");
+    setToast("");
     setError("");
 
     const nextSlots: TimetableSlotInput[] = camp.timetableSlots.map((slot) => ({
@@ -2273,13 +2261,14 @@ function PublishTimetableButton({
         return;
       }
 
-      setMessage(result.message);
+      setToast("Timetable published.");
       router.refresh();
+      window.setTimeout(() => setToast(""), 3000);
     });
   }
 
   return (
-    <div className="grid gap-1">
+    <>
       <button
         type="button"
         onClick={publish}
@@ -2293,10 +2282,16 @@ function PublishTimetableButton({
       {error ? (
         <p className="max-w-52 text-xs font-semibold text-rose-700">{error}</p>
       ) : null}
-      {message ? (
-        <p className="max-w-52 text-xs font-semibold text-emerald-700">{message}</p>
+      {toast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed right-4 top-4 z-[80] w-[min(calc(100vw-2rem),20rem)] rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 shadow-xl"
+        >
+          {toast}
+        </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -3483,18 +3478,30 @@ function getAssignableParticipantsForDay(
       const preferredMinutes = preference?.preferredMinutes;
       const assignedMinutes =
         dayBookedMinutesByUserId.get(participant.userId) ?? 0;
+      const progressPercent =
+        typeof preferredMinutes === "number" && preferredMinutes > 0
+          ? Math.round((assignedMinutes / preferredMinutes) * 100)
+          : null;
       const remainingMinutes =
-        typeof preferredMinutes === "number"
-          ? Math.max(preferredMinutes - assignedMinutes, 0)
+        typeof preferredMinutes === "number" && preferredMinutes > assignedMinutes
+          ? preferredMinutes - assignedMinutes
+          : typeof preferredMinutes === "number"
+            ? 0
+            : null;
+      const overAssignedMinutes =
+        typeof preferredMinutes === "number" && assignedMinutes > preferredMinutes
+          ? assignedMinutes - preferredMinutes
           : null;
       const dayStatus: AssignSlotParticipant["dayStatus"] =
         typeof preferredMinutes !== "number"
           ? "no_preference"
           : preferredMinutes <= 0
             ? "no_flying"
-            : remainingMinutes === 0
+            : assignedMinutes === preferredMinutes
               ? "complete"
-              : "needs_time";
+              : assignedMinutes < preferredMinutes
+                ? "needs_time"
+                : "over_assigned";
 
       return {
         id: participant.userId,
@@ -3505,6 +3512,8 @@ function getAssignableParticipantsForDay(
         dayPreferredMinutes:
           typeof preferredMinutes === "number" ? preferredMinutes : null,
         dayRemainingMinutes: remainingMinutes,
+        dayOverAssignedMinutes: overAssignedMinutes,
+        dayProgressPercent: progressPercent,
         dayStatus,
       };
     })
