@@ -108,6 +108,9 @@ type CampWorkspace = {
   startDate: string;
   endDate: string;
   registrationDeadline: string | null;
+  tunnelTimeMode:
+    | "athletes_may_use_own_tunnel_time"
+    | "tunnel_time_must_be_purchased_through_coach";
   sessionStart: string | null;
   sessionEnd: string | null;
   totalCapacity: number;
@@ -2332,6 +2335,7 @@ function CampSettingsPanel({
       startDate: camp.startDate,
       endDate: camp.endDate,
       registrationDeadline: form.registrationDeadline,
+      tunnelTimeMode: camp.tunnelTimeMode,
       sessionStart: camp.sessionStart ?? "",
       sessionEnd: camp.sessionEnd ?? "",
       price: Number(form.price),

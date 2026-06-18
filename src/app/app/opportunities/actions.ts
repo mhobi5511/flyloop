@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import {
+  normalizeCampTunnelTimeMode,
+  supportsCampTunnelTimeModeColumn,
+} from "@/lib/camp-tunnel-time-mode";
 import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendPendingPushNotificationsForUsers } from "@/lib/push";
@@ -156,8 +160,13 @@ export async function sendOpportunityInterest(
   }
 
   const needsCampPreferences = opportunity.type === "camp" && campPreferences.length > 0;
+  const requiresCoachManagedTunnelTime =
+    opportunity.type === "camp" &&
+    (await supportsCampTunnelTimeModeColumn(supabase)) &&
+    (await getOpportunityTunnelTimeMode(supabase, opportunityId)) ===
+      "tunnel_time_must_be_purchased_through_coach";
   const validatedCampTunnelTime =
-    opportunity.type === "camp"
+    opportunity.type === "camp" && !requiresCoachManagedTunnelTime
       ? validateCampTunnelTimeInput(campTunnelTime)
       : null;
 
@@ -693,12 +702,27 @@ export async function bookOpportunitySlots(
     return { ok: false, message: "Please log in again." };
   }
 
-  const tunnelTimeResult = await saveTunnelTimeStatus(
-    supabase,
-    opportunityId,
-    user.id,
-    tunnelTime,
-  );
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("type")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityError) {
+    console.error("Slot booking opportunity lookup failed", opportunityError);
+    return { ok: false, message: "Could not book slots. Please try again." };
+  }
+
+  const supportsTunnelTimeMode = await supportsCampTunnelTimeModeColumn(supabase);
+  const tunnelTimeMode = supportsTunnelTimeMode
+    ? await getOpportunityTunnelTimeMode(supabase, opportunityId)
+    : "athletes_may_use_own_tunnel_time";
+
+  const tunnelTimeResult =
+    opportunity?.type === "camp" &&
+    tunnelTimeMode !== "tunnel_time_must_be_purchased_through_coach"
+      ? await saveTunnelTimeStatus(supabase, opportunityId, user.id, tunnelTime)
+      : { ok: true as const, message: "" };
 
   if (!tunnelTimeResult.ok) {
     return tunnelTimeResult;
@@ -829,6 +853,32 @@ export async function setCampTunnelTimeStatus(
     return { ok: false, message: "Please log in again." };
   }
 
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("type")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (opportunityError) {
+    console.error("Tunnel time status opportunity lookup failed", opportunityError);
+    return { ok: false, message: "Could not save tunnel time status." };
+  }
+
+  const supportsTunnelTimeMode = await supportsCampTunnelTimeModeColumn(supabase);
+  const tunnelTimeMode = supportsTunnelTimeMode
+    ? await getOpportunityTunnelTimeMode(supabase, opportunityId)
+    : "athletes_may_use_own_tunnel_time";
+
+  if (
+    opportunity?.type === "camp" &&
+    tunnelTimeMode === "tunnel_time_must_be_purchased_through_coach"
+  ) {
+    return {
+      ok: true,
+      message: "Tunnel time is not required for this camp.",
+    };
+  }
+
   const result = await saveTunnelTimeStatus(
     supabase,
     opportunityId,
@@ -900,70 +950,50 @@ export async function releaseOwnOpportunitySlot(
   }
 
   if (booking.is_final || interest?.self_booking_enabled === true) {
-    const timestamp = new Date().toISOString();
-    const { data: updatedBooking, error: updateError } = await supabase
-      .from("opportunity_slot_bookings")
-      .update({
-        release_requested_at: timestamp,
-        release_requested_by: user.id,
-      })
-      .eq("id", booking.id)
-      .eq("user_id", user.id)
-      .is("release_requested_at", null)
-      .select("id")
-      .maybeSingle();
+    const rpcResult = await supabase.rpc("request_own_opportunity_slot_release", {
+      target_opportunity_id: opportunityId,
+      target_slot_id: slotId,
+    });
 
-    if (updateError) {
-      console.error("Own slot release request update failed", {
+    if (rpcResult.error) {
+      console.error("Own slot release request failed", {
         opportunityId,
         slotId,
         userId: user.id,
-        code: updateError.code,
-        message: updateError.message,
-        details: updateError.details,
-        hint: updateError.hint,
+        code: rpcResult.error.code,
+        message: rpcResult.error.message,
+        details: rpcResult.error.details,
+        hint: rpcResult.error.hint,
       });
 
-      const { error: rpcError } = await supabase.rpc(
-        "request_own_opportunity_slot_release",
-        {
-          target_opportunity_id: opportunityId,
-          target_slot_id: slotId,
-        },
-      );
+      const timestamp = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from("opportunity_slot_bookings")
+        .update({
+          release_requested_at: timestamp,
+          release_requested_by: user.id,
+        })
+        .eq("id", booking.id)
+        .eq("user_id", user.id)
+        .is("release_requested_at", null);
 
-      if (rpcError) {
-        console.error("Own slot release request failed", {
-          opportunityId,
-          slotId,
-          userId: user.id,
-          code: rpcError.code,
-          message: rpcError.message,
-          details: rpcError.details,
-          hint: rpcError.hint,
-        });
-        return { ok: false, message: "Could not send release request." };
-      }
-    } else if (!updatedBooking) {
-      const { error: rpcError } = await supabase.rpc(
-        "request_own_opportunity_slot_release",
-        {
-          target_opportunity_id: opportunityId,
-          target_slot_id: slotId,
-        },
-      );
-
-      if (rpcError) {
+      if (updateError) {
         console.error("Own slot release request fallback failed", {
           opportunityId,
           slotId,
           userId: user.id,
-          code: rpcError.code,
-          message: rpcError.message,
-          details: rpcError.details,
-          hint: rpcError.hint,
+          code: updateError.code,
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
         });
-        return { ok: false, message: "Could not send release request." };
+        return {
+          ok: false,
+          message:
+            rpcResult.error.message ||
+            updateError.message ||
+            "Could not send release request.",
+        };
       }
     }
 
@@ -1069,6 +1099,25 @@ async function saveTunnelTimeStatus(
   }
 
   return { ok: true, message: "Tunnel time status saved." };
+}
+
+async function getOpportunityTunnelTimeMode(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+) {
+  const { data, error } = await supabase
+    .from("opportunities")
+    .select("tunnel_time_mode")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (error) {
+    return "athletes_may_use_own_tunnel_time";
+  }
+
+  return normalizeCampTunnelTimeMode(
+    (data as { tunnel_time_mode?: string | null } | null)?.tunnel_time_mode ?? null,
+  );
 }
 
 function validateCampTunnelTimeInput(

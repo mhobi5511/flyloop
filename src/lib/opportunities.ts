@@ -54,6 +54,13 @@ export function opportunityViewModel(opportunity: Opportunity) {
   };
 }
 
+export function isCoachManagedTunnelTimeOpportunity(opportunity: Opportunity) {
+  return (
+    opportunity.type === "camp" &&
+    opportunity.tunnelTimeMode === "tunnel_time_must_be_purchased_through_coach"
+  );
+}
+
 export function formatDateRange(startDate: string, endDate: string) {
   const formatter = new Intl.DateTimeFormat("en", {
     month: "short",

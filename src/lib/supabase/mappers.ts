@@ -10,6 +10,10 @@ export type HomeFeedRow = {
   start_date: string;
   end_date: string;
   registration_deadline: string | null;
+  tunnel_time_mode?:
+    | "athletes_may_use_own_tunnel_time"
+    | "tunnel_time_must_be_purchased_through_coach"
+    | null;
   session_start?: string | null;
   session_end?: string | null;
   price: number | string;
@@ -68,6 +72,8 @@ export function mapOpportunity(row: HomeFeedRow): Opportunity {
     startDate: row.start_date,
     endDate: row.end_date,
     registrationDeadline: row.registration_deadline,
+    tunnelTimeMode:
+      row.tunnel_time_mode ?? "athletes_may_use_own_tunnel_time",
     sessionStart: row.session_start ?? null,
     sessionEnd: row.session_end ?? null,
     price:

@@ -11,6 +11,7 @@ import {
   formatDateRange,
   formatOpportunityType,
   isOpportunityFull,
+  isCoachManagedTunnelTimeOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
@@ -63,6 +64,8 @@ export default async function SlotBookingPage({
 
   const opportunity = mapOpportunity(row as HomeFeedRow);
   const isFull = isOpportunityFull(opportunity);
+  const requiresCoachManagedTunnelTime =
+    isCoachManagedTunnelTimeOpportunity(opportunity);
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
@@ -193,6 +196,7 @@ export default async function SlotBookingPage({
                     currency={opportunity.currency}
                     slots={slots}
                     selfBookingEnabled={viewerSelfBookingEnabled}
+                    tunnelTimeMode={opportunity.tunnelTimeMode}
                     initialTunnelTimeStatus={
                       (viewerInterest?.tunnel_time_status as TunnelTimeStatus | null) ??
                       null
@@ -209,16 +213,19 @@ export default async function SlotBookingPage({
                     preferredMinutes: preference.preferred_minutes,
                   }))}
                 />
-                <CampTunnelTimeSummary
-                  status={viewerInterest?.tunnel_time_status as TunnelTimeStatus | null}
-                  accountEmail={viewerInterest?.tunnel_account_email ?? null}
-                />
+                {!requiresCoachManagedTunnelTime ? (
+                  <CampTunnelTimeSummary
+                    status={viewerInterest?.tunnel_time_status as TunnelTimeStatus | null}
+                    accountEmail={viewerInterest?.tunnel_account_email ?? null}
+                  />
+                ) : null}
               </div>
             ) : (
               <CampApplyPreferencesForm
                 opportunityId={opportunity.id}
                 campStartDate={opportunity.startDate}
                 campEndDate={opportunity.endDate}
+                tunnelTimeMode={opportunity.tunnelTimeMode}
                 isFull={isFull}
               />
             )}

@@ -12,7 +12,7 @@ import {
   calculateEstimatedCost,
   getPriceAppliesToMinutesNumber,
 } from "@/lib/timetable";
-import type { TunnelTimeStatus } from "@/lib/types";
+import type { CampTunnelTimeMode, TunnelTimeStatus } from "@/lib/types";
 
 type SlotOption = {
   id: string;
@@ -34,6 +34,7 @@ type SlotBookingSelectorProps = {
   slots: SlotOption[];
   initialTunnelTimeStatus?: TunnelTimeStatus | null;
   initialTunnelAccountEmail?: string | null;
+  tunnelTimeMode?: CampTunnelTimeMode;
   changesClosed?: boolean;
   selfBookingEnabled?: boolean;
 };
@@ -46,6 +47,7 @@ export function SlotBookingSelector({
   slots,
   initialTunnelTimeStatus = null,
   initialTunnelAccountEmail = null,
+  tunnelTimeMode = "athletes_may_use_own_tunnel_time",
   changesClosed = false,
   selfBookingEnabled = false,
 }: SlotBookingSelectorProps) {
@@ -68,6 +70,8 @@ export function SlotBookingSelector({
   const [isPending, startTransition] = useTransition();
   const [pendingReleaseSlotIds, setPendingReleaseSlotIds] = useState<string[]>([]);
   const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
+  const requiresCoachManagedTunnelTime =
+    tunnelTimeMode === "tunnel_time_must_be_purchased_through_coach";
   const newSelectedSlotIds = selectedSlotIds.filter(
     (slotId) => !bookedSlotIds.includes(slotId),
   );
@@ -77,7 +81,9 @@ export function SlotBookingSelector({
   const hasPendingChanges =
     newSelectedSlotIds.length > 0 || removedBookedSlotIds.length > 0;
   const needsTunnelTimePrompt =
-    selectedSlotIds.length > 0 && !initialTunnelTimeStatus;
+    newSelectedSlotIds.length > 0 &&
+    !initialTunnelTimeStatus &&
+    !requiresCoachManagedTunnelTime;
   const canSave = hasPendingChanges;
   const selectedCount = selectedSlotIds.length;
   const totalMinutes = selectedSlots.reduce(
@@ -319,6 +325,11 @@ export function SlotBookingSelector({
       )}
 
       <section className="sticky bottom-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+        {requiresCoachManagedTunnelTime ? (
+          <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-sm font-black text-amber-900">
+            Tunnel time for this camp must be purchased through the coach.
+          </p>
+        ) : null}
         {selfBookingEnabled ? (
           <p className="mb-3 rounded-xl bg-sky-50 p-3 text-center text-sm font-black text-sky-700">
             You may choose your own available flight times.
@@ -457,7 +468,7 @@ export function SlotBookingSelector({
               <button
                 type="button"
                 disabled={isPending}
-                onClick={() => saveSlotChanges()}
+                onClick={() => saveSlotChanges(true)}
                 className="h-11 rounded-xl bg-sky-600 px-4 text-sm font-black text-white hover:bg-sky-700 disabled:bg-slate-300"
               >
                 {isPending ? "Booking..." : "Confirm Booking"}

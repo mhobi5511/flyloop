@@ -8,7 +8,7 @@ import {
   updateOpportunity,
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
-import type { OpportunityType } from "@/lib/types";
+import type { CampTunnelTimeMode, OpportunityType } from "@/lib/types";
 
 export type TunnelOption = {
   id: string;
@@ -40,6 +40,7 @@ type StepId =
   | "schedule"
   | "capacity"
   | "pricing"
+  | "tunnel-time"
   | "participation"
   | "review";
 
@@ -59,6 +60,7 @@ const campSteps: { id: StepId; label: string }[] = [
   { id: "location", label: "Location" },
   { id: "schedule", label: "Schedule" },
   { id: "pricing", label: "Pricing" },
+  { id: "tunnel-time", label: "Tunnel Time" },
   { id: "capacity", label: "Capacity" },
   { id: "review", label: "Review" },
 ];
@@ -176,6 +178,12 @@ function fallbackOpportunityName(type: OpportunityType, organizerName?: string) 
   }`;
 }
 
+function defaultTunnelTimeMode(
+  mode?: CampTunnelTimeMode,
+): CampTunnelTimeMode {
+  return mode ?? "athletes_may_use_own_tunnel_time";
+}
+
 export function CreateOpportunityForm({
   tunnels,
   inheritedCoachProfile,
@@ -214,6 +222,9 @@ export function CreateOpportunityForm({
   const [endDateTouched, setEndDateTouched] = useState(Boolean(initialOpportunity));
   const [registrationDeadline, setRegistrationDeadline] = useState(
     initialOpportunity?.registrationDeadline ?? initialStartDate,
+  );
+  const [tunnelTimeMode, setTunnelTimeMode] = useState<CampTunnelTimeMode>(
+    defaultTunnelTimeMode(initialOpportunity?.tunnelTimeMode),
   );
   const [deadlineMode, setDeadlineMode] = useState<"start" | "custom">(
     initialOpportunity?.registrationDeadline &&
@@ -332,6 +343,7 @@ export function CreateOpportunityForm({
       setStartDate(defaultCampStartDate);
       setEndDate(defaultCampEndDate);
       setEndDateTouched(false);
+      setTunnelTimeMode("athletes_may_use_own_tunnel_time");
       if (deadlineMode === "start") {
         setRegistrationDeadline(defaultCampStartDate);
       }
@@ -428,6 +440,15 @@ export function CreateOpportunityForm({
       }
     }
 
+    if (stepId === "tunnel-time" && type === "camp") {
+      if (
+        tunnelTimeMode !== "athletes_may_use_own_tunnel_time" &&
+        tunnelTimeMode !== "tunnel_time_must_be_purchased_through_coach"
+      ) {
+        return "Choose a tunnel time mode.";
+      }
+    }
+
     return "";
   }
 
@@ -473,6 +494,10 @@ export function CreateOpportunityForm({
         startDate,
         endDate: effectiveEndDate,
         registrationDeadline,
+        tunnelTimeMode:
+          type === "camp"
+            ? tunnelTimeMode
+            : "athletes_may_use_own_tunnel_time",
         sessionStart,
         sessionEnd,
         price: Number(price),
@@ -606,6 +631,13 @@ export function CreateOpportunityForm({
           />
         ) : null}
 
+        {currentStep.id === "tunnel-time" ? (
+          <TunnelTimeModeStep
+            value={tunnelTimeMode}
+            onChange={setTunnelTimeMode}
+          />
+        ) : null}
+
         {currentStep.id === "participation" ? (
           <ParticipationStep
             price={price}
@@ -631,6 +663,7 @@ export function CreateOpportunityForm({
             price={price}
             currency={currency}
             minMinutesOrHours={minMinutesOrHours}
+            tunnelTimeMode={tunnelTimeMode}
             organizerName={organizerName}
             onEdit={(stepId) => {
               const nextIndex = steps.findIndex((step) => step.id === stepId);
@@ -1163,11 +1196,11 @@ function PricingStep({
     <div className="grid gap-3">
       <StepHeader
         eyebrow="Pricing"
-        title="Set the price"
-        description="Set the amount athletes see for the flying-time duration."
+        title="Set the total athlete price"
+        description="Price paid by the athlete. This should include coaching and any costs you wish to charge through the camp."
       />
       <div className="rounded-2xl border border-slate-200 bg-white p-3">
-        <p className="text-sm font-black text-slate-800">Price</p>
+        <p className="text-sm font-black text-slate-800">Total athlete price</p>
         <div className="mt-2 grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_auto_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-xs font-bold text-slate-600">
             Amount
@@ -1215,14 +1248,88 @@ function PricingStep({
           <span className="pb-2 text-sm font-black text-slate-500">minutes</span>
         </div>
         <span className="mt-2 block text-xs font-semibold leading-4 text-slate-500">
-          Displayed as {formatCurrency(price || "0", currency)} per{" "}
-          {minMinutesOrHours || "60"} minutes.
+          Price paid by the athlete. This should include coaching and any costs you
+          wish to charge through the camp.
         </span>
         {priceAppliesToError ? (
           <span className="mt-1 block text-xs font-bold leading-5 text-rose-600">
             {priceAppliesToError}
           </span>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function TunnelTimeModeStep({
+  value,
+  onChange,
+}: {
+  value: CampTunnelTimeMode;
+  onChange: (value: CampTunnelTimeMode) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      <StepHeader
+        eyebrow="Tunnel Time"
+        title="How should athletes purchase tunnel time?"
+        description="Choose the coach decision for whether athletes may use their own tunnel time or must buy it through this camp."
+      />
+      <div className="grid gap-2">
+        <label
+          className={`cursor-pointer rounded-2xl border px-3 py-3 text-left transition ${
+            value === "athletes_may_use_own_tunnel_time"
+              ? "border-sky-300 bg-sky-50 text-sky-900"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <input
+              type="radio"
+              name="tunnelTimeMode"
+              checked={value === "athletes_may_use_own_tunnel_time"}
+              onChange={() => onChange("athletes_may_use_own_tunnel_time")}
+              className="mt-1 size-4 accent-sky-600"
+            />
+            <span>
+              <span className="block text-base font-black">
+                Athletes may use existing tunnel time
+              </span>
+              <span className="mt-1 block text-sm font-semibold leading-6 text-slate-600">
+                Athletes may use tunnel time they have already purchased directly
+                from the tunnel. Choose this option if participants are free to use
+                their own tunnel credit.
+              </span>
+            </span>
+          </div>
+        </label>
+        <label
+          className={`cursor-pointer rounded-2xl border px-3 py-3 text-left transition ${
+            value === "tunnel_time_must_be_purchased_through_coach"
+              ? "border-amber-300 bg-amber-50 text-amber-950"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <input
+              type="radio"
+              name="tunnelTimeMode"
+              checked={value === "tunnel_time_must_be_purchased_through_coach"}
+              onChange={() => onChange("tunnel_time_must_be_purchased_through_coach")}
+              className="mt-1 size-4 accent-amber-600"
+            />
+            <span>
+              <span className="block text-base font-black">
+                Athletes must buy tunnel time through this camp
+              </span>
+              <span className="mt-1 block text-sm font-semibold leading-6 text-slate-600">
+                Participants cannot use existing tunnel credit. All tunnel time
+                must be purchased through the coach or camp organizer. Choose this
+                option if your tunnel deal requires athletes to buy time through the camp.
+              </span>
+            </span>
+          </div>
+        </label>
       </div>
     </div>
   );
@@ -1301,6 +1408,7 @@ function ReviewStep({
   price,
   currency,
   minMinutesOrHours,
+  tunnelTimeMode,
   organizerName,
   onEdit,
 }: {
@@ -1316,6 +1424,7 @@ function ReviewStep({
   price: string;
   currency: string;
   minMinutesOrHours: string;
+  tunnelTimeMode: CampTunnelTimeMode;
   organizerName?: string;
   onEdit: (stepId: StepId) => void;
 }) {
@@ -1337,6 +1446,10 @@ function ReviewStep({
   const deadlineLabel = registrationDeadline
     ? `Registration closes ${formatDate(registrationDeadline)}`
     : `Registration closes when the ${isHuckJam ? "event" : "camp"} starts`;
+  const tunnelTimeLabel =
+    tunnelTimeMode === "tunnel_time_must_be_purchased_through_coach"
+      ? "Athletes must buy tunnel time through this camp"
+      : "Athletes may use existing tunnel time";
 
   return (
     <div className="grid gap-3">
@@ -1373,6 +1486,13 @@ function ReviewStep({
             value={priceLabel}
             onEdit={() => onEdit(isHuckJam ? "participation" : "pricing")}
           />
+          {!isHuckJam ? (
+            <ReviewLine
+              icon={<Check size={17} />}
+              value={tunnelTimeLabel}
+              onEdit={() => onEdit("tunnel-time")}
+            />
+          ) : null}
         </div>
         <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
           {deadlineLabel}

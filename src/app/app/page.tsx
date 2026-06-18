@@ -12,6 +12,7 @@ import {
   countUnreadByOpportunity,
   participantActivityNotificationTypes,
 } from "@/lib/notifications";
+import { isCoachManagedTunnelTimeOpportunity } from "@/lib/opportunities";
 import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -426,6 +427,10 @@ function getDiscoveryBadges(item: FeedItem) {
 
   if (item.isLastMinute) {
     badges.push({ label: "Last Minute", tone: "amber" });
+  }
+
+  if (isCoachManagedTunnelTimeOpportunity(item.opportunity)) {
+    badges.push({ label: "Must Buy Tunnel Time", tone: "amber" });
   }
 
   if (item.isFollowedCoach) {

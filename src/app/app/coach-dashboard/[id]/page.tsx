@@ -11,6 +11,10 @@ import {
 } from "@/lib/flyloop-history";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { coachNotificationTypes } from "@/lib/notifications";
+import {
+  normalizeCampTunnelTimeMode,
+  supportsCampTunnelTimeModeColumn,
+} from "@/lib/camp-tunnel-time-mode";
 import { getTimetableSummary } from "@/lib/timetable";
 import type {
   BookingMode,
@@ -175,12 +179,22 @@ export default async function CoachWorkspaceCampPage({
         .maybeSingle(),
     ]);
 
+  const campTunnelTimeMode = (await supportsCampTunnelTimeModeColumn(supabase))
+    ? await getTunnelTimeMode(supabase, id)
+    : "athletes_may_use_own_tunnel_time";
+
   if (profileResult.error) {
-    console.error("Coach workspace profile lookup failed", profileResult.error);
+    const profileError = formatSupabaseError(profileResult.error);
+    if (profileError) {
+      console.error("Coach workspace profile lookup failed", profileError);
+    }
   }
 
   if (opportunityResult.error) {
-    console.error("Coach workspace opportunity lookup failed", opportunityResult.error);
+    const opportunityError = formatSupabaseError(opportunityResult.error);
+    if (opportunityError) {
+      console.error("Coach workspace opportunity lookup failed", opportunityError);
+    }
   }
 
   const profile = (profileResult.data ?? null) as CoachProfileRow | null;
@@ -212,6 +226,7 @@ export default async function CoachWorkspaceCampPage({
   const selectedCamp = await toCampWorkspace(
     opportunity,
     supabase,
+    campTunnelTimeMode,
   );
 
   const camps = [selectedCamp];
@@ -229,6 +244,7 @@ export default async function CoachWorkspaceCampPage({
 async function toCampWorkspace(
   row: CoachOpportunityRow,
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  campTunnelTimeMode: "athletes_may_use_own_tunnel_time" | "tunnel_time_must_be_purchased_through_coach",
 ): Promise<CampWorkspace> {
   const tunnel = firstRelation(row.tunnel_profiles);
   const interests = (row.opportunity_interests ?? []).filter(
@@ -361,6 +377,7 @@ async function toCampWorkspace(
     priceAppliesToMinutes: formatPriceAppliesToMinutes(row.min_minutes_or_hours),
     description: row.description ?? "",
     tunnelId: row.tunnel_id ?? "",
+    tunnelTimeMode: campTunnelTimeMode,
     tunnelSharedAt: row.tunnel_shared_at,
     tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
     tunnelLocation: formatLocation(tunnel?.city, tunnel?.country),
@@ -385,8 +402,46 @@ async function toCampWorkspace(
   };
 }
 
+async function getTunnelTimeMode(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+) {
+  const { data, error } = await supabase
+    .from("opportunities")
+    .select("tunnel_time_mode")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (error) {
+    return "athletes_may_use_own_tunnel_time";
+  }
+
+  return normalizeCampTunnelTimeMode(
+    (data as { tunnel_time_mode?: string | null } | null)?.tunnel_time_mode ?? null,
+  );
+}
+
 function firstRelation<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function formatSupabaseError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const { message, code, details, hint } = error as {
+    message?: string;
+    code?: string;
+    details?: string | null;
+    hint?: string | null;
+  };
+
+  const parts = [message, details, hint, code ? `Code: ${code}` : null].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  return parts.length > 0 ? parts.join(" ") : null;
 }
 
 function statusRank(status: InterestStatus) {

@@ -4,6 +4,10 @@ export type OpportunityStatus = "draft" | "published" | "full" | "cancelled";
 
 export type BookingMode = "approval_required" | "direct_time_booking";
 
+export type CampTunnelTimeMode =
+  | "athletes_may_use_own_tunnel_time"
+  | "tunnel_time_must_be_purchased_through_coach";
+
 export type InterestStatus =
   | "pending"
   | "accepted"
@@ -71,6 +75,7 @@ export type Opportunity = {
   startDate: string;
   endDate: string;
   registrationDeadline: string | null;
+  tunnelTimeMode?: CampTunnelTimeMode;
   sessionStart?: string | null;
   sessionEnd?: string | null;
   price: number;

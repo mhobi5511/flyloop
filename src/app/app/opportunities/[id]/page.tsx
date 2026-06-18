@@ -26,6 +26,7 @@ import {
   getPublicOpportunityUrl,
   isOpportunityFull,
   isLastMinuteOpportunity,
+  isCoachManagedTunnelTimeOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
@@ -82,6 +83,8 @@ export default async function OpportunityDetailPage({
   const opportunity = mapOpportunity(opportunityRow);
   const isHuckJam = opportunity.type === "huck_jam";
   const isCamp = opportunity.type === "camp";
+  const requiresCoachManagedTunnelTime =
+    isCoachManagedTunnelTimeOpportunity(opportunity);
   const { data: viewerInterest } =
     user && user.id !== opportunity.createdBy
       ? await supabase
@@ -277,6 +280,9 @@ export default async function OpportunityDetailPage({
     opportunityType: opportunity.type,
   });
   const capacityLines = getCapacityLines(opportunity);
+  const tunnelTimeBadgeLabel = requiresCoachManagedTunnelTime
+    ? "Must Buy Tunnel Time"
+    : "";
 
   return (
     <AppShell active="home">
@@ -287,6 +293,9 @@ export default async function OpportunityDetailPage({
             <Badge tone={opportunity.type === "camp" ? "blue" : "green"}>
               {formatOpportunityType(opportunity.type)}
             </Badge>
+            {requiresCoachManagedTunnelTime ? (
+              <Badge tone="amber">{tunnelTimeBadgeLabel}</Badge>
+            ) : null}
             {isLastMinute ? <Badge tone="amber">Last-minute opportunity</Badge> : null}
             {isFull ? <Badge tone="slate">Full</Badge> : null}
             <Badge tone={isUnavailable ? "red" : "slate"}>
@@ -297,6 +306,18 @@ export default async function OpportunityDetailPage({
           <h1 className="mt-2 text-2xl font-black leading-tight tracking-tight sm:text-4xl">
             {opportunity.title}
           </h1>
+
+          {requiresCoachManagedTunnelTime ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+              <p className="text-xs font-black uppercase tracking-wide text-amber-700">
+                Tunnel time requirement
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6">
+                Tunnel time for this camp must be purchased through the coach.
+                Existing tunnel time at this tunnel cannot be used for this opportunity.
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-2 grid gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
             <p className="flex items-center gap-2">
@@ -421,10 +442,12 @@ export default async function OpportunityDetailPage({
                             preferredMinutes: preference.preferred_minutes,
                           }))}
                         />
-                        <CampTunnelTimeSummary
-                          status={viewerTunnelTimeStatus}
-                          accountEmail={viewerTunnelAccountEmail}
-                        />
+                        {!requiresCoachManagedTunnelTime ? (
+                          <CampTunnelTimeSummary
+                            status={viewerTunnelTimeStatus}
+                            accountEmail={viewerTunnelAccountEmail}
+                          />
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -466,10 +489,12 @@ export default async function OpportunityDetailPage({
                     preferredMinutes: preference.preferred_minutes,
                   }))}
                 />
-                <CampTunnelTimeSummary
-                  status={viewerTunnelTimeStatus}
-                  accountEmail={viewerTunnelAccountEmail}
-                />
+                {!requiresCoachManagedTunnelTime ? (
+                  <CampTunnelTimeSummary
+                    status={viewerTunnelTimeStatus}
+                    accountEmail={viewerTunnelAccountEmail}
+                  />
+                ) : null}
               </div>
             ) : canShowCampApply ? (
               <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm sm:p-5">
@@ -484,6 +509,11 @@ export default async function OpportunityDetailPage({
                     <p className="mt-1 text-sm font-semibold text-slate-600">
                       This camp still requires coach approval before any timetable is visible.
                     </p>
+                    {requiresCoachManagedTunnelTime ? (
+                      <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-900">
+                        Tunnel time must be purchased through the coach for this camp.
+                      </p>
+                    ) : null}
                     {isFull ? (
                       <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-900">
                         This camp has already reached its participant capacity.
@@ -667,11 +697,13 @@ export default async function OpportunityDetailPage({
                 Manage Participation v
               </summary>
               <div className="mt-3 grid gap-3">
-                <CampTunnelTimeSettings
-                  opportunityId={opportunity.id}
-                  initialStatus={viewerTunnelTimeStatus}
-                  initialAccountEmail={viewerTunnelAccountEmail}
-                />
+                {!requiresCoachManagedTunnelTime ? (
+                  <CampTunnelTimeSettings
+                    opportunityId={opportunity.id}
+                    initialStatus={viewerTunnelTimeStatus}
+                    initialAccountEmail={viewerTunnelAccountEmail}
+                  />
+                ) : null}
                 {canRequestCampRemoval ? (
                   <div className="rounded-2xl border border-slate-200 bg-white p-3">
                     <h3 className="text-sm font-black text-slate-950">

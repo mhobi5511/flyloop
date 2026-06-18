@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendNewTunnelNotification } from "@/lib/email/tunnel-notifications";
 import { sendPendingPushNotificationsForOpportunity } from "@/lib/push";
+import { supportsCampTunnelTimeModeColumn } from "@/lib/camp-tunnel-time-mode";
 import { regions } from "@/lib/location";
-import type { BookingMode, OpportunityType } from "@/lib/types";
+import type {
+  BookingMode,
+  CampTunnelTimeMode,
+  OpportunityType,
+} from "@/lib/types";
 
 const supportedCurrencies = ["EUR", "CHF", "USD", "PLN", "GBP"] as const;
 type Currency = (typeof supportedCurrencies)[number];
@@ -21,6 +26,7 @@ type PublishOpportunityInput = {
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  tunnelTimeMode: CampTunnelTimeMode;
   sessionStart: string;
   sessionEnd: string;
   price: number;
@@ -199,6 +205,14 @@ export async function publishOpportunity(
     return { ok: false, message: "Please choose an opportunity type." };
   }
 
+  if (
+    input.type === "camp" &&
+    input.tunnelTimeMode !== "athletes_may_use_own_tunnel_time" &&
+    input.tunnelTimeMode !== "tunnel_time_must_be_purchased_through_coach"
+  ) {
+    return { ok: false, message: "Please choose a tunnel time mode." };
+  }
+
   const bookingMode: BookingMode = "approval_required";
 
   if (!uuidPattern.test(input.tunnelId)) {
@@ -297,34 +311,45 @@ export async function publishOpportunity(
         profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"
       }`;
   const inheritedCoachProfile = await getInheritedCoachProfile(supabase, user.id);
+  const supportsTunnelTimeMode = await supportsCampTunnelTimeModeColumn(supabase);
+  const tunnelTimeModeValue =
+    input.type === "camp"
+      ? input.tunnelTimeMode
+      : "athletes_may_use_own_tunnel_time";
+
+  const insertPayload: Record<string, unknown> = {
+    type: input.type,
+    booking_mode: bookingMode,
+    title,
+    coach_id: null,
+    tunnel_id: input.tunnelId,
+    start_date: input.startDate,
+    end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
+    registration_deadline: registrationDeadline,
+    session_start: input.type === "huck_jam" ? input.sessionStart : null,
+    session_end: input.type === "huck_jam" ? input.sessionEnd : null,
+    price: input.price,
+    currency: input.currency,
+    total_capacity: input.totalCapacity,
+    available_spots: input.totalCapacity,
+    min_minutes_or_hours:
+      input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
+    description: cleanText(input.description),
+    languages: inheritedCoachProfile.languages,
+    disciplines: inheritedCoachProfile.disciplines,
+    skill_level: cleanText(input.skillLevel),
+    status: "published",
+    contact_method: "whatsapp",
+    created_by: user.id,
+  };
+
+  if (supportsTunnelTimeMode) {
+    insertPayload.tunnel_time_mode = tunnelTimeModeValue;
+  }
 
   const { data, error } = await supabase
     .from("opportunities")
-    .insert({
-      type: input.type,
-      booking_mode: bookingMode,
-      title,
-      coach_id: null,
-      tunnel_id: input.tunnelId,
-      start_date: input.startDate,
-      end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
-      registration_deadline: registrationDeadline,
-      session_start: input.type === "huck_jam" ? input.sessionStart : null,
-      session_end: input.type === "huck_jam" ? input.sessionEnd : null,
-      price: input.price,
-      currency: input.currency,
-      total_capacity: input.totalCapacity,
-      available_spots: input.totalCapacity,
-      min_minutes_or_hours:
-        input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
-      description: cleanText(input.description),
-      languages: inheritedCoachProfile.languages,
-      disciplines: inheritedCoachProfile.disciplines,
-      skill_level: cleanText(input.skillLevel),
-      status: "published",
-      contact_method: "whatsapp",
-      created_by: user.id,
-    })
+    .insert(insertPayload)
     .select("id")
     .single();
 
@@ -374,6 +399,14 @@ export async function updateOpportunity(
 
   if (input.type !== "camp" && input.type !== "huck_jam") {
     return { ok: false, message: "Please choose an opportunity type." };
+  }
+
+  if (
+    input.type === "camp" &&
+    input.tunnelTimeMode !== "athletes_may_use_own_tunnel_time" &&
+    input.tunnelTimeMode !== "tunnel_time_must_be_purchased_through_coach"
+  ) {
+    return { ok: false, message: "Please choose a tunnel time mode." };
   }
 
   const bookingMode: BookingMode = "approval_required";
@@ -496,30 +529,41 @@ export async function updateOpportunity(
         profile?.full_name ?? user.email?.split("@")[0] ?? "Flyloop organizer"
       }`;
   const inheritedCoachProfile = await getInheritedCoachProfile(supabase, user.id);
+  const supportsTunnelTimeMode = await supportsCampTunnelTimeModeColumn(supabase);
+  const tunnelTimeModeValue =
+    input.type === "camp"
+      ? input.tunnelTimeMode
+      : "athletes_may_use_own_tunnel_time";
+
+  const updatePayload: Record<string, unknown> = {
+    type: input.type,
+    booking_mode: bookingMode,
+    title,
+    tunnel_id: input.tunnelId,
+    start_date: input.startDate,
+    end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
+    registration_deadline: registrationDeadline,
+    session_start: input.type === "huck_jam" ? input.sessionStart : null,
+    session_end: input.type === "huck_jam" ? input.sessionEnd : null,
+    price: input.price,
+    currency: input.currency,
+    total_capacity: input.totalCapacity,
+    available_spots: Math.max(input.totalCapacity - acceptedCount, 0),
+    min_minutes_or_hours:
+      input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
+    description: cleanText(input.description),
+    languages: inheritedCoachProfile.languages,
+    disciplines: inheritedCoachProfile.disciplines,
+    skill_level: cleanText(input.skillLevel),
+  };
+
+  if (supportsTunnelTimeMode) {
+    updatePayload.tunnel_time_mode = tunnelTimeModeValue;
+  }
 
   const { error } = await supabase
     .from("opportunities")
-    .update({
-      type: input.type,
-      booking_mode: bookingMode,
-      title,
-      tunnel_id: input.tunnelId,
-      start_date: input.startDate,
-      end_date: input.type === "huck_jam" ? input.startDate : input.endDate,
-      registration_deadline: registrationDeadline,
-      session_start: input.type === "huck_jam" ? input.sessionStart : null,
-      session_end: input.type === "huck_jam" ? input.sessionEnd : null,
-      price: input.price,
-      currency: input.currency,
-      total_capacity: input.totalCapacity,
-      available_spots: Math.max(input.totalCapacity - acceptedCount, 0),
-      min_minutes_or_hours:
-        input.type === "huck_jam" ? null : input.minMinutesOrHours.trim(),
-      description: cleanText(input.description),
-      languages: inheritedCoachProfile.languages,
-      disciplines: inheritedCoachProfile.disciplines,
-      skill_level: cleanText(input.skillLevel),
-    })
+    .update(updatePayload)
     .eq("id", opportunityId)
     .eq("created_by", user.id);
 

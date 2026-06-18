@@ -5,6 +5,10 @@ import {
   CreateOpportunityForm,
   type TunnelOption,
 } from "@/components/CreateOpportunityForm";
+import {
+  normalizeCampTunnelTimeMode,
+  supportsCampTunnelTimeModeColumn,
+} from "@/lib/camp-tunnel-time-mode";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { BookingMode, OpportunityType } from "@/lib/types";
 
@@ -59,6 +63,10 @@ export default async function EditOrganizerOpportunityPage({
         .maybeSingle(),
     ]);
 
+  const campTunnelTimeMode = (await supportsCampTunnelTimeModeColumn(supabase))
+    ? await getTunnelTimeMode(supabase, id)
+    : "athletes_may_use_own_tunnel_time";
+
   if (!opportunity) {
     notFound();
   }
@@ -100,6 +108,7 @@ export default async function EditOrganizerOpportunityPage({
             startDate: row.start_date,
             endDate: row.end_date,
             registrationDeadline: row.registration_deadline ?? row.start_date,
+            tunnelTimeMode: campTunnelTimeMode,
             sessionStart: row.session_start ?? "",
             sessionEnd: row.session_end ?? "",
             price: Number(row.price),
@@ -114,5 +123,24 @@ export default async function EditOrganizerOpportunityPage({
         />
       </div>
     </AppShell>
+  );
+}
+
+async function getTunnelTimeMode(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  opportunityId: string,
+) {
+  const { data, error } = await supabase
+    .from("opportunities")
+    .select("tunnel_time_mode")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (error) {
+    return "athletes_may_use_own_tunnel_time";
+  }
+
+  return normalizeCampTunnelTimeMode(
+    (data as { tunnel_time_mode?: string | null } | null)?.tunnel_time_mode ?? null,
   );
 }
