@@ -448,7 +448,6 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
             pendingApplications.length +
             waitlistApplicants.length +
             (hasPublishedTimetable && !row.tunnel_shared_at ? 1 : 0),
-          reasons,
         }),
         reasons,
         campId,
@@ -484,22 +483,10 @@ function buildReleaseRequests(row: CoachOpportunityRow) {
 
 function summarizeAttentionReasons({
   total,
-  reasons,
 }: {
   total: number;
-  reasons: Array<{ label: string; count?: number }>;
 }) {
-  const lines = [`${total} unpublished change${total === 1 ? "" : "s"} requiring review.`];
-
-  for (const reason of reasons) {
-    lines.push(
-      reason.count !== undefined
-        ? `${reason.label}: ${reason.count}`
-        : reason.label,
-    );
-  }
-
-  return lines.join("\n");
+  return `${total} unpublished change${total === 1 ? "" : "s"} requiring review.`;
 }
 
 function buildNotificationItems(rows: NotificationRow[]): CoachWorkspaceNotificationItem[] {
