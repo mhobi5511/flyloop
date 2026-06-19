@@ -6,18 +6,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
-  CalendarClock,
   CheckCircle2,
-  Clock3,
   Plus,
-  Share2,
-  Users,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
-import { SlotReleaseRequestActions } from "@/components/SlotReleaseRequestActions";
 import {
   CreateOpportunityForm,
   type InheritedCoachProfile,
@@ -69,16 +63,14 @@ export type CoachWorkspaceReleaseRequest = {
 
 export type CoachWorkspaceAttentionItem = {
   id: string;
-  group:
-    | "Applications Waiting"
-    | "Waitlist"
-    | "Tunnel Not Informed"
-    | "Draft Changes Pending"
-    | "Slot Removal Requests"
-    | "Unassigned Athletes";
-  kind: "application" | "waitlist" | "tunnel" | "draft" | "release" | "unassigned";
+  group: "Requires Attention";
+  kind: "opportunity";
   title: string;
   description: string;
+  reasons: Array<{
+    label: string;
+    count?: number;
+  }>;
   campId: string;
   campTitle: string;
   interestId?: string;
@@ -111,14 +103,7 @@ type CoachCommandCenterWorkspaceProps = {
   inheritedCoachProfile?: InheritedCoachProfile;
 };
 
-const attentionGroupOrder: CoachWorkspaceAttentionItem["group"][] = [
-  "Applications Waiting",
-  "Waitlist",
-  "Tunnel Not Informed",
-  "Draft Changes Pending",
-  "Slot Removal Requests",
-  "Unassigned Athletes",
-];
+const attentionGroupOrder: CoachWorkspaceAttentionItem["group"][] = ["Requires Attention"];
 
 export function CoachCommandCenterWorkspace({
   coachName,
@@ -348,15 +333,7 @@ function CoachCommandCenter({
   const inboxAttentionItems = groupedAttention
     .flatMap((group) => group.items)
     .slice()
-    .sort((a, b) => {
-      const delta = getAttentionPriority(a) - getAttentionPriority(b);
-
-      if (delta !== 0) {
-        return delta;
-      }
-
-      return a.title.localeCompare(b.title);
-    });
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   return (
     <div className="grid gap-5">
@@ -376,40 +353,41 @@ function CoachCommandCenter({
                 key={item.id}
                 className="group grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition hover:border-sky-200 hover:bg-sky-50/60 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
               >
-                <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${getAttentionTone(item)}`}>
-                  {getAttentionIcon(item)}
+                <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${getAttentionTone()}`}>
+                  {getAttentionIcon()}
                 </div>
 
                 <div className="min-w-0">
                   <p className="text-sm font-black leading-5 text-slate-950">
                     {item.title}
                   </p>
-                  <p className="mt-0.5 text-xs leading-5 text-slate-600">
+                  <p className="mt-0.5 whitespace-pre-line text-xs leading-5 text-slate-600">
                     {item.description}
                   </p>
+                  {item.reasons.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {item.reasons.map((reason) => (
+                        <span
+                          key={`${item.id}-${reason.label}`}
+                          className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-700 shadow-sm ring-1 ring-slate-200"
+                        >
+                          {reason.label}
+                          {typeof reason.count === "number" ? (
+                            <span className="text-slate-400">&middot; {reason.count}</span>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 md:justify-self-end">
-                  {item.kind === "application" ? (
-                    <ApplicantStatusActions
-                      interestId={item.interestId ?? ""}
-                      currentStatus="pending"
-                      compact
-                    />
-                  ) : item.kind === "release" ? (
-                    <SlotReleaseRequestActions
-                      opportunityId={item.campId}
-                      bookingId={item.bookingId ?? ""}
-                      compact
-                    />
-                  ) : (
-                    <Link
-                      href={`/app/coach-dashboard/${item.campId}`}
-                      className="inline-flex h-8 items-center rounded-lg bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-sky-700 hover:text-white"
-                    >
-                      Open Opportunity
-                    </Link>
-                  )}
+                  <Link
+                    href={`/app/coach-dashboard/${item.campId}`}
+                    className="inline-flex h-8 items-center rounded-lg bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-sky-700 hover:text-white"
+                  >
+                    Open Schedule
+                  </Link>
                 </div>
               </article>
             ))
@@ -595,75 +573,11 @@ function MetricPill({
   );
 }
 
-function getAttentionPriority(item: CoachWorkspaceAttentionItem) {
-  if (item.kind === "application") {
-    return 0;
-  }
-
-  if (item.kind === "waitlist") {
-    return 1;
-  }
-
-  if (item.kind === "tunnel") {
-    return 2;
-  }
-
-  if (item.kind === "draft") {
-    return 3;
-  }
-
-  if (item.kind === "unassigned") {
-    return 4;
-  }
-
-  return 5;
+function getAttentionTone() {
+  return "bg-amber-100 text-amber-700";
 }
 
-function getAttentionTone(item: CoachWorkspaceAttentionItem) {
-  if (item.kind === "application") {
-    return "bg-sky-100 text-sky-700";
-  }
-
-  if (item.kind === "waitlist") {
-    return "bg-amber-100 text-amber-700";
-  }
-
-  if (item.kind === "tunnel") {
-    return "bg-amber-100 text-amber-700";
-  }
-
-  if (item.kind === "draft") {
-    return "bg-violet-100 text-violet-700";
-  }
-
-  if (item.kind === "unassigned") {
-    return "bg-rose-100 text-rose-700";
-  }
-
-  return "bg-slate-200 text-slate-700";
-}
-
-function getAttentionIcon(item: CoachWorkspaceAttentionItem) {
-  if (item.kind === "application") {
-    return <Clock3 size={16} />;
-  }
-
-  if (item.kind === "waitlist") {
-    return <Users size={16} />;
-  }
-
-  if (item.kind === "tunnel") {
-    return <Share2 size={16} />;
-  }
-
-  if (item.kind === "draft") {
-    return <CalendarClock size={16} />;
-  }
-
-  if (item.kind === "unassigned") {
-    return <Users size={16} />;
-  }
-
+function getAttentionIcon() {
   return <Bell size={16} />;
 }
 

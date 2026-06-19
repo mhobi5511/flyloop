@@ -97,7 +97,7 @@ type CoachOpportunityRow = {
         duration_minutes: number;
         capacity: number;
         is_published: boolean;
-        opportunity_slot_bookings:
+              opportunity_slot_bookings:
           | Array<{
               id: string;
               minutes: number;
@@ -105,6 +105,7 @@ type CoachOpportunityRow = {
               user_id: string;
               is_final: boolean;
               finalized_at: string | null;
+              release_requested_at: string | null;
               profiles:
                 | {
                     full_name: string;
@@ -172,7 +173,7 @@ export default async function CoachWorkspaceCampPage({
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
+          "id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
         )
         .eq("id", id)
         .eq("created_by", user.id)
@@ -349,6 +350,7 @@ async function toCampWorkspace(
         athletePhone: bookingProfile?.whatsapp_number ?? bookingProfile?.phone ?? "",
         isFinal: booking.is_final,
         finalizedAt: booking.finalized_at,
+        releaseRequestedAt: booking.release_requested_at,
       };
     }),
   }));

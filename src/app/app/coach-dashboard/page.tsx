@@ -60,19 +60,20 @@ type CoachOpportunityRow = {
           | null;
       }>
     | null;
-  opportunity_time_slots:
-    | Array<{
-        id: string;
-        is_published: boolean;
-        opportunity_slot_bookings:
+        opportunity_time_slots:
           | Array<{
               id: string;
-              user_id: string;
-              release_requested_at: string | null;
-              profiles:
-                | { id: string; full_name: string | null }
-                | Array<{ id: string; full_name: string | null }>
-                | null;
+              is_published: boolean;
+              opportunity_slot_bookings:
+                  | Array<{
+                      id: string;
+                      user_id: string;
+                      is_final: boolean;
+                      release_requested_at: string | null;
+                      profiles:
+                        | { id: string; full_name: string | null }
+                        | Array<{ id: string; full_name: string | null }>
+                        | null;
             }>
           | null;
       }>
@@ -108,7 +109,7 @@ export default async function CoachDashboardPage() {
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
+          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name)))",
         )
         .eq("created_by", user.id)
         .neq("status", "cancelled")
@@ -295,9 +296,12 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
   const pendingApplications = applicants.filter(
     (applicant) => applicant.status === "pending",
   ).length;
-  const draftChanges = (row.opportunity_time_slots ?? []).filter(
+  const draftTimetableChanges = (row.opportunity_time_slots ?? []).filter(
     (slot) => !slot.is_published,
   ).length;
+  const draftParticipantAssignments = (row.opportunity_time_slots ?? []).flatMap(
+    (slot) => slot.opportunity_slot_bookings ?? [],
+  ).filter((booking) => booking.is_final === false).length;
   const hasPublishedTimetable = (row.opportunity_time_slots ?? []).some(
     (slot) => slot.is_published,
   );
@@ -316,7 +320,8 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
     pendingApplications * 4 +
     waitlistApplications * 3 +
     (hasPublishedTimetable && !row.tunnel_shared_at ? 4 : 0) +
-    draftChanges * 3 +
+    draftTimetableChanges * 3 +
+    draftParticipantAssignments * 2 +
     unassignedAthletes * 3 +
     releaseRequests.length * 4;
 
@@ -333,14 +338,15 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
     athleteCount: acceptedApplicants.length,
     pendingApplications,
     waitlistApplications,
-    draftChanges,
+    draftChanges: draftTimetableChanges,
     unassignedAthletes,
     actionScore,
     hasAttention:
       pendingApplications > 0 ||
       waitlistApplications > 0 ||
       (hasPublishedTimetable && !row.tunnel_shared_at) ||
-      draftChanges > 0 ||
+      draftTimetableChanges > 0 ||
+      draftParticipantAssignments > 0 ||
       unassignedAthletes > 0 ||
       releaseRequests.length > 0,
     applicants,
@@ -372,102 +378,79 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
     const waitlistApplicants = applicants.filter(
       (applicant) => applicant.status === "waitlist",
     );
+    const pendingApplications = applicants.filter(
+      (applicant) => applicant.status === "pending",
+    );
     const hasPublishedTimetable = (row.opportunity_time_slots ?? []).some(
       (slot) => slot.is_published,
     );
+    const draftTimetableChanges = (row.opportunity_time_slots ?? []).filter(
+      (slot) => !slot.is_published,
+    ).length;
+    const draftParticipantAssignments = (row.opportunity_time_slots ?? [])
+      .flatMap((slot) => slot.opportunity_slot_bookings ?? [])
+      .filter((booking) => booking.is_final === false).length;
+    const releaseRequests = buildReleaseRequests(row);
+    const reasons: Array<{ label: string; count?: number }> = [];
 
-    for (const applicant of applicants.filter((item) => item.status === "pending")) {
-      items.push({
-        id: `application-${applicant.interestId}`,
-        group: "Applications Waiting",
-        kind: "application",
-        title: `${applicant.name} applied to ${campTitle}`,
-        description: `Review the application for ${campTitle} and decide what happens next.`,
-        campId,
-        campTitle,
-        interestId: applicant.interestId,
+    if (draftTimetableChanges > 0) {
+      reasons.push({
+        label: "Timetable Changes Pending",
+        count: draftTimetableChanges,
+      });
+    }
+
+    if (draftParticipantAssignments > 0) {
+      reasons.push({
+        label: "Unpublished Participant Assignments",
+        count: draftParticipantAssignments,
+      });
+    }
+
+    if (releaseRequests.length > 0) {
+      reasons.push({
+        label: "Release Requests Pending",
+        count: releaseRequests.length,
+      });
+    }
+
+    if (pendingApplications.length > 0) {
+      reasons.push({
+        label: "Applications Waiting",
+        count: pendingApplications.length,
       });
     }
 
     if (waitlistApplicants.length > 0) {
-      const label = `${waitlistApplicants.length} athlete${waitlistApplicants.length === 1 ? "" : "s"} currently on the waitlist for ${campTitle}.`;
-      items.push({
-        id: `waitlist-${campId}`,
-        group: "Waitlist",
-        kind: "waitlist",
-        title: waitlistApplicants.length === 1 ? `1 athlete is waiting for a spot in ${campTitle}.` : label,
-        description:
-          waitlistApplicants.length === 1
-            ? `Open ${campTitle} to review the waitlisted participant and decide what happens next.`
-            : `Open ${campTitle} to review the waitlisted participants and decide what happens next.`,
-        campId,
-        campTitle,
-        workshopLabel: "Open Workspace",
+      reasons.push({
+        label: "Waitlist",
+        count: waitlistApplicants.length,
       });
     }
 
     if (hasPublishedTimetable && !row.tunnel_shared_at) {
-      const tunnel = firstRelation(row.tunnel_profiles);
-      const tunnelName = tunnel?.name?.trim() || "the tunnel";
-
-      items.push({
-        id: `tunnel-${campId}`,
-        group: "Tunnel Not Informed",
-        kind: "tunnel",
-        title: "Tunnel not informed",
-        description: `${campTitle}: timetable published but not yet shared with ${tunnelName}.`,
-        campId,
-        campTitle,
+      reasons.push({
+        label: "Tunnel Not Informed",
       });
     }
 
-    for (const request of buildReleaseRequests(row)) {
+    if (reasons.length > 0) {
       items.push({
-        id: `release-${request.bookingId}`,
-        group: "Slot Removal Requests",
-        kind: "release",
-        title: "Slot Removal Request",
-        description: `${request.name} wants to release a booked slot.\nOpportunity: ${campTitle}`,
-        campId,
-        campTitle,
-        bookingId: request.bookingId,
-      });
-    }
-
-    const draftChanges = (row.opportunity_time_slots ?? []).filter(
-      (slot) => !slot.is_published,
-    ).length;
-    if (draftChanges > 0) {
-      items.push({
-        id: `draft-${campId}`,
-        group: "Draft Changes Pending",
-        kind: "draft",
-        title: `${campTitle} has unpublished timetable changes`,
-        description: `${draftChanges} slot${draftChanges === 1 ? "" : "s"} are still in draft.`,
-        campId,
-        campTitle,
-      });
-    }
-
-    const acceptedApplicants = applicants.filter((item) => item.status === "accepted");
-    const bookedIds = new Set(
-      (row.opportunity_time_slots ?? []).flatMap((slot) =>
-        (slot.opportunity_slot_bookings ?? [])
-          .map((booking) => booking.user_id)
-          .filter(Boolean),
-      ),
-    );
-    const unassignedCount = acceptedApplicants.filter(
-      (applicant) => !applicant.selfBookingEnabled && !bookedIds.has(applicant.id),
-    ).length;
-
-    if (unassignedCount > 0) {
-      items.push({
-        id: `unassigned-${campId}`,
-        group: "Unassigned Athletes",
-        kind: "unassigned",
-        title: `${campTitle} has accepted athletes without assigned slots`,
-        description: `${unassignedCount} accepted athlete${unassignedCount === 1 ? "" : "s"} still need assigned time.`,
+        id: `attention-${campId}`,
+        group: "Requires Attention",
+        kind: "opportunity",
+        title: campTitle,
+        description: summarizeAttentionReasons({
+          total:
+            draftTimetableChanges +
+            draftParticipantAssignments +
+            releaseRequests.length +
+            pendingApplications.length +
+            waitlistApplicants.length +
+            (hasPublishedTimetable && !row.tunnel_shared_at ? 1 : 0),
+          reasons,
+        }),
+        reasons,
         campId,
         campTitle,
       });
@@ -497,6 +480,26 @@ function buildReleaseRequests(row: CoachOpportunityRow) {
   }
 
   return requests;
+}
+
+function summarizeAttentionReasons({
+  total,
+  reasons,
+}: {
+  total: number;
+  reasons: Array<{ label: string; count?: number }>;
+}) {
+  const lines = [`${total} unpublished change${total === 1 ? "" : "s"} requiring review.`];
+
+  for (const reason of reasons) {
+    lines.push(
+      reason.count !== undefined
+        ? `${reason.label}: ${reason.count}`
+        : reason.label,
+    );
+  }
+
+  return lines.join("\n");
 }
 
 function buildNotificationItems(rows: NotificationRow[]): CoachWorkspaceNotificationItem[] {

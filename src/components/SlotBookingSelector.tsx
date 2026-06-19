@@ -173,7 +173,20 @@ export function SlotBookingSelector({
       }
 
       for (const slotId of removedBookedSlotIds) {
+        console.log("Release request save flow: releasing slot", {
+          opportunityId,
+          slotId,
+          removedBookedSlotIds,
+          newSelectedSlotIds,
+        });
         const releaseResult = await releaseOwnOpportunitySlot(opportunityId, slotId);
+
+        console.log("Release request save flow: release result", {
+          opportunityId,
+          slotId,
+          ok: releaseResult.ok,
+          message: releaseResult.message,
+        });
 
         if (!releaseResult.ok) {
           setError(releaseResult.message);
@@ -252,7 +265,11 @@ export function SlotBookingSelector({
                   isPending ||
                   (!slot.userHasBooking && isFull) ||
                   isReleaseRequested;
-                const actionLabel = slot.userHasBooking ? "Release Slot" : "Select Slot";
+                const actionLabel = isReleaseRequested
+                  ? "Release Requested"
+                  : slot.userHasBooking
+                    ? "Release Slot"
+                    : "Select Slot";
 
                 return (
                   <button
@@ -285,7 +302,7 @@ export function SlotBookingSelector({
                         </span>
                         {isReleaseRequested ? (
                           <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-amber-800">
-                            Pending Coach Approval
+                            Release Requested
                           </span>
                         ) : null}
                       </span>
@@ -302,15 +319,17 @@ export function SlotBookingSelector({
                       </span>
                     </span>
                     <span className="mt-2 block text-[0.68rem] font-black uppercase text-slate-500">
-                      {slot.userHasBooking && isSelected
-                        ? "Draft"
-                        : slot.userHasBooking
+                      {isReleaseRequested
+                        ? "Awaiting Coach Review"
+                        : slot.userHasBooking && isSelected
                           ? "Draft"
-                          : isSelected
-                            ? "Selected"
-                            : isFull
-                              ? "Full"
-                              : `${slot.remainingCapacity} open`}
+                          : slot.userHasBooking
+                            ? "Draft"
+                            : isSelected
+                              ? "Selected"
+                              : isFull
+                                ? "Full"
+                                : `${slot.remainingCapacity} open`}
                     </span>
                   </button>
                 );

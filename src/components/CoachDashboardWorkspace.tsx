@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -21,7 +21,6 @@ import {
   Share2,
   Send,
   Users,
-  UserRound,
   WalletCards,
   X,
 } from "lucide-react";
@@ -40,7 +39,6 @@ import {
   type AssignSlotParticipant,
 } from "@/components/AssignSlotButton";
 import { Avatar } from "@/components/Avatar";
-import { ReleaseSlotBookingButton } from "@/components/ReleaseSlotBookingButton";
 import { SlotReleaseRequestActions } from "@/components/SlotReleaseRequestActions";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TunnelDashboardShareButton } from "@/components/TunnelDashboardShareButton";
@@ -163,13 +161,6 @@ type HuckjamRegistration = {
   status: InterestStatus;
 };
 
-type SlotActionPopoverState = {
-  bookingId: string;
-  top: number;
-  left: number;
-  placement: "bottom" | "top";
-};
-
 type CoachDashboardWorkspaceProps = {
   selectedCampId: string;
   camps: CampWorkspace[];
@@ -196,8 +187,6 @@ export function CoachDashboardWorkspace({
   const [tabletPanel, setTabletPanel] = useState<TabletPanel>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [desktopDayStart, setDesktopDayStart] = useState(0);
-  const [activeBookingAction, setActiveBookingAction] =
-    useState<SlotActionPopoverState | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [profileModalParticipantId, setProfileModalParticipantId] = useState("");
   const [massBookingParticipantId, setMassBookingParticipantId] = useState("");
@@ -270,24 +259,6 @@ export function CoachDashboardWorkspace({
       .getElementById("coach-live-timetable")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-
-  useEffect(() => {
-    if (!activeBookingAction) {
-      return;
-    }
-
-    function handleViewportChange() {
-      setActiveBookingAction(null);
-    }
-
-    window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("scroll", handleViewportChange, true);
-
-    return () => {
-      window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("scroll", handleViewportChange, true);
-    };
-  }, [activeBookingAction]);
 
   if (!activeCamp) {
     return (
@@ -663,22 +634,17 @@ export function CoachDashboardWorkspace({
                       {day.slots.length > 0 ? (
                         day.slots.map((slot) => {
                           const isFull = slot.bookings.length >= slot.capacity;
-                          const isSelectedSlot = slot.bookings.some(
-                            (booking) => booking.id === activeBookingAction?.bookingId,
-                          );
                           const isDraftSlot = slot.isPublished === false;
 
                           return (
                             <article
                               key={slot.id}
                               className={`relative overflow-hidden rounded-xl border bg-white p-2 shadow-sm transition ${
-                                isSelectedSlot
-                                  ? "border-sky-300 bg-sky-50/60 ring-2 ring-sky-100"
-                                  : isDraftSlot
-                                    ? "border-dashed border-orange-300 bg-orange-50/35"
-                                    : isFull
-                                      ? "border-emerald-200"
-                                      : "border-slate-200"
+                                isDraftSlot
+                                  ? "border-dashed border-orange-300 bg-orange-50/35"
+                                  : isFull
+                                    ? "border-emerald-200"
+                                    : "border-slate-200"
                               }`}
                             >
                               <div
@@ -711,72 +677,13 @@ export function CoachDashboardWorkspace({
                                 </span>
                               </div>
                               <div className="grid gap-1">
-                              {slot.bookings.map((booking) => {
+                                {slot.bookings.map((booking) => {
                                   const colors = participantColorMap.get(booking.userId);
-                                  const matchingParticipant = activeCamp.participants.find(
-                                    (item) => item.userId === booking.userId,
-                                  );
-                                  const releaseRequested = Boolean(
-                                    booking.releaseRequestedAt,
-                                  );
+                                  const releaseRequested = Boolean(booking.releaseRequestedAt);
 
                                   return (
-                                    <div key={booking.id} className="relative">
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          const rect =
-                                            event.currentTarget.getBoundingClientRect();
-                                          const viewportWidth = window.innerWidth;
-                                          const viewportHeight = window.innerHeight;
-                                          const popoverWidth = Math.min(
-                                            288,
-                                            viewportWidth - 24,
-                                          );
-                                          const popoverEstimatedHeight = 180;
-                                          const gap = 8;
-                                          const horizontalMargin = 8;
-                                          const preferredLeft = rect.left;
-                                          const clampedLeft = Math.min(
-                                            Math.max(preferredLeft, horizontalMargin),
-                                            Math.max(
-                                              horizontalMargin,
-                                              viewportWidth - horizontalMargin - popoverWidth,
-                                            ),
-                                          );
-                                          const openBelow =
-                                            rect.bottom + gap + popoverEstimatedHeight;
-                                          const placement: "bottom" | "top" =
-                                            openBelow <= viewportHeight - horizontalMargin
-                                              ? "bottom"
-                                              : "top";
-                                          const preferredTop =
-                                            placement === "bottom"
-                                              ? rect.bottom + gap
-                                              : rect.top - gap - popoverEstimatedHeight;
-                                          const clampedTop = Math.min(
-                                            Math.max(preferredTop, horizontalMargin),
-                                            Math.max(
-                                              horizontalMargin,
-                                              viewportHeight -
-                                                horizontalMargin -
-                                                popoverEstimatedHeight,
-                                            ),
-                                          );
-
-                                          setActiveBookingAction((current) => {
-                                            if (current?.bookingId === booking.id) {
-                                              return null;
-                                            }
-
-                                            return {
-                                              bookingId: booking.id,
-                                              top: clampedTop,
-                                              left: clampedLeft,
-                                              placement,
-                                            };
-                                          });
-                                        }}
+                                    <div key={booking.id} className="grid gap-1.5">
+                                      <div
                                         className="grid w-full rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm"
                                         style={{
                                           backgroundColor: colors?.soft,
@@ -790,7 +697,7 @@ export function CoachDashboardWorkspace({
                                         <span className="block truncate text-sm font-black">
                                           {booking.athleteName}
                                         </span>
-                                        <span className="flex items-center gap-2 text-xs font-bold opacity-80">
+                                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold opacity-80">
                                           <span>{booking.minutes} min</span>
                                           {booking.isFinal === false ? (
                                             <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
@@ -799,64 +706,20 @@ export function CoachDashboardWorkspace({
                                           ) : null}
                                           {releaseRequested ? (
                                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-black uppercase text-amber-800">
-                                              Pending Coach Approval
+                                              Release Requested
                                             </span>
                                           ) : null}
                                         </span>
-                                      </button>
-                                      {activeBookingAction?.bookingId === booking.id ? (
-                                        <>
-                                          <button
-                                            type="button"
-                                            className="fixed inset-0 z-40 cursor-default"
-                                            aria-label="Close slot actions"
-                                            onClick={() => setActiveBookingAction(null)}
-                                          />
-                                          {typeof document !== "undefined"
-                                            ? createPortal(
-                                                <div
-                                                  className="fixed z-50 grid w-[min(18rem,calc(100vw-1rem))] gap-1 rounded-xl border border-slate-200 bg-white p-2 text-slate-950 shadow-2xl"
-                                                  style={{
-                                                    top: activeBookingAction.top,
-                                                    left: activeBookingAction.left,
-                                                    maxHeight: "calc(100vh - 1rem)",
-                                                    overflowY: "auto",
-                                                  }}
-                                                >
-                                                  <p className="px-2 pb-1 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-400">
-                                                    Slot actions
-                                                  </p>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                      if (matchingParticipant) {
-                                                        setSelectedParticipantId(matchingParticipant.id);
-                                                        setIsSidebarCollapsed(false);
-                                                      }
-                                                      setActiveBookingAction(null);
-                                                    }}
-                                                    className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-left text-xs font-black text-slate-700 hover:bg-slate-50"
-                                                  >
-                                                    <UserRound size={15} className="text-sky-700" />
-                                                    Show Participant Info
-                                                  </button>
-                                                  {releaseRequested ? (
-                                                    <SlotReleaseRequestActions
-                                                      opportunityId={activeCamp.id}
-                                                      bookingId={booking.id}
-                                                    />
-                                                  ) : (
-                                                    <ReleaseSlotBookingButton
-                                                      opportunityId={activeCamp.id}
-                                                      bookingId={booking.id}
-                                                    />
-                                                  )}
-                                                </div>,
-                                                document.body,
-                                              )
-                                            : null}
-                                        </>
-                                      ) : null}
+                                        <div className="flex flex-wrap items-center gap-1.5 px-1">
+                                          {releaseRequested ? (
+                                            <SlotReleaseRequestActions
+                                              opportunityId={activeCamp.id}
+                                              bookingId={booking.id}
+                                              compact
+                                            />
+                                          ) : null}
+                                        </div>
+                                      </div>
                                     </div>
                                   );
                                 })}

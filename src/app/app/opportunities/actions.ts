@@ -950,51 +950,132 @@ export async function releaseOwnOpportunitySlot(
   }
 
   if (booking.is_final || interest?.self_booking_enabled === true) {
+    const requestTimestamp = new Date().toISOString();
+    console.log("Own slot release request: starting", {
+      opportunityId,
+      slotId,
+      userId: user.id,
+      bookingId: booking.id,
+      booking,
+      interest,
+      requestTimestamp,
+    });
+
     const rpcResult = await supabase.rpc("request_own_opportunity_slot_release", {
       target_opportunity_id: opportunityId,
       target_slot_id: slotId,
     });
 
-    if (rpcResult.error) {
+    console.log("Own slot release request: rpc response", {
+      opportunityId,
+      slotId,
+      userId: user.id,
+      data: rpcResult.data,
+      error: rpcResult.error,
+    });
+
+    const rpcUpdatedCount = Number(rpcResult.data ?? 0);
+    const rpcSucceeded = !rpcResult.error && rpcUpdatedCount > 0;
+
+    if (rpcResult.error || !rpcSucceeded) {
       console.error("Own slot release request failed", {
         opportunityId,
         slotId,
         userId: user.id,
-        code: rpcResult.error.code,
-        message: rpcResult.error.message,
-        details: rpcResult.error.details,
-        hint: rpcResult.error.hint,
+        code: rpcResult.error?.code,
+        message: rpcResult.error?.message,
+        details: rpcResult.error?.details,
+        hint: rpcResult.error?.hint,
+        rpcUpdatedCount,
       });
 
-      const timestamp = new Date().toISOString();
-      const { error: updateError } = await supabase
+      console.log("Own slot release request: fallback payload", {
+        opportunityId,
+        slotId,
+        userId: user.id,
+        bookingId: booking.id,
+        payload: {
+          release_requested_at: requestTimestamp,
+          release_requested_by: user.id,
+        },
+      });
+
+      const updateResult = await supabase
         .from("opportunity_slot_bookings")
         .update({
-          release_requested_at: timestamp,
+          release_requested_at: requestTimestamp,
           release_requested_by: user.id,
         })
         .eq("id", booking.id)
         .eq("user_id", user.id)
-        .is("release_requested_at", null);
+        .is("release_requested_at", null)
+        .select("id,slot_id,opportunity_id,user_id,release_requested_at,release_requested_by")
+        .maybeSingle();
 
-      if (updateError) {
+      console.log("Own slot release request: fallback response", {
+        opportunityId,
+        slotId,
+        userId: user.id,
+        data: updateResult.data,
+        error: updateResult.error,
+      });
+
+      if (updateResult.error) {
         console.error("Own slot release request fallback failed", {
           opportunityId,
           slotId,
           userId: user.id,
-          code: updateError.code,
-          message: updateError.message,
-          details: updateError.details,
-          hint: updateError.hint,
+          code: updateResult.error.code,
+          message: updateResult.error.message,
+          details: updateResult.error.details,
+          hint: updateResult.error.hint,
         });
         return {
           ok: false,
           message:
-            rpcResult.error.message ||
-            updateError.message ||
+            rpcResult.error?.message ||
+            updateResult.error.message ||
             "Could not send release request.",
         };
       }
+    }
+
+    const verificationClient = createSupabaseAdminClient() ?? supabase;
+    const { data: persistedBooking, error: refreshError } = await verificationClient
+      .from("opportunity_slot_bookings")
+      .select(
+        "id,slot_id,opportunity_id,user_id,release_requested_at,release_requested_by",
+      )
+      .eq("id", booking.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    console.log("Own slot release request: persistence check", {
+      opportunityId,
+      slotId,
+      userId: user.id,
+      verificationClient: verificationClient === supabase ? "server" : "admin",
+      persistedBooking,
+      refreshError,
+    });
+
+    if (refreshError || !persistedBooking?.release_requested_at) {
+      console.error("Own slot release request did not persist", {
+        opportunityId,
+        slotId,
+        userId: user.id,
+        code: refreshError?.code,
+        message: refreshError?.message,
+        details: refreshError?.details,
+        hint: refreshError?.hint,
+        persistedBooking,
+      });
+      return {
+        ok: false,
+        message:
+          refreshError?.message ||
+          "Release request did not persist after the database write.",
+      };
     }
 
     revalidatePath(`/app/opportunities/${opportunityId}`);
