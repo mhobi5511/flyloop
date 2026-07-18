@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { CalendarDays, MapPin, Users, UserRound } from "lucide-react";
 import { Badge } from "./Badge";
 import { NotificationCountBadge } from "./NotificationCountBadge";
@@ -14,6 +13,7 @@ import {
 } from "@/lib/opportunities";
 import type { Opportunity } from "@/lib/types";
 import { applicantBorderClass } from "./ApplicationStatusBadge";
+import { PrefetchedOpportunityLink } from "./PrefetchedOpportunityLink";
 
 type OpportunityCardProps = {
   opportunity: Opportunity;
@@ -66,7 +66,7 @@ export function OpportunityCard({
     isFull && !isUserAlreadyIn && !isOwnOpportunity;
 
   return (
-    <Link
+    <PrefetchedOpportunityLink
       href={href}
       className={`relative block overflow-hidden rounded-2xl border shadow-sm transition ${dense ? "p-3" : "p-4"} ${statusBorder} ${
         showFullUnavailableState
@@ -262,7 +262,7 @@ export function OpportunityCard({
           </div>
         )}
       </div>
-    </Link>
+    </PrefetchedOpportunityLink>
   );
 }
 

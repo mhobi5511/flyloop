@@ -2,6 +2,7 @@ import Link from "next/link";
 import { applicantBorderClass } from "@/components/ApplicationStatusBadge";
 import { Badge } from "@/components/Badge";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
+import { PrefetchedOpportunityLink } from "@/components/PrefetchedOpportunityLink";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
 import {
   countUnreadByOpportunity,
@@ -280,7 +281,7 @@ export default async function ApplicationsPage({
               className={`relative rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${applicantBorderClass(application.status)}`}
             >
               <NotificationCountBadge count={unreadCount} />
-              <Link href={`/app/opportunities/${opportunity.id}`} className="block p-3">
+              <PrefetchedOpportunityLink href={`/app/opportunities/${opportunity.id}`} className="block p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -358,7 +359,7 @@ export default async function ApplicationsPage({
                   </p>
                 </div>
               ) : null}
-              </Link>
+              </PrefetchedOpportunityLink>
               {application.status === "pending" || application.status === "waitlist" ? (
                 <div className="px-3 pb-3">
                   <WithdrawApplicationButton interestId={application.id} />
@@ -398,7 +399,7 @@ export default async function ApplicationsPage({
                   className={`relative rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${applicantBorderClass(application.status)}`}
                 >
                   <NotificationCountBadge count={unreadCount} />
-                  <Link href={`/app/opportunities/${opportunity.id}`} className="block p-3">
+                  <PrefetchedOpportunityLink href={`/app/opportunities/${opportunity.id}`} className="block p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -433,7 +434,7 @@ export default async function ApplicationsPage({
                         </div>
                       </div>
                     </div>
-                  </Link>
+                  </PrefetchedOpportunityLink>
                 </article>
               );
             })}
