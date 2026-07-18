@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { applicantBorderClass } from "@/components/ApplicationStatusBadge";
-import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import { WithdrawApplicationButton } from "@/components/WithdrawApplicationButton";
@@ -220,7 +219,7 @@ export default async function ApplicationsPage({
     );
   });
   return (
-    <AppShell active="applications" canJoin>
+    <>
       <div>
         <h1 className="text-2xl font-black tracking-tight sm:text-3xl">My Flights</h1>
       </div>
@@ -457,7 +456,7 @@ export default async function ApplicationsPage({
           No current flights match those filters.
         </p>
       ) : null}
-    </AppShell>
+    </>
   );
 }
 

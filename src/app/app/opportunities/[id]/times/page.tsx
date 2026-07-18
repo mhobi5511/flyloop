@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import { CampApplyPreferencesForm } from "@/components/CampApplyPreferencesForm";
 import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
 import { CampTunnelTimeSummary } from "@/components/CampTunnelTimeSummary";
@@ -160,7 +159,7 @@ export default async function SlotBookingPage({
     );
 
     return (
-      <AppShell active="home">
+      <>
         <NotificationReadSignal />
         <div className="mx-auto max-w-2xl">
           <Link
@@ -243,7 +242,7 @@ export default async function SlotBookingPage({
             )}
           </div>
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -284,7 +283,7 @@ export default async function SlotBookingPage({
   );
 
   return (
-    <AppShell active="home">
+    <>
       <NotificationReadSignal />
       <div className="mx-auto max-w-2xl">
         <Link
@@ -326,7 +325,7 @@ export default async function SlotBookingPage({
           />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 

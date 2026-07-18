@@ -2,7 +2,6 @@ import Link from "next/link";
 import { after } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, Users } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { CampPreferencesSummary } from "@/components/CampPreferencesSummary";
@@ -315,7 +314,7 @@ export default async function OpportunityDetailPage({
     : "";
 
   return (
-    <AppShell active="home">
+    <>
       <NotificationReadSignal />
       <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
         <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
@@ -794,7 +793,7 @@ export default async function OpportunityDetailPage({
           </div>
         </aside>
       </div>
-    </AppShell>
+    </>
   );
 }
 

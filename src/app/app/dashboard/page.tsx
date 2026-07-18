@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Monitor, Plus } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { NotificationCountBadge } from "@/components/NotificationCountBadge";
 import {
@@ -123,7 +122,7 @@ export default async function OrganizerDashboardPage({
 
   if (!canCreate) {
     return (
-      <AppShell active="dashboard" canCreate={false}>
+      <>
         <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <h1 className="text-3xl font-black tracking-tight">My Coachings</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -136,7 +135,7 @@ export default async function OrganizerDashboardPage({
             Open profile
           </Link>
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -196,7 +195,7 @@ export default async function OrganizerDashboardPage({
   const activeEmpty = tabs.find((tab) => tab.key === activeTab)?.empty;
 
   return (
-    <AppShell active="dashboard" canCreate>
+    <>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
@@ -256,7 +255,7 @@ export default async function OrganizerDashboardPage({
           {activeEmpty}
         </p>
       ) : null}
-    </AppShell>
+    </>
   );
 }
 

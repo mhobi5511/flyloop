@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
 import {
   CreateOpportunityForm,
   type InheritedCoachProfile,
@@ -45,7 +44,7 @@ export default async function CreateOpportunityPage() {
   };
 
   return (
-    <AppShell active="create" canCreate={canCreate}>
+    <>
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-black tracking-tight">Create opportunity</h1>
         {canCreate ? (
@@ -71,6 +70,6 @@ export default async function CreateOpportunityPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

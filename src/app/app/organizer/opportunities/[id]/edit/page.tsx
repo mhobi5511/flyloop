@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import {
   CreateOpportunityForm,
   type TunnelOption,
@@ -45,13 +44,8 @@ export default async function EditOrganizerOpportunityPage({
     data: { user },
   } = await getCurrentUser();
 
-  const [{ data: profile }, { data: tunnelRows }, { data: opportunity }] =
+  const [{ data: tunnelRows }, { data: opportunity }] =
     await Promise.all([
-      supabase
-        .from("profiles")
-        .select("is_organizer,wants_to_create_opportunities")
-        .eq("id", user?.id)
-        .maybeSingle(),
       supabase
         .from("tunnel_profiles")
         .select("id,name,city,country")
@@ -72,9 +66,6 @@ export default async function EditOrganizerOpportunityPage({
     notFound();
   }
 
-  const canCreate =
-    profile?.is_organizer === true ||
-    profile?.wants_to_create_opportunities === true;
   const row = opportunity as OpportunityEditRow;
   const tunnels = ((tunnelRows ?? []) as TunnelOption[]).map((tunnel) => ({
     id: tunnel.id,
@@ -84,7 +75,7 @@ export default async function EditOrganizerOpportunityPage({
   }));
 
   return (
-    <AppShell active="dashboard" canCreate={canCreate}>
+    <>
       <div className="mx-auto max-w-3xl">
         <Link
           href={`/app/organizer/opportunities/${id}`}
@@ -123,7 +114,7 @@ export default async function EditOrganizerOpportunityPage({
           }}
         />
       </div>
-    </AppShell>
+    </>
   );
 }
 

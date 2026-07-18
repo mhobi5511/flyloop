@@ -193,7 +193,7 @@ export function NotificationCenterProvider({
         applyRealtimeChange,
       );
 
-    void channel.subscribe((status) => {
+    void channel.subscribe((status: string) => {
       if (disposed || status !== "SUBSCRIBED") {
         return;
       }

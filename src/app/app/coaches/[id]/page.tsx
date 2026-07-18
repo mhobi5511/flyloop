@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { AtSign, ChevronDown } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { FollowButton } from "@/components/FollowButton";
 import { OpportunityCard } from "@/components/OpportunityCard";
@@ -81,7 +80,7 @@ export default async function CoachProfilePage({
   const instagram = coach.instagram_handle ?? profile?.instagram_handle;
 
   return (
-    <AppShell active="profile">
+    <>
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-4">
           <Avatar
@@ -200,7 +199,7 @@ export default async function CoachProfilePage({
           </div>
         </section>
       ) : null}
-    </AppShell>
+    </>
   );
 }
 

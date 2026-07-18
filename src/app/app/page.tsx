@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
 import { GlobalCampSearch } from "@/components/GlobalCampSearch";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { distanceKm, parseCoordinate } from "@/lib/location";
@@ -252,7 +251,7 @@ export default async function AppHomePage({
   const heroHeadline = getDailyHeroMessage();
 
   return (
-    <AppShell active="home">
+    <>
       <div className="rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-500 px-4 py-3 text-white shadow-sm sm:px-5">
         <p className="text-sm font-bold text-sky-100">
           Good to see you{homeProfile?.full_name ? `, ${homeProfile.full_name}` : ""}
@@ -347,7 +346,7 @@ export default async function AppHomePage({
         opportunities={globalSearchOpportunities}
         currentUserId={user.id}
       />
-    </AppShell>
+    </>
   );
 }
 

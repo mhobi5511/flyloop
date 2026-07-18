@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AtSign, CalendarDays, Clock3, Globe2, MapPin, PlayCircle } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import {
@@ -58,7 +57,7 @@ export default async function PublicUserProfilePage({
   );
 
   return (
-    <AppShell active="home">
+    <>
       <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="bg-sky-50 px-4 py-5 sm:px-6">
           <div className="flex items-start gap-4">
@@ -165,7 +164,7 @@ export default async function PublicUserProfilePage({
           </section>
         </div>
       </article>
-    </AppShell>
+    </>
   );
 }
 

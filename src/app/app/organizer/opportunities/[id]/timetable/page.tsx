@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import { CampTimetableEditor } from "@/components/CampTimetableEditor";
 import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -34,13 +33,8 @@ export default async function OrganizerTimetablePage({
     data: { user },
   } = await getCurrentUser();
 
-  const [{ data: profile }, { data: opportunity }, { data: slotRows }] =
+  const [{ data: opportunity }, { data: slotRows }] =
     await Promise.all([
-      supabase
-        .from("profiles")
-        .select("is_organizer,wants_to_create_opportunities")
-        .eq("id", user?.id)
-        .maybeSingle(),
       supabase
         .from("opportunities")
         .select("id,title,type,start_date,end_date")
@@ -59,9 +53,6 @@ export default async function OrganizerTimetablePage({
     notFound();
   }
 
-  const canCreate =
-    profile?.is_organizer === true ||
-    profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as TimetableOpportunity;
   if (currentOpportunity.type === "huck_jam") {
     notFound();
@@ -75,7 +66,7 @@ export default async function OrganizerTimetablePage({
   }));
 
   return (
-    <AppShell active="dashboard" canCreate={canCreate}>
+    <>
       <div className="mx-auto max-w-2xl">
         <Link
           href={`/app/organizer/opportunities/${id}`}
@@ -112,6 +103,6 @@ export default async function OrganizerTimetablePage({
           />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

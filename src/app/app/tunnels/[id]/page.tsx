@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { MapPin } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
@@ -41,7 +40,7 @@ export default async function TunnelProfilePage({
   const opportunities = ((opportunityRows ?? []) as HomeFeedRow[]).map(mapOpportunity);
 
   return (
-    <AppShell active="home">
+    <>
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         {tunnel.header_image_url ? (
           isOptimizableSupabaseImage(tunnel.header_image_url) ? (
@@ -106,6 +105,6 @@ export default async function TunnelProfilePage({
           ))}
         </div>
       </section>
-    </AppShell>
+    </>
   );
 }

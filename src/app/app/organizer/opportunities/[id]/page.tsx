@@ -12,7 +12,6 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import {
   AssignSlotButton,
   type AssignSlotParticipant,
@@ -154,15 +153,9 @@ export default async function OrganizerOpportunityPage({
     data: { user },
   } = await getCurrentUser();
   const [
-    { data: profile },
     { data: opportunity },
     { count: timetableSlotCount },
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("is_organizer,wants_to_create_opportunities,full_name")
-      .eq("id", user?.id)
-      .maybeSingle(),
     supabase
       .from("opportunities")
       .select("id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_shared_at,tunnel_profiles(name,city,country)")
@@ -199,9 +192,6 @@ export default async function OrganizerOpportunityPage({
     .eq("opportunity_id", id)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
-  const canCreate =
-    profile?.is_organizer === true ||
-    profile?.wants_to_create_opportunities === true;
   const currentOpportunity = opportunity as OrganizerOpportunity;
   const isHuckJam = currentOpportunity.type === "huck_jam";
   const applicantRows = (applicants ?? []) as ApplicantRow[];
@@ -326,7 +316,7 @@ export default async function OrganizerOpportunityPage({
   );
 
   return (
-    <AppShell active="dashboard" canCreate={canCreate}>
+    <>
       <NotificationReadSignal />
       {showPublishedSuccess ? (
         <section className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 shadow-sm">
@@ -732,7 +722,7 @@ export default async function OrganizerOpportunityPage({
           </p>
         ) : null}
       </section>
-    </AppShell>
+    </>
   );
 }
 

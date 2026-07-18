@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/AppShell";
 import { ProfileForm } from "@/components/ProfileForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -28,7 +27,7 @@ export default async function ProfilePage() {
   ]);
 
   return (
-    <AppShell active="profile">
+    <>
       <ProfileForm
         tunnels={(tunnels ?? []) as TunnelOption[]}
         profile={
@@ -58,6 +57,6 @@ export default async function ProfilePage() {
           }
         }
       />
-    </AppShell>
+    </>
   );
 }
