@@ -16,6 +16,7 @@ import { isCoachManagedTunnelTimeOpportunity } from "@/lib/opportunities";
 import { calculateProfileCompleteness } from "@/lib/profile-completeness";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { InterestStatus, Opportunity } from "@/lib/types";
 import { redirect } from "next/navigation";
 
@@ -56,6 +57,9 @@ type FeedItem = {
   distanceKm: number | null;
 };
 
+const homeFeedSelect =
+  "id,type,booking_mode,title,coach_id,tunnel_id,start_date,end_date,registration_deadline,tunnel_time_mode,session_start,session_end,price,currency,total_capacity,available_spots,min_minutes_or_hours,description,languages,disciplines,skill_level,status,contact_method,created_by,created_at,updated_at,is_last_minute,tunnel_name,tunnel_country,tunnel_city,coach_name,coach_follow_id,tunnel_region,tunnel_latitude,tunnel_longitude,is_followed_coach";
+
 const interactedStatuses = new Set<InterestStatus>([
   "pending",
   "accepted",
@@ -82,17 +86,20 @@ export default async function AppHomePage({
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
 
   if (!user) {
     redirect("/login?next=/app");
   }
+
+  const today = new Date().toISOString().slice(0, 10);
 
   const [
     profileResult,
     opportunitiesResult,
     followsResult,
     unreadNotificationsResult,
+    interestsResult,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -101,18 +108,26 @@ export default async function AppHomePage({
       .maybeSingle(),
     supabase
       .from("published_opportunities_with_context")
-      .select("*")
+      .select(homeFeedSelect)
+      .gte("end_date", today)
       .order("start_date", { ascending: true }),
     supabase
       .from("follows")
       .select("target_id,target_type")
-      .eq("follower_id", user.id),
+      .eq("follower_id", user.id)
+      .eq("target_type", "tunnel"),
     supabase
       .from("notifications")
       .select("opportunity_id,type,body")
       .eq("user_id", user.id)
       .eq("read", false)
       .in("type", [...participantActivityNotificationTypes]),
+    supabase
+      .from("opportunity_interests")
+      .select("opportunity_id,status,interest_type,opportunities!inner(status,end_date)")
+      .eq("athlete_id", user.id)
+      .in("opportunities.status", ["published", "full"])
+      .gte("opportunities.end_date", today),
   ]);
 
   if (profileResult.error) {
@@ -130,7 +145,6 @@ export default async function AppHomePage({
   const allRows = opportunitiesResult.error
     ? []
     : ((opportunitiesResult.data ?? []) as HomeFeedRow[]);
-  const opportunityIds = allRows.map((row) => row.id);
   const followRows = followsResult.error ? [] : followsResult.data ?? [];
   if (unreadNotificationsResult.error) {
     console.error(
@@ -147,14 +161,11 @@ export default async function AppHomePage({
       .filter((follow) => follow.target_type === "tunnel")
       .map((follow) => follow.target_id),
   );
-  const { data: interestRows } =
-    opportunityIds.length > 0
-      ? await supabase
-          .from("opportunity_interests")
-          .select("opportunity_id,status,interest_type")
-          .eq("athlete_id", user.id)
-          .in("opportunity_id", opportunityIds)
-      : { data: [] };
+  if (interestsResult.error) {
+    console.error("Home interest lookup failed", interestsResult.error);
+  }
+
+  const interestRows = interestsResult.error ? [] : interestsResult.data ?? [];
   const homeProfile = profileResult.error
     ? null
     : (profileResult.data as HomeProfile | null);

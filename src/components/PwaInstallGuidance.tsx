@@ -23,9 +23,15 @@ export function PwaInstallGuidance({ active }: PwaInstallGuidanceProps) {
   const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
-    setupPwaInstallListeners();
+    const teardownInstallListeners = setupPwaInstallListeners();
+    const unsubscribe = subscribeToPwaInstallChanges(() =>
+      setState(getPwaInstallState()),
+    );
 
-    return subscribeToPwaInstallChanges(() => setState(getPwaInstallState()));
+    return () => {
+      unsubscribe();
+      teardownInstallListeners();
+    };
   }, []);
 
   if (

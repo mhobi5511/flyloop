@@ -1,8 +1,4 @@
-import {
-  getCountries,
-  getCountryCallingCode,
-  type CountryCode,
-} from "libphonenumber-js";
+import { countryCallingCodes } from "@/lib/country-calling-codes";
 
 export type MobileCountryCodeOption = {
   country: string;
@@ -12,11 +8,11 @@ export type MobileCountryCodeOption = {
 
 const countryNameFormatter = new Intl.DisplayNames(["en"], { type: "region" });
 
-export const mobileCountryCodeOptions: MobileCountryCodeOption[] = getCountries()
-  .map((countryCode: CountryCode) => ({
+export const mobileCountryCodeOptions: MobileCountryCodeOption[] = countryCallingCodes
+  .map(([countryCode, dialCode]) => ({
     country: countryNameFormatter.of(countryCode) ?? countryCode,
     iso2: countryCode,
-    dialCode: `+${getCountryCallingCode(countryCode)}`,
+    dialCode,
   }))
   .sort((a, b) => a.country.localeCompare(b.country));
 

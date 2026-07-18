@@ -8,10 +8,17 @@ import {
   getPublicOpportunityUrl,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 
-type PublicOpportunityRow = HomeFeedRow & {
-  coach_profile_image_url?: string | null;
+type PublicOpportunityRow = {
+  id: string;
+  type: "camp" | "huck_jam";
+  title: string;
+  start_date: string;
+  end_date: string;
+  session_start: string | null;
+  session_end: string | null;
+  tunnel_name: string | null;
+  coach_profile_image_url: string | null;
 };
 
 type PageProps = {
@@ -29,28 +36,27 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const opportunity = mapOpportunity(row);
-  const typeLabel = formatOpportunityType(opportunity.type);
+  const typeLabel = formatOpportunityType(row.type);
   const dateLabel = formatOpportunityDate(
-    opportunity.type,
-    opportunity.startDate,
-    opportunity.endDate,
+    row.type,
+    row.start_date,
+    row.end_date,
   );
   const sessionRange =
-    opportunity.type === "huck_jam"
-      ? formatSessionTimeRange(opportunity.sessionStart, opportunity.sessionEnd)
+    row.type === "huck_jam"
+      ? formatSessionTimeRange(row.session_start, row.session_end)
       : "";
-  const description = `${opportunity.title} at ${
-    opportunity.tunnelName ?? "the tunnel"
+  const description = `${row.title} at ${
+    row.tunnel_name ?? "the tunnel"
   } on ${sessionRange ? `${dateLabel}, ${sessionRange}` : dateLabel}.`;
-  const url = getPublicOpportunityUrl(opportunity.id);
+  const url = getPublicOpportunityUrl(row.id);
 
   return {
-    title: `${opportunity.title} | Flyloop`,
+    title: `${row.title} | Flyloop`,
     description,
     alternates: { canonical: url },
     openGraph: {
-      title: `${opportunity.title} | Flyloop`,
+      title: `${row.title} | Flyloop`,
       description,
       url,
       type: "website",
@@ -80,7 +86,7 @@ async function getPublicOpportunityRow(id: string) {
   const today = new Date().toISOString().slice(0, 10);
   const { data } = await supabase
     .from("published_opportunities_with_context")
-    .select("*")
+    .select("id,type,title,start_date,end_date,session_start,session_end,tunnel_name,coach_profile_image_url")
     .eq("id", id)
     .gte("end_date", today)
     .maybeSingle();

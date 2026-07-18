@@ -17,8 +17,10 @@ import {
   formatPriceLabel,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { calculateEstimatedCost } from "@/lib/timetable";
 import type { InterestStatus, OpportunityType } from "@/lib/types";
+import { redirect } from "next/navigation";
 
 type ApplicationRow = {
   id: string;
@@ -114,28 +116,38 @@ export default async function ApplicationsPage({
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login?next=/app/applications");
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
   const [
-    { data: profile },
     { data: applications },
     unreadNotificationsResult,
+    bookingResult,
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("is_organizer,wants_to_create_opportunities")
-      .eq("id", user?.id)
-      .maybeSingle(),
     supabase
       .from("opportunity_interests")
       .select("id,status,interest_type,created_at,opportunities(id,title,type,start_date,end_date,session_start,session_end,price,currency,min_minutes_or_hours,tunnel_profiles(id,name,city,country),coach_profiles(profiles(full_name)),profiles!opportunities_created_by_fkey(full_name))")
-      .eq("athlete_id", user?.id)
+      .eq("athlete_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("notifications")
       .select("opportunity_id,type,body")
-      .eq("user_id", user?.id)
+      .eq("user_id", user.id)
       .eq("read", false)
       .in("type", [...participantActivityNotificationTypes]),
+    supabase
+      .from("opportunity_slot_bookings")
+      .select(
+        "id,opportunity_id,minutes,is_final,opportunity_time_slots(slot_date,start_time),opportunities!inner(type,end_date)",
+      )
+      .eq("user_id", user.id)
+      .eq("is_final", true)
+      .eq("opportunities.type", "camp")
+      .gte("opportunities.end_date", today),
   ]);
   if (unreadNotificationsResult.error) {
     console.error(
@@ -155,7 +167,11 @@ export default async function ApplicationsPage({
 
     return (
       activeStatuses.includes(application.status) &&
-      Boolean(opportunity)
+      Boolean(opportunity) &&
+      !isOpportunityCompleted(
+        { endDate: opportunity?.end_date ?? "", registrationDeadline: null },
+        now,
+      )
     );
   });
   const pastRows = allRows.filter((application) => {
@@ -163,31 +179,17 @@ export default async function ApplicationsPage({
 
     return (
       Boolean(opportunity) &&
-      !activeStatuses.includes(application.status) &&
       isOpportunityCompleted(
         { endDate: opportunity?.end_date ?? "", registrationDeadline: null },
         now,
       )
     );
   });
-  const acceptedOpportunityIds = currentRows
-    .filter((application) => {
-      const opportunity = getOpportunity(application);
-      return application.status === "accepted" && opportunity?.type === "camp";
-    })
-    .map((application) => getOpportunity(application)?.id)
-    .filter((opportunityId): opportunityId is string => Boolean(opportunityId));
-  const { data: bookingRows } =
-    acceptedOpportunityIds.length > 0 && user
-      ? await supabase
-          .from("opportunity_slot_bookings")
-          .select(
-            "id,opportunity_id,minutes,is_final,opportunity_time_slots(slot_date,start_time)",
-          )
-          .in("opportunity_id", acceptedOpportunityIds)
-          .eq("user_id", user.id)
-          .eq("is_final", true)
-      : { data: [] };
+  if (bookingResult.error) {
+    console.error("My Flying booking lookup failed", bookingResult.error);
+  }
+
+  const bookingRows = bookingResult.error ? [] : bookingResult.data ?? [];
   const bookingsByOpportunity = groupBookingsByOpportunity(
     (bookingRows ?? []) as UserBookingRow[],
   );
@@ -217,12 +219,8 @@ export default async function ApplicationsPage({
       (!selectedTunnel || tunnel?.id === selectedTunnel)
     );
   });
-  const canCreate =
-    profile?.is_organizer === true ||
-    profile?.wants_to_create_opportunities === true;
-
   return (
-    <AppShell active="applications" canCreate={canCreate} canJoin>
+    <AppShell active="applications" canJoin>
       <div>
         <h1 className="text-2xl font-black tracking-tight sm:text-3xl">My Flights</h1>
       </div>

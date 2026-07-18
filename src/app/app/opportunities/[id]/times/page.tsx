@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { CampApplyPreferencesForm } from "@/components/CampApplyPreferencesForm";
@@ -14,6 +15,7 @@ import {
   isCoachManagedTunnelTimeOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 
@@ -29,6 +31,9 @@ type SlotAvailabilityRow = {
   release_requested_at: string | null;
 };
 
+const slotBookingOpportunitySelect =
+  "id,type,booking_mode,title,coach_id,tunnel_id,start_date,end_date,registration_deadline,tunnel_time_mode,session_start,session_end,price,currency,total_capacity,available_spots,min_minutes_or_hours,description,languages,disciplines,skill_level,status,contact_method,created_by,created_at,updated_at,is_last_minute,tunnel_name,tunnel_country,tunnel_city,coach_name,coach_follow_id,tunnel_region,tunnel_latitude,tunnel_longitude,has_published_timetable";
+
 export default async function SlotBookingPage({
   params,
 }: {
@@ -36,33 +41,43 @@ export default async function SlotBookingPage({
 }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [userResult, opportunityResult] = await Promise.all([
+    getCurrentUser(),
+    supabase
+      .from("published_opportunities_with_context")
+      .select(slotBookingOpportunitySelect)
+      .eq("id", id)
+      .maybeSingle(),
+  ]);
+  const user = userResult.data.user;
 
   if (!user) {
     notFound();
   }
 
-  const [{ data: row }, { data: viewerInterest }] = await Promise.all([
-    supabase
-      .from("published_opportunities_with_context")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle(),
-    supabase
-      .from("opportunity_interests")
-      .select("status,interest_type,self_booking_enabled,tunnel_time_status,tunnel_account_email")
-      .eq("opportunity_id", id)
-      .eq("athlete_id", user.id)
-      .maybeSingle(),
-  ]);
+  const row = opportunityResult.data;
 
   if (!row) {
     notFound();
   }
 
   const opportunity = mapOpportunity(row as HomeFeedRow);
+  const [{ data: viewerInterest }, { data: campPreferenceRows }] = await Promise.all([
+    supabase
+      .from("opportunity_interests")
+      .select("status,interest_type,self_booking_enabled,tunnel_time_status,tunnel_account_email")
+      .eq("opportunity_id", id)
+      .eq("athlete_id", user.id)
+      .maybeSingle(),
+    opportunity.type === "camp"
+      ? supabase
+          .from("camp_day_preferences")
+          .select("day_id,preferred_minutes")
+          .eq("opportunity_id", opportunity.id)
+          .eq("participant_id", user.id)
+          .order("day_id", { ascending: true })
+      : Promise.resolve({ data: [] }),
+  ]);
   const isFull = isOpportunityFull(opportunity);
   const requiresCoachManagedTunnelTime =
     isCoachManagedTunnelTimeOpportunity(opportunity);
@@ -76,47 +91,44 @@ export default async function SlotBookingPage({
     viewerHasTimetableReminder || viewerInterestStatus === "withdrawn"
       ? undefined
       : viewerInterestStatus;
-  const { data: campPreferenceRows } =
-    opportunity.type === "camp" && user
-      ? await supabase
-          .from("camp_day_preferences")
-          .select("day_id,preferred_minutes")
-          .eq("opportunity_id", opportunity.id)
-          .eq("participant_id", user.id)
-          .order("day_id", { ascending: true })
-      : { data: [] };
-  const { count: publishedSlotCount } = await supabase
-    .from("opportunity_time_slots")
-    .select("id", { count: "exact", head: true })
-    .eq("opportunity_id", opportunity.id)
-    .eq("is_published", true);
-  const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
+  const hasPublishedTimetable = opportunity.hasPublishedTimetable === true;
 
-  await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("user_id", user.id)
-    .eq("opportunity_id", opportunity.id)
-    .in("type", [...participantActivityNotificationTypes])
-    .eq("read", false);
+  after(async () => {
+    const { error: markReadError } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", user.id)
+      .eq("opportunity_id", opportunity.id)
+      .in("type", [...participantActivityNotificationTypes])
+      .eq("read", false);
+
+    if (markReadError) {
+      console.error("Slot booking notification read update failed", markReadError);
+    }
+  });
 
   if (opportunity.type === "camp") {
     const shouldShowSelfBookingSlots =
       viewerApplicationStatus === "accepted" &&
       viewerSelfBookingEnabled &&
       hasPublishedTimetable;
-    const { data: bookingRows } = shouldShowSelfBookingSlots
-      ? await supabase
-          .from("opportunity_slot_bookings")
-          .select("slot_id,release_requested_at")
-          .eq("opportunity_id", opportunity.id)
-          .eq("user_id", user.id)
-      : { data: [] };
-    const { data: slotRows, error: slotError } = shouldShowSelfBookingSlots
-      ? await supabase.rpc("get_published_opportunity_slots", {
-          target_opportunity_id: opportunity.id,
-        })
-      : { data: null, error: null };
+    const [bookingResult, slotResult] = shouldShowSelfBookingSlots
+      ? await Promise.all([
+          supabase
+            .from("opportunity_slot_bookings")
+            .select("slot_id,release_requested_at")
+            .eq("opportunity_id", opportunity.id)
+            .eq("user_id", user.id),
+          supabase.rpc("get_published_opportunity_slots", {
+            target_opportunity_id: opportunity.id,
+          }),
+        ])
+      : [
+          { data: [], error: null },
+          { data: null, error: null },
+        ];
+    const { data: bookingRows } = bookingResult;
+    const { data: slotRows, error: slotError } = slotResult;
 
     if (slotError) {
       console.error("Camp self-booking slot lookup failed", slotError);

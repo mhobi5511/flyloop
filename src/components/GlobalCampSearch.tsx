@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import type { Opportunity } from "@/lib/types";
 
@@ -22,6 +28,8 @@ type SearchState = {
   tunnel: string;
 };
 
+const resultPageSize = 20;
+
 export function GlobalCampSearch({
   initialCountry,
   initialMonth,
@@ -37,7 +45,8 @@ export function GlobalCampSearch({
   const [coach, setCoach] = useState(initialCoach);
   const [tunnel, setTunnel] = useState(initialTunnel);
   const [results, setResults] = useState<Opportunity[] | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [visibleResultCount, setVisibleResultCount] = useState(resultPageSize);
+  const [isSearching, startSearch] = useTransition();
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,16 +57,15 @@ export function GlobalCampSearch({
       tunnel: tunnel.trim(),
     };
 
-    setIsSearching(true);
-
-    try {
-      setResults(filterOpportunities(opportunities, nextSearch));
-    } catch (searchError) {
-      console.error("Explore Camps Worldwide search failed", searchError);
-      setResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+    setVisibleResultCount(resultPageSize);
+    startSearch(() => {
+      try {
+        setResults(filterOpportunities(opportunities, nextSearch));
+      } catch (searchError) {
+        console.error("Explore Camps Worldwide search failed", searchError);
+        setResults([]);
+      }
+    });
   }
 
   function clearSearch() {
@@ -66,8 +74,11 @@ export function GlobalCampSearch({
     setCoach("");
     setTunnel("");
     setResults(null);
-    setIsSearching(false);
   }
+
+  const loadMore = useCallback(() => {
+    setVisibleResultCount((current) => current + resultPageSize);
+  }, []);
 
   return (
     <section
@@ -158,35 +169,67 @@ export function GlobalCampSearch({
       ) : null}
 
       {results !== null ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {isSearching ? (
-            <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-              Searching camps...
-            </p>
-          ) : results.length > 0 ? (
-            results.map((opportunity) => (
-              <OpportunityCard
-                key={opportunity.id}
-                opportunity={opportunity}
-                dense
-                discoveryLayout
-                currentUserId={currentUserId}
-                discoveryBadges={getOwnOpportunityBadges(
-                  opportunity,
-                  currentUserId,
-                )}
-              />
-            ))
-          ) : (
-            <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-              No camps found.
-            </p>
-          )}
-        </div>
+        <SearchResults
+          results={results}
+          visibleCount={visibleResultCount}
+          currentUserId={currentUserId}
+          onLoadMore={loadMore}
+        />
       ) : null}
     </section>
   );
 }
+
+const SearchResults = memo(function SearchResults({
+  results,
+  visibleCount,
+  currentUserId,
+  onLoadMore,
+}: {
+  results: Opportunity[];
+  visibleCount: number;
+  currentUserId: string;
+  onLoadMore: () => void;
+}) {
+  if (results.length === 0) {
+    return (
+      <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+        No camps found.
+      </p>
+    );
+  }
+
+  const visibleResults = results.slice(0, visibleCount);
+
+  return (
+    <>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {visibleResults.map((opportunity) => (
+          <OpportunityCard
+            key={opportunity.id}
+            opportunity={opportunity}
+            dense
+            discoveryLayout
+            currentUserId={currentUserId}
+            discoveryBadges={getOwnOpportunityBadges(
+              opportunity,
+              currentUserId,
+            )}
+          />
+        ))}
+      </div>
+      {visibleResults.length < results.length ? (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          className="mt-4 h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-sky-700 hover:bg-sky-50"
+        >
+          Show more ({results.length - visibleResults.length} remaining)
+        </button>
+      ) : null}
+    </>
+  );
+});
 
 function normalize(value?: string) {
   return (value ?? "").trim().toLowerCase();

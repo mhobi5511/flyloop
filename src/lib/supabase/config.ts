@@ -4,9 +4,6 @@ export function getSupabaseConfigOrThrow() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
-  console.log("SUPABASE URL:", url)
-  console.log("SUPABASE KEY:", anonKey)
-
   if (!url || !anonKey) {
     throw new Error(
       "Supabase is not configured. NEXT_PUBLIC_SUPABASE_URL and KEY missing."

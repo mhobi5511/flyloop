@@ -25,7 +25,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
             alt="Flyloop"
             width={40}
             height={40}
-            priority
+            preload
             className="size-9 rounded-xl shadow-sm sm:size-10"
           />
           <span className="text-base sm:text-lg">Flyloop</span>

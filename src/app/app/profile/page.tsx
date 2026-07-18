@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { ProfileForm } from "@/components/ProfileForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 type TunnelOption = {
   id: string;
@@ -13,7 +14,7 @@ export default async function ProfilePage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
   const [{ data: profile }, { data: tunnels }] = await Promise.all([
     supabase
       .from("profiles")

@@ -39,6 +39,7 @@ import {
 } from "@/lib/opportunities";
 import { phoneToWhatsAppPath } from "@/lib/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import {
   formatTimetableDate,
   formatTimetableMoney,
@@ -151,7 +152,7 @@ export default async function OrganizerOpportunityPage({
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
   const [
     { data: profile },
     { data: opportunity },

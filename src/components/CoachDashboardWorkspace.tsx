@@ -1,9 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -59,91 +59,22 @@ import {
   formatCampPreferenceMinutes,
 } from "@/lib/camp-days";
 import {
-  assignParticipantSlotBooking,
-  releaseParticipantSlotBooking,
   setCampParticipantSelfBooking,
 } from "@/app/app/organizer/opportunities/actions";
-import type { FlyloopProfileStats } from "@/lib/flyloop-history";
+import {
+  formatInterestStatusLabel,
+  formatLongDay,
+  getDateRange,
+  type CampPreference,
+  type CampWorkspace,
+  type Participant,
+} from "@/components/coach-dashboard-shared";
 import type {
-  BookingMode,
   InterestStatus,
-  OpportunityStatus,
-  OpportunityType,
 } from "@/lib/types";
 
-type Participant = {
-  id: string;
-  interestId: string;
-  userId: string;
-  name: string;
-  email: string;
-  phone: string;
-  country: string;
-  city: string | null;
-  bio: string | null;
-  instagramHandle: string | null;
-  websiteUrl: string | null;
-  youtubeUrl: string | null;
-  homeTunnelName: string | null;
-  homeTunnelCity: string | null;
-  homeTunnelCountry: string | null;
-  profileImageUrl: string;
-  status: InterestStatus;
-  createdAt: string;
-  removalRequestedAt: string | null;
-  tunnelTimeStatus: string | null;
-  tunnelAccountEmail: string | null;
-  selfBookingEnabled: boolean;
-  profileStats: FlyloopProfileStats | null;
-};
-
-type CampWorkspace = {
-  id: string;
-  title: string;
-  type: OpportunityType;
-  bookingMode: BookingMode;
-  status: OpportunityStatus;
-  startDate: string;
-  endDate: string;
-  registrationDeadline: string | null;
-  tunnelTimeMode:
-    | "athletes_may_use_own_tunnel_time"
-    | "tunnel_time_must_be_purchased_through_coach";
-  sessionStart: string | null;
-  sessionEnd: string | null;
-  totalCapacity: number;
-  availableSpots: number;
-  price: number;
-  currency: string;
-  priceAppliesToMinutes: string;
-  description: string;
-  tunnelId: string;
-  tunnelName: string;
-  tunnelLocation: string;
-  tunnelSharedAt: string | null;
-  dateLabel: string;
-  participants: Participant[];
-  preferences: CampPreference[];
-  timetableSlots: TimetableSlot[];
-  summary: {
-    totalSlots: number;
-    bookedSlots: number;
-    openSlots: number;
-    totalTimetableMinutes: number;
-    totalBookedMinutes: number;
-    totalAvailableMinutes: number;
-    estimatedRevenue: number;
-  };
-};
-
-type CampPreference = {
-  opportunityId: string;
-  participantId: string;
-  dayId: number;
-  preferredMinutes: number;
-};
-
 type TabletPanel = "participants" | "participant" | null;
+type WorkspaceViewport = "mobile" | "tablet" | "desktop";
 type AttentionItem = {
   label: string;
   tone: "amber" | "slate";
@@ -177,11 +108,49 @@ const participantColors = [
   { bg: "#c2410c", soft: "#ffedd5", text: "#9a3412" },
 ];
 
+const emptyParticipantColorMap = new Map<
+  string,
+  (typeof participantColors)[number]
+>();
+const emptyAssignableParticipants: AssignSlotParticipant[] = [];
+
+const ParticipantProfileModal = dynamic(() =>
+  import("@/components/ParticipantProfileModal").then(
+    (module) => module.ParticipantProfileModal,
+  ),
+  { loading: () => <LazyModalFallback label="Loading participant profile..." /> },
+);
+const MassBookingModal = dynamic(
+  () =>
+    import("@/components/MassBookingModal").then(
+      (module) => module.MassBookingModal,
+    ),
+  { loading: () => <LazyModalFallback label="Loading mass booking..." /> },
+);
+
+function LazyModalFallback({ label }: { label: string }) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/50 p-4"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="inline-flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-xl">
+        <span
+          className="size-4 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600"
+          aria-hidden="true"
+        />
+        {label}
+      </div>
+    </div>
+  );
+}
+
 export function CoachDashboardWorkspace({
   selectedCampId,
   camps,
 }: CoachDashboardWorkspaceProps) {
-  const router = useRouter();
+  const workspaceViewport = useWorkspaceViewport();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<"share" | null>(null);
   const [tabletPanel, setTabletPanel] = useState<TabletPanel>(null);
@@ -190,45 +159,114 @@ export function CoachDashboardWorkspace({
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [profileModalParticipantId, setProfileModalParticipantId] = useState("");
   const [massBookingParticipantId, setMassBookingParticipantId] = useState("");
-  const activeCamp = camps.find((camp) => camp.id === selectedCampId) ?? camps[0];
+  const [selfBookingOverrides, setSelfBookingOverrides] = useState<
+    Record<string, boolean>
+  >({});
+  const [selfBookingPendingIds, setSelfBookingPendingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [selfBookingError, setSelfBookingError] = useState("");
+  const sourceActiveCamp = useMemo(
+    () => camps.find((camp) => camp.id === selectedCampId) ?? camps[0],
+    [camps, selectedCampId],
+  );
+  const activeCamp = useMemo(() => {
+    if (!sourceActiveCamp || Object.keys(selfBookingOverrides).length === 0) {
+      return sourceActiveCamp;
+    }
+
+    return {
+      ...sourceActiveCamp,
+      participants: sourceActiveCamp.participants.map((participant) =>
+        Object.prototype.hasOwnProperty.call(selfBookingOverrides, participant.id)
+          ? {
+              ...participant,
+              selfBookingEnabled: selfBookingOverrides[participant.id],
+            }
+          : participant,
+      ),
+    };
+  }, [selfBookingOverrides, sourceActiveCamp]);
+  const workspaceIndexes = useMemo(
+    () => (activeCamp ? buildWorkspaceIndexes(activeCamp) : null),
+    [activeCamp],
+  );
   const participant =
-    activeCamp?.participants.find((item) => item.id === selectedParticipantId) ??
+    workspaceIndexes?.participantsById.get(selectedParticipantId) ??
     null;
   const profileModalParticipant =
-    activeCamp?.participants.find((item) => item.id === profileModalParticipantId) ?? null;
+    workspaceIndexes?.participantsById.get(profileModalParticipantId) ?? null;
   const massBookingParticipant =
-    activeCamp?.participants.find((item) => item.id === massBookingParticipantId) ?? null;
-  const publicUrl = activeCamp ? getPublicOpportunityUrl(activeCamp.id) : "";
-  const shareText = activeCamp
-    ? getOpportunityShareText(
-        {
-          id: activeCamp.id,
-          type: activeCamp.type,
-          bookingMode: activeCamp.bookingMode,
-          title: activeCamp.title,
-          tunnelId: activeCamp.tunnelId,
-          tunnelName: activeCamp.tunnelName,
-          startDate: activeCamp.startDate,
-          endDate: activeCamp.endDate,
-          registrationDeadline: activeCamp.registrationDeadline,
-          price: activeCamp.price,
-          currency: activeCamp.currency,
-          totalCapacity: activeCamp.totalCapacity,
-          availableSpots: activeCamp.availableSpots,
-          sessionStart: activeCamp.sessionStart,
-          sessionEnd: activeCamp.sessionEnd,
-          description: activeCamp.description,
-          languages: [],
-          disciplines: [],
-          skillLevel: null,
-          status: activeCamp.status,
-          contactMethod: "whatsapp",
-          createdBy: "",
-        },
-        publicUrl,
-      )
-    : "";
+    workspaceIndexes?.participantsById.get(massBookingParticipantId) ?? null;
+  const publicUrl = useMemo(
+    () => (activeCamp ? getPublicOpportunityUrl(activeCamp.id) : ""),
+    [activeCamp],
+  );
+  const shareText = useMemo(
+    () =>
+      activeCamp
+        ? getOpportunityShareText(
+            {
+              id: activeCamp.id,
+              type: activeCamp.type,
+              bookingMode: activeCamp.bookingMode,
+              title: activeCamp.title,
+              tunnelId: activeCamp.tunnelId,
+              tunnelName: activeCamp.tunnelName,
+              startDate: activeCamp.startDate,
+              endDate: activeCamp.endDate,
+              registrationDeadline: activeCamp.registrationDeadline,
+              price: activeCamp.price,
+              currency: activeCamp.currency,
+              totalCapacity: activeCamp.totalCapacity,
+              availableSpots: activeCamp.availableSpots,
+              sessionStart: activeCamp.sessionStart,
+              sessionEnd: activeCamp.sessionEnd,
+              description: activeCamp.description,
+              languages: [],
+              disciplines: [],
+              skillLevel: null,
+              status: activeCamp.status,
+              contactMethod: "whatsapp",
+              createdBy: "",
+            },
+            publicUrl,
+          )
+        : "",
+    [activeCamp, publicUrl],
+  );
+  const visibleDays = useMemo(
+    () => (activeCamp ? getVisibleTimetableDays(activeCamp, activeCamp.timetableSlots) : []),
+    [activeCamp],
+  );
+  const attention = useMemo(
+    () => (activeCamp ? getAttentionItems(activeCamp) : []),
+    [activeCamp],
+  );
+  const unpublishedChangeCount = useMemo(
+    () => (activeCamp ? getUnpublishedChangeCount(activeCamp.timetableSlots) : 0),
+    [activeCamp],
+  );
+  const hasPublishedTimetable = useMemo(
+    () => activeCamp?.timetableSlots.some((slot) => slot.isPublished === true) ?? false,
+    [activeCamp],
+  );
+  const huckjamOverview = useMemo(
+    () => (activeCamp?.type === "huck_jam" ? getHuckjamOverview(activeCamp) : null),
+    [activeCamp],
+  );
+  const participantColorMap =
+    workspaceIndexes?.participantColorMap ?? emptyParticipantColorMap;
+  const assignableParticipantsBySlotId =
+    workspaceIndexes?.assignableParticipantsBySlotId;
   const tunnelDashboardShared = Boolean(activeCamp?.tunnelSharedAt);
+  const hasUnpublishedChanges = unpublishedChangeCount > 0;
+  const showTimetableStatus = hasPublishedTimetable || hasUnpublishedChanges;
+  const isHuckJam = activeCamp?.type === "huck_jam";
+  const renderDesktopWorkspace =
+    workspaceViewport === null || workspaceViewport === "desktop";
+  const renderTabletWorkspace =
+    workspaceViewport === null || workspaceViewport === "tablet";
 
   function focusApplicants() {
     setSelectedParticipantId("");
@@ -277,7 +315,6 @@ export function CoachDashboardWorkspace({
     );
   }
 
-  const visibleDays = getVisibleTimetableDays(activeCamp, activeCamp.timetableSlots);
   const desktopDayCount = isSidebarCollapsed ? 5 : 4;
   const clampedDesktopDayStart = Math.min(
     desktopDayStart,
@@ -289,16 +326,6 @@ export function CoachDashboardWorkspace({
   );
   const canPageBack = clampedDesktopDayStart > 0;
   const canPageForward = clampedDesktopDayStart + desktopDayCount < visibleDays.length;
-  const participantColorMap = buildParticipantColorMap(activeCamp.participants);
-  const attention = getAttentionItems(activeCamp);
-  const unpublishedChangeCount = getUnpublishedChangeCount(activeCamp.timetableSlots);
-  const hasUnpublishedChanges = unpublishedChangeCount > 0;
-  const hasPublishedTimetable = activeCamp.timetableSlots.some(
-    (slot) => slot.isPublished === true,
-  );
-  const showTimetableStatus = hasPublishedTimetable || hasUnpublishedChanges;
-  const isHuckJam = activeCamp.type === "huck_jam";
-
   async function toggleParticipantSelfBooking(
     participantId: string,
     nextEnabled: boolean,
@@ -307,20 +334,49 @@ export function CoachDashboardWorkspace({
       (item) => item.id === participantId,
     );
 
-    if (!targetParticipant || targetParticipant.selfBookingEnabled === nextEnabled) {
+    if (
+      !targetParticipant ||
+      targetParticipant.selfBookingEnabled === nextEnabled ||
+      selfBookingPendingIds.has(participantId)
+    ) {
       return;
     }
 
-    const result = await setCampParticipantSelfBooking(
-      targetParticipant.interestId,
-      nextEnabled,
-    );
+    const previousEnabled = targetParticipant.selfBookingEnabled;
+    setSelfBookingError("");
+    setSelfBookingOverrides((current) => ({
+      ...current,
+      [participantId]: nextEnabled,
+    }));
+    setSelfBookingPendingIds((current) => new Set(current).add(participantId));
 
-    if (!result.ok) {
-      return;
+    try {
+      const result = await setCampParticipantSelfBooking(
+        targetParticipant.interestId,
+        nextEnabled,
+      );
+
+      if (!result.ok) {
+        setSelfBookingOverrides((current) => ({
+          ...current,
+          [participantId]: previousEnabled,
+        }));
+        setSelfBookingError(result.message);
+      }
+    } catch (toggleError) {
+      console.error("Self-booking update failed", toggleError);
+      setSelfBookingOverrides((current) => ({
+        ...current,
+        [participantId]: previousEnabled,
+      }));
+      setSelfBookingError("Could not update self-booking.");
+    } finally {
+      setSelfBookingPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(participantId);
+        return next;
+      });
     }
-
-    router.refresh();
   }
 
   function openMassBooking(participantId: string) {
@@ -474,6 +530,7 @@ export function CoachDashboardWorkspace({
         </nav>
 
       <div id="coach-live-timetable" className="hidden md:block" />
+      {renderDesktopWorkspace ? (
       <main className="hidden gap-4 xl:grid">
         <section
           className={`grid items-start gap-4 ${
@@ -509,13 +566,17 @@ export function CoachDashboardWorkspace({
               </div>
             ) : (
               <>
-                {isHuckJam ? <HuckjamSidebarSummary camp={activeCamp} /> : null}
+                {isHuckJam ? (
+                  <HuckjamSidebarSummary overview={huckjamOverview!} />
+                ) : null}
                 <ParticipantColumns
                   participants={activeCamp.participants}
                   selectedParticipantId={selectedParticipantId}
                   onSelectParticipant={setSelectedParticipantId}
                   onSelectApplicants={focusApplicants}
                   onToggleSelfBooking={toggleParticipantSelfBooking}
+                  selfBookingPendingIds={selfBookingPendingIds}
+                  selfBookingError={selfBookingError}
                   onOpenMassBooking={openMassBooking}
                   isCamp={activeCamp.type === "camp"}
                 />
@@ -540,7 +601,7 @@ export function CoachDashboardWorkspace({
 
           <div className="grid min-w-0 gap-4">
             {isHuckJam ? (
-              <HuckjamOverviewPanel camp={activeCamp} />
+              <HuckjamOverviewPanel camp={activeCamp} overview={huckjamOverview!} />
             ) : (
           <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 bg-white px-4 py-4">
@@ -739,15 +800,10 @@ export function CoachDashboardWorkspace({
                                     <AssignSlotButton
                                       opportunityId={activeCamp.id}
                                       slotId={slot.id}
-                                      participants={getAssignableParticipantsForDay(
-                                        activeCamp,
-                                        slot.slotDate,
-                                      ).filter(
-                                        (item) =>
-                                          !slot.bookings.some(
-                                            (booking) => booking.userId === item.id,
-                                          ),
-                                      )}
+                                      participants={
+                                        assignableParticipantsBySlotId?.get(slot.id) ??
+                                        emptyAssignableParticipants
+                                      }
                                     />
                                   </div>
                                 ))}
@@ -772,10 +828,12 @@ export function CoachDashboardWorkspace({
           </div>
         </section>
       </main>
+      ) : null}
 
+      {renderTabletWorkspace ? (
       <main className="hidden gap-3 md:grid xl:hidden">
         {isHuckJam ? (
-          <HuckjamOverviewPanel camp={activeCamp} compact />
+          <HuckjamOverviewPanel camp={activeCamp} overview={huckjamOverview!} compact />
         ) : (
           <>
             <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -893,9 +951,10 @@ export function CoachDashboardWorkspace({
                                         key={booking.id}
                                         type="button"
                                         onClick={() => {
-                                          const match = activeCamp.participants.find(
-                                            (item) => item.userId === booking.userId,
-                                          );
+                                          const match =
+                                            workspaceIndexes?.participantsByUserId.get(
+                                              booking.userId,
+                                            );
                                           if (match) {
                                             setSelectedParticipantId(match.id);
                                             setTabletPanel("participant");
@@ -937,15 +996,10 @@ export function CoachDashboardWorkspace({
                                       <AssignSlotButton
                                         opportunityId={activeCamp.id}
                                         slotId={slot.id}
-                                        participants={getAssignableParticipantsForDay(
-                                          activeCamp,
-                                          slot.slotDate,
-                                        ).filter(
-                                          (item) =>
-                                            !slot.bookings.some(
-                                              (booking) => booking.userId === item.id,
-                                            ),
-                                        )}
+                                        participants={
+                                          assignableParticipantsBySlotId?.get(slot.id) ??
+                                          emptyAssignableParticipants
+                                        }
                                       />
                                     </div>
                                   ))}
@@ -973,6 +1027,7 @@ export function CoachDashboardWorkspace({
           </>
         )}
       </main>
+      ) : null}
 
       {tabletPanel ? (
         <TabletSlideOver
@@ -992,7 +1047,7 @@ export function CoachDashboardWorkspace({
           ) : (
             <div className="grid gap-3">
               {isHuckJam ? (
-                <HuckjamSidebarSummary camp={activeCamp} />
+                <HuckjamSidebarSummary overview={huckjamOverview!} />
               ) : (
                 <AttentionPanel items={attention} onAction={handleAttentionClick} />
               )}
@@ -1005,6 +1060,8 @@ export function CoachDashboardWorkspace({
                 }}
                 onSelectApplicants={focusApplicants}
                 onToggleSelfBooking={toggleParticipantSelfBooking}
+                selfBookingPendingIds={selfBookingPendingIds}
+                selfBookingError={selfBookingError}
                 onOpenMassBooking={openMassBooking}
                 isCamp={activeCamp.type === "camp"}
               />
@@ -1150,639 +1207,6 @@ function CenteredModal({
   );
 }
 
-function ParticipantProfileModal({
-  participant,
-  onClose,
-}: {
-  participant: Participant;
-  onClose: () => void;
-}) {
-  return typeof document !== "undefined"
-    ? createPortal(
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={onClose}
-        >
-          <section
-            className="grid max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
-              <div>
-                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-sky-700">
-                  Participant Profile
-                </p>
-                <h2 className="mt-1 text-lg font-black tracking-tight text-slate-950">
-                  {participant.name}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500"
-                aria-label="Close profile"
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <div className="grid gap-5 overflow-y-auto p-4 sm:p-6">
-              <div className="flex flex-wrap items-start gap-4 rounded-3xl bg-slate-50 p-4">
-                <Avatar
-                  name={participant.name}
-                  imageUrl={participant.profileImageUrl}
-                  size="lg"
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-2xl font-black tracking-tight text-slate-950">
-                    {participant.name}
-                  </h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-600">
-                    {participant.country || "No country provided"}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-700">
-                    {participant.instagramHandle ? (
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                        Instagram: @{cleanHandle(participant.instagramHandle)}
-                      </span>
-                    ) : null}
-                    {participant.phone ? (
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                        Phone: {participant.phone}
-                      </span>
-                    ) : null}
-                    {participant.city ? (
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                        City: {participant.city}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-                <div className="grid gap-5">
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                      Bio
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">
-                      {participant.bio?.trim() || "This participant has not added a bio yet."}
-                    </p>
-                  </section>
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                      Stats
-                    </h3>
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <CompactMetric
-                        label="Flyloop Minutes"
-                        value={String(participant.profileStats?.flyloopMinutes ?? 0)}
-                      />
-                      <CompactMetric
-                        label="Flyloop Hours"
-                        value={String(participant.profileStats?.flyloopHours ?? 0)}
-                      />
-                      <CompactMetric
-                        label="Camps Attended"
-                        value={String(participant.profileStats?.campsAttended ?? 0)}
-                      />
-                      <CompactMetric
-                        label="Huck Jams"
-                        value={String(participant.profileStats?.huckJamsAttended ?? 0)}
-                      />
-                    </div>
-                  </section>
-                </div>
-
-                <div className="grid gap-5">
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                      Application Information
-                    </h3>
-                    <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
-                      <p>Status: {formatInterestStatusLabel(participant.status)}</p>
-                      <p>
-                        Self Booking: {participant.selfBookingEnabled ? "On" : "Off"}
-                      </p>
-                      <p>
-                        Tunnel Time:{" "}
-                        {participant.tunnelTimeStatus === "owns_tunnel_time"
-                          ? "Available"
-                          : participant.tunnelTimeStatus === "needs_tunnel_time"
-                            ? "Not available"
-                            : "Not provided"}
-                      </p>
-                      <p>
-                        Tunnel Account Email: {participant.tunnelAccountEmail || "Not provided"}
-                      </p>
-                    </div>
-                  </section>
-
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                      Links
-                    </h3>
-                    <div className="mt-3 grid gap-2">
-                      {participant.instagramHandle ? (
-                        <a
-                          href={`https://instagram.com/${cleanHandle(participant.instagramHandle)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
-                        >
-                          Instagram
-                        </a>
-                      ) : null}
-                      {participant.websiteUrl ? (
-                        <a
-                          href={participant.websiteUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
-                        >
-                          Website
-                        </a>
-                      ) : null}
-                      {participant.youtubeUrl ? (
-                        <a
-                          href={participant.youtubeUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50"
-                        >
-                          YouTube
-                        </a>
-                      ) : null}
-                    </div>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>,
-        document.body,
-      )
-    : null;
-}
-
-function MassBookingModal({
-  participant,
-  camp,
-  onClose,
-}: {
-  participant: Participant;
-  camp: CampWorkspace;
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const participantBookings = useMemo(
-    () =>
-      camp.timetableSlots.flatMap((slot) =>
-        slot.bookings
-          .filter((booking) => booking.userId === participant.userId)
-          .map((booking) => ({
-            bookingId: booking.id,
-            slotId: slot.id,
-          })),
-      ),
-    [camp.timetableSlots, participant.userId],
-  );
-  const participantBookingMap = useMemo(
-    () => new Map(participantBookings.map((booking) => [booking.slotId, booking.bookingId])),
-    [participantBookings],
-  );
-  const campDays = useMemo(
-    () =>
-      getDateRange(camp.startDate, camp.endDate).map((date, index) => {
-        const dayId = index + 1;
-        const preference = camp.preferences.find(
-          (item) => item.participantId === participant.userId && item.dayId === dayId,
-        );
-        const slots = camp.timetableSlots
-          .filter((slot) => slot.slotDate === date)
-          .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-        return {
-          date,
-          dayId,
-          slots,
-          requestedMinutes: preference?.preferredMinutes ?? 0,
-        };
-      }),
-    [camp.endDate, camp.preferences, camp.startDate, camp.timetableSlots, participant.userId],
-  );
-  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(() =>
-    participantBookings.map((booking) => booking.slotId),
-  );
-  const [dayWindowStart, setDayWindowStart] = useState(0);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [isPending, startTransition] = useTransition();
-  const visibleDayCount = 3;
-
-  const selectedSlotSet = useMemo(() => new Set(selectedSlotIds), [selectedSlotIds]);
-  const dayColumns = useMemo(
-    () =>
-      campDays.map((day) => {
-        const assignedMinutes = day.slots
-          .filter((slot) => selectedSlotSet.has(slot.id))
-          .reduce((total, slot) => total + slot.durationMinutes, 0);
-        const status =
-          day.requestedMinutes > 0
-            ? assignedMinutes === day.requestedMinutes
-              ? 'Fully Matched'
-              : assignedMinutes < day.requestedMinutes
-                ? `${day.requestedMinutes - assignedMinutes} min missing`
-                : `${assignedMinutes - day.requestedMinutes} min extra`
-            : assignedMinutes > 0
-              ? `${assignedMinutes} min assigned`
-              : 'No request';
-
-        return {
-          ...day,
-          assignedMinutes,
-          isMatched: day.requestedMinutes > 0 && assignedMinutes === day.requestedMinutes,
-          status,
-        };
-      }),
-    [campDays, selectedSlotSet],
-  );
-  const summaryTotals = useMemo(() => {
-    const requestedMinutes = dayColumns.reduce((total, day) => total + day.requestedMinutes, 0);
-    const assignedMinutes = dayColumns.reduce((total, day) => total + day.assignedMinutes, 0);
-    const requestedDays = dayColumns.filter((day) => day.requestedMinutes > 0).length;
-    const matchedDays = dayColumns.filter((day) => day.isMatched).length;
-    const difference = assignedMinutes - requestedMinutes;
-    const progressPercent =
-      requestedMinutes > 0 ? Math.round((assignedMinutes / requestedMinutes) * 100) : 0;
-
-    return {
-      requestedMinutes,
-      assignedMinutes,
-      requestedDays,
-      matchedDays,
-      difference,
-      progressPercent,
-    };
-  }, [dayColumns]);
-  const maxDayWindowStart = Math.max(dayColumns.length - visibleDayCount, 0);
-  const clampedDayWindowStart = Math.min(dayWindowStart, maxDayWindowStart);
-  const visibleDays = dayColumns.slice(clampedDayWindowStart, clampedDayWindowStart + visibleDayCount);
-  const canPageBack = clampedDayWindowStart > 0;
-  const canPageForward = clampedDayWindowStart < maxDayWindowStart;
-
-  function toggleSlot(slotId: string, isUnavailable: boolean) {
-    if (isUnavailable) {
-      return;
-    }
-
-    setSelectedSlotIds((current) =>
-      current.includes(slotId)
-        ? current.filter((value) => value !== slotId)
-        : [...current, slotId],
-    );
-  }
-
-  function moveDayWindow(direction: number) {
-    setDayWindowStart((current) => {
-      const next = current + direction * visibleDayCount;
-      return Math.min(Math.max(next, 0), maxDayWindowStart);
-    });
-  }
-
-  function saveAsDraft() {
-    setError('');
-    setMessage('');
-
-    startTransition(async () => {
-      const nextSelectedIds = new Set(selectedSlotIds);
-      const removals = participantBookings.filter((booking) => !nextSelectedIds.has(booking.slotId));
-      const additions = selectedSlotIds.filter((slotId) => !participantBookingMap.has(slotId));
-
-      try {
-        for (const booking of removals) {
-          const result = await releaseParticipantSlotBooking(camp.id, booking.bookingId);
-          if (!result.ok) {
-            setError(result.message);
-            return;
-          }
-        }
-
-        for (const slotId of additions) {
-          const result = await assignParticipantSlotBooking(camp.id, slotId, participant.userId);
-          if (!result.ok) {
-            setError(result.message);
-            return;
-          }
-        }
-      } catch (assignmentError) {
-        console.error('Mass booking sync failed', assignmentError);
-        setError('Could not save draft bookings.');
-        return;
-      }
-
-      setMessage('Draft bookings saved.');
-      router.refresh();
-      onClose();
-    });
-  }
-
-  return typeof document !== 'undefined'
-    ? createPortal(
-        <div
-          className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/50 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={onClose}
-        >
-          <section
-            className="grid max-h-[calc(100dvh-2rem)] w-full max-w-7xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
-              <div className="min-w-0">
-                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-sky-700">
-                  Mass Booking
-                </p>
-                <h2 className="mt-1 truncate text-lg font-black tracking-tight text-slate-950">
-                  {participant.name}
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => moveDayWindow(-1)}
-                  disabled={!canPageBack}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
-                >
-                  <ChevronLeft size={14} />
-                  Previous Days
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveDayWindow(1)}
-                  disabled={!canPageForward}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
-                >
-                  Next Days
-                  <ChevronRight size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500"
-                  aria-label="Close mass booking"
-                >
-                  <X size={17} />
-                </button>
-              </div>
-            </div>
-
-            <div className="grid min-h-0 gap-4 overflow-y-auto p-4 sm:p-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
-              <aside className="grid content-start gap-3">
-                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                    Athlete
-                  </h3>
-                  <div className="mt-3 flex items-center gap-3">
-                    <Avatar
-                      name={participant.name}
-                      imageUrl={participant.profileImageUrl}
-                      size="sm"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-950">{participant.name}</p>
-                      <p className="text-xs font-semibold text-slate-500">Draft bookings only</p>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                    Summary
-                  </h3>
-                  <div className="mt-3 grid gap-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
-                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
-                          Requested Time
-                        </p>
-                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
-                          {summaryTotals.requestedMinutes} min
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
-                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
-                          Assigned Time
-                        </p>
-                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
-                          {summaryTotals.assignedMinutes} min
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
-                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
-                          Progress
-                        </p>
-                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
-                          {summaryTotals.progressPercent}%
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-white bg-white px-3 py-2">
-                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
-                          Days Matched
-                        </p>
-                        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">
-                          {summaryTotals.matchedDays} / {summaryTotals.requestedDays}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white bg-white px-3 py-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">
-                          Progress Bar
-                        </p>
-                        <p className="text-xs font-black text-slate-500">
-                          {summaryTotals.progressPercent >= 100
-                            ? 'Target reached'
-                            : `${Math.max(0, 100 - summaryTotals.progressPercent)}% remaining`}
-                        </p>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={`h-full rounded-full ${
-                            summaryTotals.difference === 0
-                              ? 'bg-emerald-500'
-                              : summaryTotals.difference < 0
-                                ? 'bg-amber-500'
-                                : 'bg-sky-600'
-                          }`}
-                          style={{ width: `${Math.min(summaryTotals.progressPercent, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <p className="rounded-2xl border border-white bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                      {summaryTotals.difference === 0
-                        ? 'Fully matched'
-                        : summaryTotals.difference > 0
-                          ? `${summaryTotals.difference} min extra`
-                          : `${Math.abs(summaryTotals.difference)} min missing`}
-                    </p>
-                  </div>
-                </section>
-              </aside>
-
-              <section className="min-h-0">
-                <div className="flex items-end justify-between gap-3 pb-2">
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
-                      Assigned Days
-                    </h3>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">
-                      Showing days {clampedDayWindowStart + 1}
-                      {visibleDays.length > 1 ? `-${clampedDayWindowStart + visibleDays.length}` : ''}
-                      {' '}of {dayColumns.length}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {visibleDays.map((day) => (
-                    <article
-                      key={day.date}
-                      className={`rounded-2xl border p-4 ${
-                        day.requestedMinutes > 0
-                          ? 'border-sky-200 bg-sky-50/60'
-                          : 'border-slate-200 bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-950">
-                            {formatLongDay(day.date)}
-                          </h4>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
-                            Requested {day.requestedMinutes} min
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500">
-                          {day.slots.filter((slot) => selectedSlotSet.has(slot.id)).length} selected
-                        </span>
-                      </div>
-
-                      <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
-                        <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
-                          <span>Assigned</span>
-                          <span className="font-black text-slate-950">{day.assignedMinutes} min</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
-                          <span>Status</span>
-                          <span
-                            className={`font-black ${
-                              day.isMatched
-                                ? 'text-emerald-700'
-                                : day.requestedMinutes > day.assignedMinutes
-                                  ? 'text-amber-700'
-                                  : day.requestedMinutes < day.assignedMinutes
-                                    ? 'text-sky-700'
-                                    : 'text-slate-600'
-                            }`}
-                          >
-                            {day.status}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid gap-2">
-                        {day.slots.map((slot) => {
-                          const hasOtherAthleteBooking = slot.bookings.some(
-                            (booking) => booking.userId !== participant.userId,
-                          );
-                          const isAssigned = selectedSlotSet.has(slot.id);
-                          const isUnavailable = !isAssigned && hasOtherAthleteBooking;
-
-                          return (
-                            <button
-                              key={slot.id}
-                              type="button"
-                              onClick={() => toggleSlot(slot.id, isUnavailable)}
-                              className={`flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition ${
-                                isAssigned
-                                  ? 'border-sky-300 bg-sky-50 text-sky-900 shadow-sm'
-                                  : isUnavailable
-                                    ? 'border-slate-200 bg-slate-200 text-slate-500'
-                                    : 'border-transparent bg-white text-slate-700 hover:border-sky-200 hover:bg-slate-50'
-                              }`}
-                              disabled={isPending || isUnavailable}
-                            >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-black text-slate-950">
-                                {formatTimetableTime(slot.startTime)}
-                              </p>
-                              <p className="text-xs font-bold text-slate-500">
-                                {slot.durationMinutes} min
-                              </p>
-                            </div>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] ${
-                                  isAssigned
-                                    ? 'bg-sky-600 text-white'
-                                    : isUnavailable
-                                      ? 'bg-white text-slate-500'
-                                      : 'bg-slate-100 text-slate-500'
-                                }`}
-                              >
-                                {isAssigned ? 'Assigned' : isUnavailable ? 'Unavailable' : 'Available'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            {error ? (
-              <p className="mx-4 mb-0 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 sm:mx-6">
-                {error}
-              </p>
-            ) : null}
-            {message ? (
-              <p className="mx-4 mb-0 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 sm:mx-6">
-                {message}
-              </p>
-            ) : null}
-
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-4 sm:px-6">
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={saveAsDraft}
-                disabled={isPending}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
-              >
-                <Save size={16} />
-                {isPending ? 'Saving...' : 'Save As Draft'}
-              </button>
-            </div>
-          </section>
-        </div>,
-        document.body,
-      )
-    : null;
-}
-
 function UtilityCard({
   tone,
   icon,
@@ -1916,6 +1340,8 @@ function ParticipantColumns({
   onSelectParticipant,
   onSelectApplicants,
   onToggleSelfBooking,
+  selfBookingPendingIds,
+  selfBookingError,
   onOpenMassBooking,
   isCamp,
 }: {
@@ -1924,6 +1350,8 @@ function ParticipantColumns({
   onSelectParticipant: (id: string) => void;
   onSelectApplicants: () => void;
   onToggleSelfBooking: (participantId: string, nextEnabled: boolean) => void;
+  selfBookingPendingIds: Set<string>;
+  selfBookingError: string;
   onOpenMassBooking: (participantId: string) => void;
   isCamp: boolean;
 }) {
@@ -1952,6 +1380,11 @@ function ParticipantColumns({
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      {selfBookingError ? (
+        <p className="mb-3 rounded-xl bg-rose-50 p-2 text-xs font-semibold text-rose-700">
+          {selfBookingError}
+        </p>
+      ) : null}
       <div className="grid gap-3">
         {statusColumns.map((column) => {
           return (
@@ -2015,6 +1448,7 @@ function ParticipantColumns({
                           {isCamp ? (
                             <button
                               type="button"
+                              disabled={selfBookingPendingIds.has(participant.id)}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 onToggleSelfBooking(
@@ -2022,7 +1456,7 @@ function ParticipantColumns({
                                   !participant.selfBookingEnabled,
                                 );
                               }}
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] transition ${
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] transition disabled:cursor-wait disabled:opacity-60 ${
                                 participant.selfBookingEnabled
                                   ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
                                   : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
@@ -2403,7 +1837,6 @@ function ParticipantPanel({
   onClear: () => void;
   onOpenProfile: () => void;
 }) {
-  const router = useRouter();
   const [selfBookingEnabled, setSelfBookingEnabled] = useState(
     participant.selfBookingEnabled,
   );
@@ -2436,21 +1869,28 @@ function ParticipantPanel({
 
     setToggleMessage("");
     setToggleError("");
+    const previousEnabled = selfBookingEnabled;
+    setSelfBookingEnabled(nextEnabled);
 
     startToggleTransition(async () => {
-      const result = await setCampParticipantSelfBooking(
-        participant.interestId,
-        nextEnabled,
-      );
+      try {
+        const result = await setCampParticipantSelfBooking(
+          participant.interestId,
+          nextEnabled,
+        );
 
-      if (!result.ok) {
-        setToggleError(result.message);
-        return;
+        if (!result.ok) {
+          setSelfBookingEnabled(previousEnabled);
+          setToggleError(result.message);
+          return;
+        }
+
+        setToggleMessage(result.message);
+      } catch (toggleError) {
+        console.error("Self-booking update failed", toggleError);
+        setSelfBookingEnabled(previousEnabled);
+        setToggleError("Could not update self-booking.");
       }
-
-      setSelfBookingEnabled(nextEnabled);
-      setToggleMessage(result.message);
-      router.refresh();
     });
   }
 
@@ -2679,13 +2119,13 @@ function ParticipantPanel({
 
 function HuckjamOverviewPanel({
   camp,
+  overview,
   compact = false,
 }: {
   camp: CampWorkspace;
+  overview: ReturnType<typeof getHuckjamOverview>;
   compact?: boolean;
 }) {
-  const overview = getHuckjamOverview(camp);
-
   return (
     <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className={`grid gap-4 ${compact ? "p-3" : "p-4 sm:p-5"}`}>
@@ -2839,9 +2279,11 @@ function HuckjamOverviewPanel({
   );
 }
 
-function HuckjamSidebarSummary({ camp }: { camp: CampWorkspace }) {
-  const overview = getHuckjamOverview(camp);
-
+function HuckjamSidebarSummary({
+  overview,
+}: {
+  overview: ReturnType<typeof getHuckjamOverview>;
+}) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-400">
@@ -3010,6 +2452,37 @@ function DashboardField({
 const dashboardInputClass =
   "min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-sky-400";
 
+function useWorkspaceViewport(): WorkspaceViewport | null {
+  const [viewport, setViewport] = useState<WorkspaceViewport | null>(null);
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia("(min-width: 1280px)");
+    const tabletQuery = window.matchMedia("(min-width: 768px)");
+    const updateViewport = () => {
+      setViewport(
+        desktopQuery.matches
+          ? "desktop"
+          : tabletQuery.matches
+            ? "tablet"
+            : "mobile",
+      );
+    };
+
+    // Keep the server and first client render identical, then remove the
+    // CSS-hidden workspace tree as soon as the viewport is known.
+    updateViewport();
+    desktopQuery.addEventListener("change", updateViewport);
+    tabletQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      desktopQuery.removeEventListener("change", updateViewport);
+      tabletQuery.removeEventListener("change", updateViewport);
+    };
+  }, []);
+
+  return viewport;
+}
+
 function getVisibleTimetableDays(
   camp: CampWorkspace,
   slots: TimetableSlot[],
@@ -3025,26 +2498,6 @@ function getVisibleTimetableDays(
       a.startTime.localeCompare(b.startTime),
     ),
   }));
-}
-
-function getDateRange(startDate: string, endDate: string) {
-  const dates: string[] = [];
-  const start = new Date(`${startDate}T00:00:00.000Z`);
-  const end = new Date(`${endDate || startDate}T00:00:00.000Z`);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return [];
-  }
-
-  for (
-    const date = new Date(start);
-    date.getTime() <= end.getTime();
-    date.setUTCDate(date.getUTCDate() + 1)
-  ) {
-    dates.push(date.toISOString().slice(0, 10));
-  }
-
-  return dates;
 }
 
 function groupBookedSlotsByDay<T extends { date: string; time: string }>(
@@ -3076,6 +2529,158 @@ function buildParticipantColorMap(participants: Participant[]) {
     });
 
   return map;
+}
+
+function buildWorkspaceIndexes(camp: CampWorkspace) {
+  const participantsById = new Map<string, Participant>();
+  const participantsByUserId = new Map<string, Participant>();
+
+  for (const participant of camp.participants) {
+    participantsById.set(participant.id, participant);
+    if (!participantsByUserId.has(participant.userId)) {
+      participantsByUserId.set(participant.userId, participant);
+    }
+  }
+
+  const bookedMinutesByUserId = new Map<string, number>();
+  const bookedMinutesByDateAndUserId = new Map<
+    string,
+    Map<string, number>
+  >();
+
+  for (const slot of camp.timetableSlots) {
+    let bookedMinutesForDate = bookedMinutesByDateAndUserId.get(slot.slotDate);
+    if (!bookedMinutesForDate) {
+      bookedMinutesForDate = new Map<string, number>();
+      bookedMinutesByDateAndUserId.set(slot.slotDate, bookedMinutesForDate);
+    }
+
+    for (const booking of slot.bookings) {
+      bookedMinutesByUserId.set(
+        booking.userId,
+        (bookedMinutesByUserId.get(booking.userId) ?? 0) + booking.minutes,
+      );
+      bookedMinutesForDate.set(
+        booking.userId,
+        (bookedMinutesForDate.get(booking.userId) ?? 0) + booking.minutes,
+      );
+    }
+  }
+
+  const preferenceByParticipantAndDay = new Map<string, CampPreference>();
+  for (const preference of camp.preferences) {
+    const preferenceKey = `${preference.participantId}:${preference.dayId}`;
+    if (!preferenceByParticipantAndDay.has(preferenceKey)) {
+      preferenceByParticipantAndDay.set(preferenceKey, preference);
+    }
+  }
+
+  const dayIdByDate = new Map(
+    getDateRange(camp.startDate, camp.endDate).map((date, index) => [
+      date,
+      index + 1,
+    ]),
+  );
+  const acceptedParticipants = camp.participants
+    .filter(
+      (participant) =>
+        participant.status === "accepted" && participant.userId,
+    )
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const assignableParticipantsByDate = new Map<
+    string,
+    AssignSlotParticipant[]
+  >();
+
+  for (const slotDate of new Set(
+    camp.timetableSlots.map((slot) => slot.slotDate),
+  )) {
+    const dayId = dayIdByDate.get(slotDate) ?? 0;
+    const dayLabel =
+      dayId > 0
+        ? formatCampDayPreferenceLabel(camp.startDate, camp.endDate, dayId)
+        : formatTimetableDate(slotDate);
+    const bookedMinutesForDate = bookedMinutesByDateAndUserId.get(slotDate);
+
+    assignableParticipantsByDate.set(
+      slotDate,
+      acceptedParticipants.map((participant) => {
+        const preference =
+          dayId > 0
+            ? preferenceByParticipantAndDay.get(
+                `${participant.userId}:${dayId}`,
+              )
+            : undefined;
+        const preferredMinutes = preference?.preferredMinutes;
+        const assignedMinutes =
+          bookedMinutesForDate?.get(participant.userId) ?? 0;
+        const progressPercent =
+          typeof preferredMinutes === "number" && preferredMinutes > 0
+            ? Math.round((assignedMinutes / preferredMinutes) * 100)
+            : null;
+        const remainingMinutes =
+          typeof preferredMinutes === "number" &&
+          preferredMinutes > assignedMinutes
+            ? preferredMinutes - assignedMinutes
+            : typeof preferredMinutes === "number"
+              ? 0
+              : null;
+        const overAssignedMinutes =
+          typeof preferredMinutes === "number" &&
+          assignedMinutes > preferredMinutes
+            ? assignedMinutes - preferredMinutes
+            : null;
+        const dayStatus: AssignSlotParticipant["dayStatus"] =
+          typeof preferredMinutes !== "number"
+            ? "no_preference"
+            : preferredMinutes <= 0
+              ? "no_flying"
+              : assignedMinutes === preferredMinutes
+                ? "complete"
+                : assignedMinutes < preferredMinutes
+                  ? "needs_time"
+                  : "over_assigned";
+
+        return {
+          id: participant.userId,
+          name: participant.name,
+          bookedMinutes: bookedMinutesByUserId.get(participant.userId) ?? 0,
+          dayLabel,
+          dayAssignedMinutes: assignedMinutes,
+          dayPreferredMinutes:
+            typeof preferredMinutes === "number" ? preferredMinutes : null,
+          dayRemainingMinutes: remainingMinutes,
+          dayOverAssignedMinutes: overAssignedMinutes,
+          dayProgressPercent: progressPercent,
+          dayStatus,
+        };
+      }),
+    );
+  }
+
+  const assignableParticipantsBySlotId = new Map<
+    string,
+    AssignSlotParticipant[]
+  >();
+  for (const slot of camp.timetableSlots) {
+    const bookedUserIds = new Set(
+      slot.bookings.map((booking) => booking.userId),
+    );
+    assignableParticipantsBySlotId.set(
+      slot.id,
+      (assignableParticipantsByDate.get(slot.slotDate) ??
+        emptyAssignableParticipants).filter(
+        (participant) => !bookedUserIds.has(participant.id),
+      ),
+    );
+  }
+
+  return {
+    participantsById,
+    participantsByUserId,
+    participantColorMap: buildParticipantColorMap(camp.participants),
+    assignableParticipantsBySlotId,
+  };
 }
 
 function getAttentionItems(camp: CampWorkspace) {
@@ -3303,90 +2908,6 @@ function formatRelativeTime(value: string, now = new Date()) {
   }).format(new Date(value));
 }
 
-function getAssignableParticipantsForDay(
-  camp: CampWorkspace,
-  slotDate: string,
-): AssignSlotParticipant[] {
-  const bookedMinutesByUserId = new Map<string, number>();
-  const dayBookedMinutesByUserId = new Map<string, number>();
-  const dayId = getDateRange(camp.startDate, camp.endDate).indexOf(slotDate) + 1;
-  const dayLabel =
-    dayId > 0
-      ? formatCampDayPreferenceLabel(camp.startDate, camp.endDate, dayId)
-      : formatTimetableDate(slotDate);
-
-  for (const slot of camp.timetableSlots) {
-    for (const booking of slot.bookings) {
-      bookedMinutesByUserId.set(
-        booking.userId,
-        (bookedMinutesByUserId.get(booking.userId) ?? 0) + booking.minutes,
-      );
-
-      if (slot.slotDate === slotDate) {
-        dayBookedMinutesByUserId.set(
-          booking.userId,
-          (dayBookedMinutesByUserId.get(booking.userId) ?? 0) + booking.minutes,
-        );
-      }
-    }
-  }
-
-  return camp.participants
-    .filter((participant) => participant.status === "accepted" && participant.userId)
-    .map((participant) => {
-      const preference =
-        dayId > 0
-          ? camp.preferences.find(
-              (item) =>
-                item.participantId === participant.userId &&
-                item.dayId === dayId,
-            )
-          : undefined;
-      const preferredMinutes = preference?.preferredMinutes;
-      const assignedMinutes =
-        dayBookedMinutesByUserId.get(participant.userId) ?? 0;
-      const progressPercent =
-        typeof preferredMinutes === "number" && preferredMinutes > 0
-          ? Math.round((assignedMinutes / preferredMinutes) * 100)
-          : null;
-      const remainingMinutes =
-        typeof preferredMinutes === "number" && preferredMinutes > assignedMinutes
-          ? preferredMinutes - assignedMinutes
-          : typeof preferredMinutes === "number"
-            ? 0
-            : null;
-      const overAssignedMinutes =
-        typeof preferredMinutes === "number" && assignedMinutes > preferredMinutes
-          ? assignedMinutes - preferredMinutes
-          : null;
-      const dayStatus: AssignSlotParticipant["dayStatus"] =
-        typeof preferredMinutes !== "number"
-          ? "no_preference"
-          : preferredMinutes <= 0
-            ? "no_flying"
-            : assignedMinutes === preferredMinutes
-              ? "complete"
-              : assignedMinutes < preferredMinutes
-                ? "needs_time"
-                : "over_assigned";
-
-      return {
-        id: participant.userId,
-        name: participant.name,
-        bookedMinutes: bookedMinutesByUserId.get(participant.userId) ?? 0,
-        dayLabel,
-        dayAssignedMinutes: assignedMinutes,
-        dayPreferredMinutes:
-          typeof preferredMinutes === "number" ? preferredMinutes : null,
-        dayRemainingMinutes: remainingMinutes,
-        dayOverAssignedMinutes: overAssignedMinutes,
-        dayProgressPercent: progressPercent,
-        dayStatus,
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
 function formatBookedTimeSummary(totalMinutes: number) {
   const minutes = Math.max(0, Math.round(totalMinutes));
   const hours = Math.floor(minutes / 60);
@@ -3401,37 +2922,5 @@ function formatBookedTimeSummary(totalMinutes: number) {
 
   return `${compact} (${minutes}min)`;
 }
-
-function formatInterestStatusLabel(status: InterestStatus) {
-  if (status === "accepted") {
-    return "Accepted";
-  }
-
-  if (status === "declined") {
-    return "Declined";
-  }
-
-  if (status === "waitlist") {
-    return "Waitlist";
-  }
-
-  return "Pending";
-}
-
-function formatLongDay(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
-}
-
-function cleanHandle(value: string) {
-  return value.replace(/^@/, "").trim();
-}
-
-
-
-
 
 

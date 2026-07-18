@@ -35,6 +35,9 @@ type CoachProfileRow = {
       }>;
 };
 
+const coachOpportunitySelect =
+  "id,type,booking_mode,title,coach_id,tunnel_id,start_date,end_date,registration_deadline,tunnel_time_mode,session_start,session_end,price,currency,total_capacity,available_spots,min_minutes_or_hours,description,languages,disciplines,skill_level,status,contact_method,created_by,created_at,updated_at,is_last_minute,tunnel_name,tunnel_country,tunnel_city,coach_name,coach_follow_id,tunnel_region,tunnel_latitude,tunnel_longitude";
+
 export default async function CoachProfilePage({
   params,
 }: {
@@ -42,11 +45,19 @@ export default async function CoachProfilePage({
 }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("coach_profiles")
-    .select("id,user_id,bio,disciplines,languages,achievements,instagram_handle,profiles(full_name,country,instagram_handle,profile_image_url)")
-    .eq("id", id)
-    .maybeSingle();
+  const [coachResult, opportunityResult] = await Promise.all([
+    supabase
+      .from("coach_profiles")
+      .select("id,user_id,bio,disciplines,languages,achievements,instagram_handle,profiles(full_name,country,instagram_handle,profile_image_url)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("published_opportunities_with_context")
+      .select(coachOpportunitySelect)
+      .eq("coach_id", id)
+      .order("start_date", { ascending: true }),
+  ]);
+  const data = coachResult.data;
 
   if (!data) {
     notFound();
@@ -56,11 +67,7 @@ export default async function CoachProfilePage({
   const profile = Array.isArray(coach.profiles)
     ? coach.profiles[0]
     : coach.profiles;
-  const { data: opportunityRows } = await supabase
-    .from("published_opportunities_with_context")
-    .select("*")
-    .eq("coach_id", coach.id)
-    .order("start_date", { ascending: true });
+  const opportunityRows = opportunityResult.data;
   const opportunities = ((opportunityRows ?? []) as HomeFeedRow[]).map(mapOpportunity);
   const now = new Date();
   const upcomingOpportunities = opportunities

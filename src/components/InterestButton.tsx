@@ -9,7 +9,7 @@ import type { InterestStatus } from "@/lib/types";
 type InterestButtonProps = {
   opportunityId: string;
   disabled?: boolean;
-  initialStatus?: InterestStatus;
+  initialStatus?: InterestStatus | null;
   compact?: boolean;
   isFull?: boolean;
 };
@@ -29,6 +29,10 @@ export function InterestButton({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (initialStatus !== undefined) {
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
 
     async function loadInterest() {
@@ -55,9 +59,7 @@ export function InterestButton({
       );
     }
 
-    if (!initialStatus) {
-      void loadInterest();
-    }
+    void loadInterest();
   }, [initialStatus, opportunityId]);
 
   async function sendInterest() {

@@ -1,7 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import {
   CalendarDays,
   Clock3,
@@ -65,6 +73,7 @@ const participantColors = [
 ];
 
 export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardProps) {
+  const router = useRouter();
   const storageKey = `flyloop:tunnel-dashboard:${data.opportunity.id}:last-viewed`;
   const [selectedParticipantId, setSelectedParticipantId] = useState(
     data.participants[0]?.id ?? "",
@@ -73,7 +82,8 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
     typeof window === "undefined" ? null : window.localStorage.getItem(storageKey),
   );
   const [hasChanges, setHasChanges] = useState(false);
-  const [pollSince] = useState(data.latestEventAt ?? data.loadedAt);
+  const pollSinceRef = useRef(data.latestEventAt ?? data.loadedAt);
+  const [isRefreshing, startRefresh] = useTransition();
   const participantColorMap = useMemo(
     () => buildParticipantColorMap(data.participants),
     [data.participants],
@@ -110,14 +120,19 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, data.loadedAt);
-  }, [data.loadedAt, storageKey]);
+    pollSinceRef.current = data.latestEventAt ?? data.loadedAt;
+  }, [data.latestEventAt, data.loadedAt, storageKey]);
 
   useEffect(() => {
+    if (hasChanges || isRefreshing) {
+      return;
+    }
+
     const interval = window.setInterval(async () => {
       try {
         const response = await fetch(
           `/api/tunnel-dashboard/${data.secret}/changes?since=${encodeURIComponent(
-            pollSince,
+            pollSinceRef.current,
           )}`,
           { cache: "no-store" },
         );
@@ -137,7 +152,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
     }, 20_000);
 
     return () => window.clearInterval(interval);
-  }, [data.secret, pollSince]);
+  }, [data.secret, hasChanges, isRefreshing]);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -149,11 +164,15 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
             </p>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                setHasChanges(false);
+                startRefresh(() => router.refresh());
+              }}
+              disabled={isRefreshing}
               className="inline-flex h-9 items-center gap-2 rounded-lg bg-amber-600 px-3 text-sm font-black text-white hover:bg-amber-700"
             >
               <RefreshCw size={15} />
-              Refresh view
+              {isRefreshing ? "Refreshing..." : "Refresh view"}
             </button>
           </div>
         </div>

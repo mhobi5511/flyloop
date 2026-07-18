@@ -8,12 +8,13 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { isAdmin } from "@/lib/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 export default async function AdminPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
 
   if (!isAdmin(user)) {
     redirect("/app");
@@ -35,25 +36,25 @@ export default async function AdminPage() {
       .order("name", { ascending: true }),
     supabase
       .from("tunnel_profiles")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .or("latitude.is.null,longitude.is.null"),
     supabase.rpc("get_admin_user_overview"),
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase
       .from("profiles")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("wants_to_create_opportunities", true),
     supabase
       .from("profiles")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("wants_to_create_opportunities", false),
     supabase
       .from("opportunities")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("type", "camp"),
     supabase
       .from("opportunities")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("type", "huck_jam"),
   ]);
 

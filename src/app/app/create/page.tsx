@@ -6,12 +6,13 @@ import {
   type TunnelOption,
 } from "@/components/CreateOpportunityForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 export default async function CreateOpportunityPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
 
   const [{ data: profile }, { data: coachProfile }, { data: tunnelRows }] = await Promise.all([
     supabase

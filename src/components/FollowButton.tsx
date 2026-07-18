@@ -9,13 +9,25 @@ type FollowButtonProps = {
   targetType: FollowTargetType;
   targetId: string;
   label: string;
+  initialFollowing?: boolean;
+  userId?: string;
 };
 
-export function FollowButton({ targetType, targetId, label }: FollowButtonProps) {
-  const [isFollowing, setIsFollowing] = useState(false);
+export function FollowButton({
+  targetType,
+  targetId,
+  label,
+  initialFollowing,
+  userId,
+}: FollowButtonProps) {
+  const [isFollowing, setIsFollowing] = useState(initialFollowing ?? false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    if (initialFollowing !== undefined) {
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
 
     async function loadFollow() {
@@ -39,40 +51,47 @@ export function FollowButton({ targetType, targetId, label }: FollowButtonProps)
     }
 
     void loadFollow();
-  }, [targetId, targetType]);
+  }, [initialFollowing, targetId, targetType]);
 
   async function toggle() {
     setIsLoading(true);
+    const previousFollowing = isFollowing;
+    setIsFollowing(!previousFollowing);
     const supabase = createSupabaseBrowserClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const activeUserId = userId
+      ? userId
+      : (await supabase.auth.getUser()).data.user?.id;
 
-    if (!user) {
+    if (!activeUserId) {
+      setIsFollowing(previousFollowing);
       setIsLoading(false);
       return;
     }
 
-    if (isFollowing) {
-      await supabase
+    if (previousFollowing) {
+      const { error } = await supabase
         .from("follows")
         .delete()
-        .eq("follower_id", user.id)
+        .eq("follower_id", activeUserId)
         .eq("target_type", targetType)
         .eq("target_id", targetId);
-      setIsFollowing(false);
+
+      if (error) {
+        console.error("Unfollow failed", error);
+        setIsFollowing(previousFollowing);
+      }
     } else {
       const { error } = await supabase.from("follows").insert({
-        follower_id: user.id,
+        follower_id: activeUserId,
         target_type: targetType,
         target_id: targetId,
       });
       if (error && error.code !== "23505") {
         console.error("Follow failed", error);
+        setIsFollowing(previousFollowing);
         setIsLoading(false);
         return;
       }
-      setIsFollowing(true);
     }
 
     setIsLoading(false);

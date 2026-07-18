@@ -6,7 +6,11 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const isPasswordResetRoute = pathname === "/reset-password";
-  const { response, user, profile } = await updateSupabaseSession(request);
+  const requiresCreatorProfile =
+    pathname.startsWith("/app/create") || pathname.startsWith("/app/dashboard");
+  const { response, user, profile } = await updateSupabaseSession(request, {
+    includeProfile: requiresCreatorProfile,
+  });
 
   if (pathname.startsWith("/app") && !user) {
     const url = request.nextUrl.clone();
@@ -30,7 +34,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (
-    (pathname.startsWith("/app/create") || pathname.startsWith("/app/dashboard")) &&
+    requiresCreatorProfile &&
     profile?.is_organizer !== true &&
     profile?.wants_to_create_opportunities !== true
   ) {

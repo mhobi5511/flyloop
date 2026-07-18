@@ -10,19 +10,20 @@ import {
   User,
 } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import {
+  NotificationCenterProvider,
+  type NotificationCenterItem,
+} from "./NotificationCenter";
 import { OrganizerNavBadge } from "./OrganizerNavBadge";
 import { ProfileNavDot } from "./ProfileNavDot";
 import { PwaInstallGuidance } from "./PwaInstallGuidance";
 import { PushNotificationPrompt } from "./PushNotificationPrompt";
 import { calculateProfileCompleteness } from "@/lib/profile-completeness";
+import { parseNotificationSnapshot } from "@/lib/notification-center";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { unstable_rethrow } from "next/navigation";
 import { isAdmin } from "@/lib/admin";
-import {
-  countBadgeNotifications,
-  organizerActivityNotificationTypes,
-  participantActivityNotificationTypes,
-} from "@/lib/notifications";
 
 type AppShellProps = {
   children: ReactNode;
@@ -71,7 +72,7 @@ async function getShellState() {
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await getCurrentUser();
 
     if (!user) {
       return {
@@ -80,55 +81,37 @@ async function getShellState() {
         isAdmin: false,
         organizerUnreadCount: 0,
         participantUnreadCount: 0,
+        bellUnreadCount: 0,
+        notifications: [] as NotificationCenterItem[],
         profileIncomplete: true,
         pushNotificationsEnabled: false,
         pushPromptAnsweredAt: null,
         isAuthenticated: false,
+        userId: null,
       };
     }
 
-    const [
-      { data: profile, error: profileError },
-      organizerNotificationResult,
-      participantNotificationResult,
-    ] =
+    const [{ data: profile, error: profileError }, notificationResult] =
       await Promise.all([
         supabase
           .from("profiles")
           .select("is_organizer,wants_to_create_opportunities,full_name,country,city,disciplines,home_tunnel_id,instagram_handle,profile_image_url,push_notifications_enabled,push_prompt_answered_at")
           .eq("id", user.id)
           .maybeSingle(),
-        supabase
-          .from("notifications")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .eq("read", false)
-          .in("type", [...organizerActivityNotificationTypes]),
-        supabase
-          .from("notifications")
-          .select("type,body")
-          .eq("user_id", user.id)
-          .eq("read", false)
-          .in("type", [...participantActivityNotificationTypes]),
+        supabase.rpc("get_notification_center_snapshot", { target_limit: 20 }),
       ]);
 
     if (profileError) {
       console.error("App shell profile lookup failed", profileError);
     }
 
-    if (organizerNotificationResult.error) {
-      console.error(
-        "App shell organizer notification count failed",
-        organizerNotificationResult.error,
-      );
+    if (notificationResult.error) {
+      console.error("App shell notification snapshot failed", notificationResult.error);
     }
 
-    if (participantNotificationResult.error) {
-      console.error(
-        "App shell participant notification count failed",
-        participantNotificationResult.error,
-      );
-    }
+    const notificationSnapshot = notificationResult.error
+      ? parseNotificationSnapshot(null)
+      : parseNotificationSnapshot(notificationResult.data);
 
     const canCreate =
       profile?.is_organizer === true ||
@@ -139,16 +122,15 @@ async function getShellState() {
       canCreate,
       canJoin: true,
       isAdmin: isAdmin(user),
-      organizerUnreadCount: organizerNotificationResult.count ?? 0,
-      participantUnreadCount: countBadgeNotifications(
-        participantNotificationResult.error
-          ? []
-          : (participantNotificationResult.data ?? []),
-      ),
+      organizerUnreadCount: notificationSnapshot.organizerUnreadCount,
+      participantUnreadCount: notificationSnapshot.participantUnreadCount,
+      bellUnreadCount: notificationSnapshot.bellUnreadCount,
+      notifications: notificationSnapshot.notifications,
       profileIncomplete,
       pushNotificationsEnabled: profile?.push_notifications_enabled === true,
       pushPromptAnsweredAt: profile?.push_prompt_answered_at ?? null,
       isAuthenticated: true,
+      userId: user.id,
     };
   } catch (error) {
     unstable_rethrow(error);
@@ -159,10 +141,13 @@ async function getShellState() {
       isAdmin: false,
       organizerUnreadCount: 0,
       participantUnreadCount: 0,
+      bellUnreadCount: 0,
+      notifications: [] as NotificationCenterItem[],
       profileIncomplete: true,
       pushNotificationsEnabled: false,
       pushPromptAnsweredAt: null,
       isAuthenticated: false,
+      userId: null,
     };
   }
 }
@@ -191,7 +176,15 @@ export async function AppShell({
   const profileSelected = active === profileNavItem.id;
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950">
+    <NotificationCenterProvider
+      key={shellState.userId ?? "signed-out"}
+      userId={shellState.userId}
+      initialNotifications={shellState.notifications}
+      initialBellUnreadCount={shellState.bellUnreadCount}
+      initialOrganizerUnreadCount={shellState.organizerUnreadCount}
+      initialParticipantUnreadCount={shellState.participantUnreadCount}
+    >
+      <div className="min-h-dvh bg-slate-50 text-slate-950">
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <Link href="/app" className="flex items-center gap-2">
@@ -200,7 +193,7 @@ export async function AppShell({
               alt=""
               width={36}
               height={36}
-              priority
+              preload
               className="size-9 rounded-xl shadow-sm"
             />
             <span className="text-lg font-bold tracking-tight">Flyloop</span>
@@ -222,14 +215,12 @@ export async function AppShell({
                     <Icon size={17} />
                     {item.id === "dashboard" ? (
                       <OrganizerNavBadge
-                        initialCount={shellState.organizerUnreadCount}
-                        notificationTypes={organizerActivityNotificationTypes}
+                        kind="organizer"
                       />
                     ) : null}
                     {item.id === "applications" ? (
                       <OrganizerNavBadge
-                        initialCount={shellState.participantUnreadCount}
-                        notificationTypes={participantActivityNotificationTypes}
+                        kind="participant"
                       />
                     ) : null}
                   </span>
@@ -290,16 +281,12 @@ export async function AppShell({
                   <Icon size={19} />
                   {item.id === "dashboard" ? (
                     <OrganizerNavBadge
-                      initialCount={shellState.organizerUnreadCount}
-                      notificationTypes={organizerActivityNotificationTypes}
-                      compact
+                      kind="organizer"
                     />
                   ) : null}
                   {item.id === "applications" ? (
                     <OrganizerNavBadge
-                      initialCount={shellState.participantUnreadCount}
-                      notificationTypes={participantActivityNotificationTypes}
-                      compact
+                      kind="participant"
                     />
                   ) : null}
                 </span>
@@ -309,6 +296,7 @@ export async function AppShell({
           })}
         </div>
       </nav>
-    </div>
+      </div>
+    </NotificationCenterProvider>
   );
 }

@@ -1,9 +1,14 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
+import { isOptimizableSupabaseImage } from "@/lib/image-url";
+
+const tunnelOpportunitySelect =
+  "id,type,booking_mode,title,coach_id,tunnel_id,start_date,end_date,registration_deadline,tunnel_time_mode,session_start,session_end,price,currency,total_capacity,available_spots,min_minutes_or_hours,description,languages,disciplines,skill_level,status,contact_method,created_by,created_at,updated_at,is_last_minute,tunnel_name,tunnel_country,tunnel_city,coach_name,coach_follow_id,tunnel_region,tunnel_latitude,tunnel_longitude";
 
 export default async function TunnelProfilePage({
   params,
@@ -12,33 +17,55 @@ export default async function TunnelProfilePage({
 }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
-  const { data: tunnel } = await supabase
-    .from("tunnel_profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const today = new Date().toISOString().slice(0, 10);
+  const [tunnelResult, opportunityResult] = await Promise.all([
+    supabase
+      .from("tunnel_profiles")
+      .select("id,name,city,country,description,size,website,header_image_url")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("published_opportunities_with_context")
+      .select(tunnelOpportunitySelect)
+      .eq("tunnel_id", id)
+      .gte("end_date", today)
+      .order("start_date", { ascending: true }),
+  ]);
+  const tunnel = tunnelResult.data;
 
   if (!tunnel) {
     notFound();
   }
 
-  const { data: opportunityRows } = await supabase
-    .from("published_opportunities_with_context")
-    .select("*")
-    .eq("tunnel_id", tunnel.id)
-    .order("start_date", { ascending: true });
+  const opportunityRows = opportunityResult.data;
   const opportunities = ((opportunityRows ?? []) as HomeFeedRow[]).map(mapOpportunity);
 
   return (
     <AppShell active="home">
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         {tunnel.header_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={tunnel.header_image_url}
-            alt=""
-            className="h-44 w-full object-cover"
-          />
+          isOptimizableSupabaseImage(tunnel.header_image_url) ? (
+            <div className="relative h-44 w-full">
+              <Image
+                src={tunnel.header_image_url}
+                alt=""
+                fill
+                sizes="(max-width: 1024px) 100vw, 1024px"
+                fetchPriority="high"
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            // Arbitrary legacy header URLs remain supported outside Flyloop storage.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={tunnel.header_image_url}
+              alt=""
+              loading="eager"
+              decoding="async"
+              className="h-44 w-full object-cover"
+            />
+          )
         ) : (
           <div className="h-44 bg-gradient-to-br from-sky-100 to-cyan-50" />
         )}

@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseConfigOrThrow } from "./config";
 
-export async function updateSupabaseSession(request: NextRequest) {
+export async function updateSupabaseSession(
+  request: NextRequest,
+  { includeProfile = false }: { includeProfile?: boolean } = {},
+) {
   let response = NextResponse.next({ request });
 
   const { url, anonKey } = getSupabaseConfigOrThrow();
@@ -28,7 +31,7 @@ export async function updateSupabaseSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = user
+  const { data: profile } = user && includeProfile
     ? await supabase
         .from("profiles")
         .select("is_admin,is_organizer,wants_to_create_opportunities")

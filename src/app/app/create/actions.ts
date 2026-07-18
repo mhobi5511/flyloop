@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendNewTunnelNotification } from "@/lib/email/tunnel-notifications";
-import { sendPendingPushNotificationsForOpportunity } from "@/lib/push";
+import { schedulePendingPushNotificationsForOpportunity } from "@/lib/push";
 import { supportsCampTunnelTimeModeColumn } from "@/lib/camp-tunnel-time-mode";
 import { regions } from "@/lib/location";
 import type {
@@ -357,14 +357,11 @@ export async function publishOpportunity(
     return { ok: false, message: friendlyPublishError(error) };
   }
 
-  const pushResult = await sendPendingPushNotificationsForOpportunity(data.id, [
+  schedulePendingPushNotificationsForOpportunity(
+    data.id,
+    ["new_opportunity"],
     "new_opportunity",
-  ]);
-  console.log("Server push trigger completed", {
-    context: "new_opportunity",
-    opportunityId: data.id,
-    result: pushResult,
-  });
+  );
 
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
@@ -511,7 +508,7 @@ export async function updateOpportunity(
 
   const acceptedResult = await supabase
     .from("opportunity_interests")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("opportunity_id", opportunityId)
     .eq("status", "accepted");
   const acceptedCount = acceptedResult.count ?? 0;
@@ -582,14 +579,11 @@ export async function updateOpportunity(
     }
   }
 
-  const pushResult = await sendPendingPushNotificationsForOpportunity(opportunityId, [
-    "new_opportunity",
-  ]);
-  console.log("Server push trigger completed", {
-    context: "new_opportunity",
+  schedulePendingPushNotificationsForOpportunity(
     opportunityId,
-    result: pushResult,
-  });
+    ["new_opportunity"],
+    "new_opportunity",
+  );
 
   revalidatePath("/app");
   revalidatePath("/app/dashboard");

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { CampTimetableEditor } from "@/components/CampTimetableEditor";
 import { formatDateRange, formatOpportunityType } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { OpportunityType } from "@/lib/types";
 
 type TimetableOpportunity = {
@@ -31,7 +32,7 @@ export default async function OrganizerTimetablePage({
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
 
   const [{ data: profile }, { data: opportunity }, { data: slotRows }] =
     await Promise.all([

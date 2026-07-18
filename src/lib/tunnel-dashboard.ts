@@ -243,7 +243,6 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     { data: slots },
     { data: events },
     { data: acceptedInterests },
-    { data: latestEvent },
   ] = await Promise.all([
     supabase
       .from("opportunities")
@@ -262,20 +261,14 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .from("opportunity_slot_booking_events")
       .select("id,event_type,user_id,slot_date,start_time,minutes,previous_rotation_minutes,new_rotation_minutes,created_at,profiles!opportunity_slot_booking_events_user_id_fkey(full_name)")
       .eq("opportunity_id", link.opportunity_id)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: false })
+      .limit(100),
     supabase
       .from("opportunity_interests")
       .select("athlete_id,tunnel_time_status,tunnel_account_email,updated_at")
       .eq("opportunity_id", link.opportunity_id)
       .eq("status", "accepted")
       .neq("interest_type", "timetable_reminder"),
-    supabase
-      .from("opportunity_slot_booking_events")
-      .select("created_at")
-      .eq("opportunity_id", link.opportunity_id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
 
   if (!opportunity) {
@@ -287,6 +280,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     ...collectParticipantIds((slots ?? []) as SlotRow[]),
   ]);
   const normalizedSlots = normalizeSlots((slots ?? []) as SlotRow[], userEmails);
+  const eventRows = ((events ?? []) as EventRow[]).slice().reverse();
   const tunnelTimeByParticipant = getTunnelTimeByParticipant(
     (acceptedInterests ?? []) as InterestRow[],
   );
@@ -303,7 +297,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     secret: link.secret,
     loadedAt: new Date().toISOString(),
     latestEventAt: latestIso(
-      latestEvent?.created_at,
+      eventRows.at(-1)?.created_at,
       latestAcceptedInterestUpdate((acceptedInterests ?? []) as InterestRow[]),
     ),
     opportunity: {
@@ -330,7 +324,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
     },
     slots: normalizedSlots,
     participants,
-    events: normalizeEvents((events ?? []) as EventRow[]),
+    events: normalizeEvents(eventRows),
   } satisfies TunnelDashboardData;
 }
 
@@ -495,15 +489,25 @@ async function getUserEmails(userIds: string[]) {
     return emails;
   }
 
-  await Promise.all(
-    [...new Set(userIds)].map(async (userId) => {
-      const { data } = await supabase.auth.admin.getUserById(userId);
+  const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueUserIds.length === 0) {
+    return emails;
+  }
 
-      if (data.user?.email) {
-        emails.set(userId, data.user.email);
-      }
-    }),
-  );
+  const { data, error } = await supabase.rpc("get_auth_user_emails", {
+    target_user_ids: uniqueUserIds,
+  });
+
+  if (error) {
+    console.error("Tunnel dashboard email batch lookup failed", error);
+    return emails;
+  }
+
+  for (const user of (data ?? []) as Array<{ id: string; email: string | null }>) {
+    if (user.email) {
+      emails.set(user.id, user.email);
+    }
+  }
 
   return emails;
 }

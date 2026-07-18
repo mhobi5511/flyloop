@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,11 +12,10 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import {
-  CreateOpportunityForm,
-  type InheritedCoachProfile,
-  type TunnelOption,
+import { useMemo, useState, type ReactNode } from "react";
+import type {
+  InheritedCoachProfile,
+  TunnelOption,
 } from "@/components/CreateOpportunityForm";
 import { formatOpportunityType } from "@/lib/opportunities";
 import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
@@ -105,6 +105,23 @@ type CoachCommandCenterWorkspaceProps = {
 
 const attentionGroupOrder: CoachWorkspaceAttentionItem["group"][] = ["Requires Attention"];
 
+const CreateOpportunityForm = dynamic(
+  () =>
+    import("@/components/CreateOpportunityForm").then(
+      (module) => module.CreateOpportunityForm,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid gap-3" aria-label="Loading opportunity form">
+        <div className="h-12 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-12 animate-pulse rounded-2xl bg-slate-100" />
+      </div>
+    ),
+  },
+);
+
 export function CoachCommandCenterWorkspace({
   coachName,
   camps,
@@ -118,22 +135,48 @@ export function CoachCommandCenterWorkspace({
   const router = useRouter();
   const [creationOpen, setCreationOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"camps" | "huckJams">("camps");
-  const campsManaged = camps.length;
-  const athletesCoached = camps.reduce((total, camp) => total + camp.athleteCount, 0);
-  const tunnelsVisited = new Set(camps.map((camp) => camp.tunnelLabel)).size;
-  const now = new Date();
-  const activeCamps = camps.filter((camp) => !isOpportunityCompleted({ endDate: camp.endDate }, now));
-  const activeHuckJams = huckJams.filter((camp) => !isOpportunityCompleted({ endDate: camp.endDate }, now));
-  const upcomingCamps = activeCamps
-    .slice()
-    .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title))
-    .slice(0, 3);
-  const groupedAttention = attentionGroupOrder
-    .map((group) => ({
-      group,
-      items: attentionItems.filter((item) => item.group === group),
-    }))
-    .filter((group) => group.items.length > 0);
+  const {
+    campsManaged,
+    athletesCoached,
+    tunnelsVisited,
+    activeCamps,
+    activeHuckJams,
+    upcomingCamps,
+    groupedAttention,
+  } = useMemo(() => {
+    const now = new Date();
+    const currentCamps = camps.filter(
+      (camp) => !isOpportunityCompleted({ endDate: camp.endDate }, now),
+    );
+    const currentHuckJams = huckJams.filter(
+      (camp) => !isOpportunityCompleted({ endDate: camp.endDate }, now),
+    );
+
+    return {
+      campsManaged: camps.length,
+      athletesCoached: camps.reduce(
+        (total, camp) => total + camp.athleteCount,
+        0,
+      ),
+      tunnelsVisited: new Set(camps.map((camp) => camp.tunnelLabel)).size,
+      activeCamps: currentCamps,
+      activeHuckJams: currentHuckJams,
+      upcomingCamps: currentCamps
+        .slice()
+        .sort(
+          (a, b) =>
+            a.startDate.localeCompare(b.startDate) ||
+            a.title.localeCompare(b.title),
+        )
+        .slice(0, 3),
+      groupedAttention: attentionGroupOrder
+        .map((group) => ({
+          group,
+          items: attentionItems.filter((item) => item.group === group),
+        }))
+        .filter((group) => group.items.length > 0),
+    };
+  }, [attentionItems, camps, huckJams]);
   const activeOpportunityCards = activeTab === "camps" ? activeCamps : activeHuckJams;
 
   return (
@@ -306,7 +349,6 @@ export function CoachCommandCenterWorkspace({
           onSuccess={(opportunityId) => {
             setCreationOpen(false);
             router.replace(`/app/coach-dashboard/${opportunityId}`);
-            router.refresh();
           }}
         />
       ) : null}

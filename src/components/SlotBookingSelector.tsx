@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   bookOpportunitySlots,
   releaseOwnOpportunitySlot,
-  setCampTunnelTimeStatus,
+  requestOwnOpportunitySlotReleases,
 } from "@/app/app/opportunities/actions";
 import {
   calculateEstimatedCost,
@@ -69,14 +69,26 @@ export function SlotBookingSelector({
   const [isReleaseRequestModalOpen, setIsReleaseRequestModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [pendingReleaseSlotIds, setPendingReleaseSlotIds] = useState<string[]>([]);
-  const selectedSlots = slots.filter((slot) => selectedSlotIds.includes(slot.id));
+  const bookedSlotIdSet = useMemo(() => new Set(bookedSlotIds), [bookedSlotIds]);
+  const selectedSlotIdSet = useMemo(
+    () => new Set(selectedSlotIds),
+    [selectedSlotIds],
+  );
+  const pendingReleaseSlotIdSet = useMemo(
+    () => new Set(pendingReleaseSlotIds),
+    [pendingReleaseSlotIds],
+  );
+  const selectedSlots = useMemo(
+    () => slots.filter((slot) => selectedSlotIdSet.has(slot.id)),
+    [selectedSlotIdSet, slots],
+  );
   const requiresCoachManagedTunnelTime =
     tunnelTimeMode === "tunnel_time_must_be_purchased_through_coach";
   const newSelectedSlotIds = selectedSlotIds.filter(
-    (slotId) => !bookedSlotIds.includes(slotId),
+    (slotId) => !bookedSlotIdSet.has(slotId),
   );
   const removedBookedSlotIds = bookedSlotIds.filter(
-    (slotId) => !selectedSlotIds.includes(slotId),
+    (slotId) => !selectedSlotIdSet.has(slotId),
   );
   const hasPendingChanges =
     newSelectedSlotIds.length > 0 || removedBookedSlotIds.length > 0;
@@ -157,40 +169,31 @@ export function SlotBookingSelector({
     }
 
     startTransition(async () => {
-      let statusResult: Awaited<ReturnType<typeof setCampTunnelTimeStatus>> | null =
-        null;
+      if (removedBookedSlotIds.length > 0) {
+        if (selfBookingEnabled) {
+          const releaseResult = await requestOwnOpportunitySlotReleases(
+            opportunityId,
+            removedBookedSlotIds,
+          );
 
-      if (needsTunnelTimePrompt) {
-        statusResult = await setCampTunnelTimeStatus(opportunityId, {
-          status: tunnelTimeStatus,
-          accountEmail: tunnelAccountEmail,
-        });
+          if (!releaseResult.ok) {
+            setError(releaseResult.message);
+            return;
+          }
+        } else {
+          // Legacy direct-booking drafts can be deleted immediately. Preserve
+          // that behavior while self-booking releases use the atomic batch RPC.
+          for (const slotId of removedBookedSlotIds) {
+            const releaseResult = await releaseOwnOpportunitySlot(
+              opportunityId,
+              slotId,
+            );
 
-        if (!statusResult.ok) {
-          setError(statusResult.message);
-          return;
-        }
-      }
-
-      for (const slotId of removedBookedSlotIds) {
-        console.log("Release request save flow: releasing slot", {
-          opportunityId,
-          slotId,
-          removedBookedSlotIds,
-          newSelectedSlotIds,
-        });
-        const releaseResult = await releaseOwnOpportunitySlot(opportunityId, slotId);
-
-        console.log("Release request save flow: release result", {
-          opportunityId,
-          slotId,
-          ok: releaseResult.ok,
-          message: releaseResult.message,
-        });
-
-        if (!releaseResult.ok) {
-          setError(releaseResult.message);
-          return;
+            if (!releaseResult.ok) {
+              setError(releaseResult.message);
+              return;
+            }
+          }
         }
       }
 
@@ -200,7 +203,7 @@ export function SlotBookingSelector({
               status: tunnelTimeStatus || initialTunnelTimeStatus || "",
               accountEmail: tunnelAccountEmail || initialTunnelAccountEmail || "",
             })
-          : statusResult ?? { ok: true as const, message: "Your slots were saved as draft." };
+          : { ok: true as const, message: "Your slots were saved as draft." };
 
       if (!result.ok) {
         setError(result.message);
@@ -234,9 +237,7 @@ export function SlotBookingSelector({
       } else {
         setMessage(result.message);
       }
-      window.setTimeout(() => {
-        router.refresh();
-      }, 700);
+      router.refresh();
     });
   }
 
@@ -255,11 +256,11 @@ export function SlotBookingSelector({
             </header>
             <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3">
               {day.slots.map((slot) => {
-                const isSelected = selectedSlotIds.includes(slot.id);
+                const isSelected = selectedSlotIdSet.has(slot.id);
                 const isFull = slot.remainingCapacity <= 0;
                 const isReleaseRequested =
                   Boolean(slot.releaseRequestedAt) ||
-                  pendingReleaseSlotIds.includes(slot.id);
+                  pendingReleaseSlotIdSet.has(slot.id);
                 const disabled =
                   bookingLocked ||
                   isPending ||

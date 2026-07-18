@@ -169,12 +169,12 @@ export function AdminDashboard({
           .from("tunnel_profiles")
           .update(payload)
           .eq("id", editingTunnelId)
-          .select("*")
+          .select("id,name,country,city,address,website,description,wind_quality_notes,size,region,header_image_url")
           .single()
       : await supabase
           .from("tunnel_profiles")
           .insert(payload)
-          .select("*")
+          .select("id,name,country,city,address,website,description,wind_quality_notes,size,region,header_image_url")
           .single();
 
     setIsSaving(false);

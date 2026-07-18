@@ -23,11 +23,13 @@ type OpportunityRelation = {
 };
 
 type CampBookingRow = {
+  user_id: string;
   minutes: number;
   opportunities: OpportunityRelation | OpportunityRelation[] | null;
 };
 
 type InterestRow = {
+  athlete_id: string;
   opportunities: OpportunityRelation | OpportunityRelation[] | null;
 };
 
@@ -80,22 +82,37 @@ export async function getFlyloopProfileHistory(
   userId: string,
   now = new Date(),
 ): Promise<FlyloopProfileHistory> {
+  const histories = await getFlyloopProfileHistories(supabase, [userId], now);
+  return histories.get(userId) ?? buildFlyloopProfileHistory([], [], [], now);
+}
+
+export async function getFlyloopProfileHistories(
+  supabase: SupabaseServerClient,
+  userIds: string[],
+  now = new Date(),
+): Promise<Map<string, FlyloopProfileHistory>> {
+  const uniqueUserIds = [...new Set(userIds)];
+
+  if (uniqueUserIds.length === 0) {
+    return new Map();
+  }
+
   const [campBookingsResult, huckJamInterestsResult, organizedResult] =
     await Promise.all([
       supabase
         .from("opportunity_slot_bookings")
-        .select("minutes,opportunities(id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
-        .eq("user_id", userId),
+        .select("user_id,minutes,opportunities(id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
+        .in("user_id", uniqueUserIds),
       supabase
         .from("opportunity_interests")
-        .select("opportunities(id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
-        .eq("athlete_id", userId)
+        .select("athlete_id,opportunities(id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name))")
+        .in("athlete_id", uniqueUserIds)
         .eq("status", "accepted")
         .neq("interest_type", "timetable_reminder"),
       supabase
         .from("opportunities")
         .select("id,title,type,status,start_date,end_date,registration_deadline,created_by,tunnel_profiles(id,name,country),profiles!opportunities_created_by_fkey(full_name),opportunity_slot_bookings(minutes,user_id)")
-        .eq("created_by", userId),
+        .in("created_by", uniqueUserIds),
     ]);
 
   if (campBookingsResult.error) {
@@ -110,10 +127,45 @@ export async function getFlyloopProfileHistory(
     console.error("Flyloop organized history lookup failed", organizedResult.error);
   }
 
+  const campBookingsByUserId = groupBy(
+    (campBookingsResult.data ?? []) as CampBookingRow[],
+    (row) => row.user_id,
+  );
+  const huckJamInterestsByUserId = groupBy(
+    (huckJamInterestsResult.data ?? []) as InterestRow[],
+    (row) => row.athlete_id,
+  );
+  const organizedByUserId = groupBy(
+    (organizedResult.data ?? []) as OrganizedOpportunityRow[],
+    (row) => row.created_by,
+  );
+
+  return new Map(
+    uniqueUserIds.map(
+      (userId) =>
+        [
+          userId,
+          buildFlyloopProfileHistory(
+            campBookingsByUserId.get(userId) ?? [],
+            huckJamInterestsByUserId.get(userId) ?? [],
+            organizedByUserId.get(userId) ?? [],
+            now,
+          ),
+        ] as const,
+    ),
+  );
+}
+
+function buildFlyloopProfileHistory(
+  campBookings: CampBookingRow[],
+  huckJamInterests: InterestRow[],
+  organizedOpportunities: OrganizedOpportunityRow[],
+  now: Date,
+): FlyloopProfileHistory {
   const entriesByOpportunity = new Map<string, FlyloopHistoryEntry>();
   const countableEntriesByOpportunity = new Map<string, FlyloopHistoryEntry>();
 
-  for (const row of (campBookingsResult.data ?? []) as CampBookingRow[]) {
+  for (const row of campBookings) {
     const opportunity = firstRelation(row.opportunities);
 
     if (
@@ -142,7 +194,7 @@ export async function getFlyloopProfileHistory(
     }
   }
 
-  for (const row of (huckJamInterestsResult.data ?? []) as InterestRow[]) {
+  for (const row of huckJamInterests) {
     const opportunity = firstRelation(row.opportunities);
 
     if (
@@ -174,12 +226,11 @@ export async function getFlyloopProfileHistory(
   const historyEntries = [...entriesByOpportunity.values()].sort((a, b) =>
     `${b.completedDate} ${b.title}`.localeCompare(`${a.completedDate} ${a.title}`),
   );
-  const completedOrganized = ((organizedResult.data ?? []) as OrganizedOpportunityRow[])
-    .filter(
-      (opportunity) =>
-        isRegistrationCycleCounted(opportunity, now) &&
-        isCountableOpportunityStatus(opportunity.status),
-    );
+  const completedOrganized = organizedOpportunities.filter(
+    (opportunity) =>
+      isRegistrationCycleCounted(opportunity, now) &&
+      isCountableOpportunityStatus(opportunity.status),
+  );
   const athleteMinutesCoached = completedOrganized.reduce((total, opportunity) => {
     if (opportunity.type !== "camp") {
       return total;
@@ -317,4 +368,17 @@ function normalizeArray<T>(value: T | T[] | null | undefined) {
   }
 
   return Array.isArray(value) ? value : [value];
+}
+
+function groupBy<T>(rows: T[], getKey: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+
+  for (const row of rows) {
+    const key = getKey(row);
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+
+  return groups;
 }

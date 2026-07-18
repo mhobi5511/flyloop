@@ -8,8 +8,8 @@ import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
-  sendPendingPushNotificationsForOpportunity,
-  sendPendingPushNotificationsForUsers,
+  schedulePendingPushNotificationsForOpportunity,
+  schedulePendingPushNotificationsForUsers,
 } from "@/lib/push";
 import type { InterestStatus } from "@/lib/types";
 
@@ -18,6 +18,12 @@ const editableStatuses: InterestStatus[] = ["accepted", "declined", "waitlist"];
 type ActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
+
+type SlotBookingDraftSyncResult = {
+  inserted_count?: unknown;
+  removed_count?: unknown;
+  notification_created?: unknown;
+};
 
 type TunnelDashboardShareResult =
   | { ok: true; message: string; tunnelDashboardUrl: string }
@@ -41,13 +47,12 @@ type ExistingTimetableSlotWithBookings = {
     | null;
 };
 
-async function sendServerPush(
+function scheduleServerPush(
   userIds: string[],
   context: string,
   filter?: { opportunityId?: string; types?: string[] },
 ) {
-  const result = await sendPendingPushNotificationsForUsers(userIds, filter);
-  console.log("Server push trigger completed", { context, result, userIds, filter });
+  schedulePendingPushNotificationsForUsers(userIds, filter, context);
 }
 
 export async function updateApplicantStatus(
@@ -149,7 +154,7 @@ export async function updateApplicantStatus(
   }
 
   if (shouldPushApplicant) {
-    await sendServerPush([interest.athlete_id], "application_status", {
+    scheduleServerPush([interest.athlete_id], "application_status", {
       opportunityId: interest.opportunity_id,
       types: ["application_status", "slot_bookings_released"],
     });
@@ -347,7 +352,7 @@ async function resolveCampRemovalRequest(
       error: notificationError,
     });
   } else if (shouldPush) {
-    await sendServerPush([interest.athlete_id], notification.type, {
+    scheduleServerPush([interest.athlete_id], notification.type, {
       opportunityId: opportunity.id,
       types: [notification.type],
     });
@@ -546,6 +551,9 @@ export async function saveCampTimetable(
   const existingSlotRows = (existingSlots ??
     []) as ExistingTimetableSlotWithBookings[];
   const existingIds = new Set(existingSlotRows.map((slot) => slot.id));
+  const existingSlotById = new Map(
+    existingSlotRows.map((slot) => [slot.id, slot] as const),
+  );
   const submittedIds = new Set(
     normalizedSlots
       .map((slot) => slot.id)
@@ -568,9 +576,9 @@ export async function saveCampTimetable(
     }
   }
 
-  for (const slot of normalizedSlots) {
+  const slotWriteResults = await Promise.all(normalizedSlots.map(async (slot) => {
     const existingSlot = slot.id
-      ? existingSlotRows.find((existing) => existing.id === slot.id)
+      ? existingSlotById.get(slot.id)
       : null;
     const keepPublished = existingSlot?.is_published === true;
     const payload = {
@@ -594,18 +602,23 @@ export async function saveCampTimetable(
         .eq("id", slot.id)
         .eq("opportunity_id", opportunityId);
 
-      if (error) {
-        console.error("Timetable slot update failed", { slotId: slot.id, error });
-        return { ok: false, message: "Could not update timetable slots." };
-      }
-    } else {
-      const { error } = await supabase.from("opportunity_time_slots").insert(payload);
-
-      if (error) {
-        console.error("Timetable slot insert failed", error);
-        return { ok: false, message: "Could not add timetable slots." };
-      }
+      return { error, operation: "update" as const, slotId: slot.id };
     }
+
+    const { error } = await supabase.from("opportunity_time_slots").insert(payload);
+    return { error, operation: "insert" as const, slotId: slot.id ?? null };
+  }));
+  const failedSlotWrite = slotWriteResults.find((result) => result.error);
+
+  if (failedSlotWrite) {
+    console.error("Timetable slot write failed", failedSlotWrite);
+    return {
+      ok: false,
+      message:
+        failedSlotWrite.operation === "update"
+          ? "Could not update timetable slots."
+          : "Could not add timetable slots.",
+    };
   }
 
   if (publish) {
@@ -641,24 +654,11 @@ export async function saveCampTimetable(
       console.error("Timetable notification RPC failed", notificationError);
       notificationWarning = true;
     } else {
-      try {
-        const pushResult = await sendPendingPushNotificationsForOpportunity(
-          opportunityId,
-          ["timetable_published"],
-        );
-        console.log("Server push trigger completed", {
-          context: "timetable_published",
-          result: pushResult,
-          opportunityId,
-        });
-
-        if ("error" in pushResult && pushResult.error) {
-          notificationWarning = true;
-        }
-      } catch (pushError) {
-        console.error("Timetable push notification delivery failed", pushError);
-        notificationWarning = true;
-      }
+      schedulePendingPushNotificationsForOpportunity(
+        opportunityId,
+        ["timetable_published"],
+        "timetable_published",
+      );
     }
   }
 
@@ -962,7 +962,7 @@ export async function releaseParticipantTimes(
   }
 
   if (shouldPushRelease) {
-    await sendServerPush([participantId], "slot_bookings_released_by_organizer", {
+    scheduleServerPush([participantId], "slot_bookings_released_by_organizer", {
       opportunityId,
       types: ["slot_bookings_released_by_organizer"],
     });
@@ -1043,7 +1043,7 @@ export async function releaseParticipantSlotBooking(
   }
 
   if (booking?.user_id && shouldPushSlotRelease) {
-    await sendServerPush([booking.user_id], "slot_booking_released_by_organizer", {
+    scheduleServerPush([booking.user_id], "slot_booking_released_by_organizer", {
       opportunityId,
       types: ["slot_booking_released_by_organizer"],
     });
@@ -1130,7 +1130,7 @@ export async function approveSlotReleaseRequest(
   }
 
   if (shouldPushRequestRelease) {
-    await sendServerPush([booking.user_id], "slot_bookings_released_by_organizer", {
+    scheduleServerPush([booking.user_id], "slot_bookings_released_by_organizer", {
       opportunityId,
       types: ["slot_bookings_released_by_organizer"],
     });
@@ -1160,7 +1160,7 @@ export async function approveSlotReleaseRequest(
     if (approvalNotificationError) {
       console.error("Approve release request notification failed", approvalNotificationError);
     } else if (shouldPushApproval) {
-      await sendServerPush([booking.user_id], "slot_booking_removal_approved", {
+      scheduleServerPush([booking.user_id], "slot_booking_removal_approved", {
         opportunityId,
         types: ["slot_booking_removal_approved"],
       });
@@ -1259,7 +1259,7 @@ export async function rejectSlotReleaseRequest(
     if (rejectionNotificationError) {
       console.error("Reject release request notification failed", rejectionNotificationError);
     } else if (shouldPushRejection) {
-      await sendServerPush([booking.user_id], "slot_booking_removal_declined", {
+      scheduleServerPush([booking.user_id], "slot_booking_removal_declined", {
         opportunityId,
         types: ["slot_booking_removal_declined"],
       });
@@ -1356,6 +1356,88 @@ export async function assignParticipantSlotBooking(
   revalidatePath("/app/applications");
 
   return { ok: true, message: "Slot assigned." };
+}
+
+export async function syncParticipantSlotBookingDraft(
+  opportunityId: string,
+  participantId: string,
+  selectedSlotIds: string[],
+): Promise<ActionResult> {
+  if (
+    !opportunityId ||
+    !participantId ||
+    !Array.isArray(selectedSlotIds) ||
+    selectedSlotIds.some((slotId) => typeof slotId !== "string" || !slotId)
+  ) {
+    return { ok: false, message: "Choose a valid participant and slots." };
+  }
+
+  const normalizedSlotIds = [...new Set(selectedSlotIds)];
+
+  if (normalizedSlotIds.length > 500) {
+    return { ok: false, message: "Too many slots were selected at once." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data, error } = await supabase.rpc(
+    "sync_participant_slot_booking_draft",
+    {
+      target_opportunity_id: opportunityId,
+      target_user_id: participantId,
+      target_slot_ids: normalizedSlotIds,
+    },
+  );
+
+  if (error) {
+    console.error("Mass booking draft sync failed", {
+      opportunityId,
+      participantId,
+      organizerId: user.id,
+      selectedSlotCount: normalizedSlotIds.length,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Could not save draft bookings.",
+    };
+  }
+
+  const result =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as SlotBookingDraftSyncResult)
+      : null;
+  const insertedCount = Number(result?.inserted_count ?? 0);
+  const removedCount = Number(result?.removed_count ?? 0);
+
+  if (result?.notification_created === true) {
+    scheduleServerPush([participantId], "slot_booking_released_by_organizer", {
+      opportunityId,
+      types: ["slot_booking_released_by_organizer"],
+    });
+  }
+
+  revalidatePath(`/app/coach-dashboard/${opportunityId}`);
+
+  return {
+    ok: true,
+    message:
+      insertedCount > 0 || removedCount > 0
+        ? "Draft bookings saved."
+        : "Draft bookings are already up to date.",
+  };
 }
 
 export async function setCampParticipantSelfBooking(

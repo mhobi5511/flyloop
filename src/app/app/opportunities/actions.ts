@@ -8,7 +8,7 @@ import {
 } from "@/lib/camp-tunnel-time-mode";
 import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { sendPendingPushNotificationsForUsers } from "@/lib/push";
+import { schedulePendingPushNotificationsForUsers } from "@/lib/push";
 import type { InterestStatus, TunnelTimeStatus } from "@/lib/types";
 
 type ActionResult =
@@ -56,13 +56,12 @@ function reminderErrorMessage(error: {
   return debugSupabaseMessage(error) || "Could not set reminder. Please try again.";
 }
 
-async function sendServerPush(
+function scheduleServerPush(
   userIds: string[],
   context: string,
   filter?: { opportunityId?: string; types?: string[] },
 ) {
-  const result = await sendPendingPushNotificationsForUsers(userIds, filter);
-  console.log("Server push trigger completed", { context, result, userIds, filter });
+  schedulePendingPushNotificationsForUsers(userIds, filter, context);
 }
 
 export async function sendOpportunityInterest(
@@ -357,7 +356,7 @@ export async function sendOpportunityInterest(
   }
 
   if (shouldPush) {
-    await sendServerPush([opportunity.created_by], "new_interest", {
+    scheduleServerPush([opportunity.created_by], "new_interest", {
       opportunityId,
       types: ["new_interest"],
     });
@@ -811,10 +810,14 @@ export async function bookOpportunitySlots(
             error: notificationError,
           });
         } else if (shouldPushTimetableUpdate) {
-          await sendPendingPushNotificationsForUsers([user.id], {
-            opportunityId,
-            types: ["timetable_updated"],
-          });
+          schedulePendingPushNotificationsForUsers(
+            [user.id],
+            {
+              opportunityId,
+              types: ["timetable_updated"],
+            },
+            "timetable_updated",
+          );
         }
       }
     }
@@ -913,20 +916,24 @@ export async function releaseOwnOpportunitySlot(
     return { ok: false, message: "Please log in again." };
   }
 
-  const { data: interest } = await supabase
-    .from("opportunity_interests")
-    .select("self_booking_enabled")
-    .eq("opportunity_id", opportunityId)
-    .eq("athlete_id", user.id)
-    .maybeSingle();
-
-  const { data: booking, error: bookingError } = await supabase
-    .from("opportunity_slot_bookings")
-    .select("id,is_final,release_requested_at,opportunity_id,user_id")
-    .eq("opportunity_id", opportunityId)
-    .eq("slot_id", slotId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [interestResult, bookingResult] = await Promise.all([
+    supabase
+      .from("opportunity_interests")
+      .select("self_booking_enabled")
+      .eq("opportunity_id", opportunityId)
+      .eq("athlete_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("opportunity_slot_bookings")
+      .select("id,is_final,release_requested_at")
+      .eq("opportunity_id", opportunityId)
+      .eq("slot_id", slotId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
+  const interest = interestResult.data;
+  const booking = bookingResult.data;
+  const bookingError = bookingResult.error;
 
   if (bookingError) {
     console.error("Own slot lookup failed", {
@@ -950,131 +957,37 @@ export async function releaseOwnOpportunitySlot(
   }
 
   if (booking.is_final || interest?.self_booking_enabled === true) {
-    const requestTimestamp = new Date().toISOString();
-    console.log("Own slot release request: starting", {
-      opportunityId,
-      slotId,
-      userId: user.id,
-      bookingId: booking.id,
-      booking,
-      interest,
-      requestTimestamp,
-    });
+    const requestResult =
+      interest?.self_booking_enabled === true
+        ? await supabase.rpc("request_own_opportunity_slot_releases", {
+            target_opportunity_id: opportunityId,
+            target_slot_ids: [slotId],
+          })
+        : await supabase
+            .from("opportunity_slot_bookings")
+            .update({
+              release_requested_at: new Date().toISOString(),
+              release_requested_by: user.id,
+            })
+            .eq("id", booking.id)
+            .eq("user_id", user.id)
+            .is("release_requested_at", null)
+            .select("id")
+            .maybeSingle();
 
-    const rpcResult = await supabase.rpc("request_own_opportunity_slot_release", {
-      target_opportunity_id: opportunityId,
-      target_slot_id: slotId,
-    });
-
-    console.log("Own slot release request: rpc response", {
-      opportunityId,
-      slotId,
-      userId: user.id,
-      data: rpcResult.data,
-      error: rpcResult.error,
-    });
-
-    const rpcUpdatedCount = Number(rpcResult.data ?? 0);
-    const rpcSucceeded = !rpcResult.error && rpcUpdatedCount > 0;
-
-    if (rpcResult.error || !rpcSucceeded) {
+    if (requestResult.error) {
       console.error("Own slot release request failed", {
         opportunityId,
         slotId,
         userId: user.id,
-        code: rpcResult.error?.code,
-        message: rpcResult.error?.message,
-        details: rpcResult.error?.details,
-        hint: rpcResult.error?.hint,
-        rpcUpdatedCount,
-      });
-
-      console.log("Own slot release request: fallback payload", {
-        opportunityId,
-        slotId,
-        userId: user.id,
-        bookingId: booking.id,
-        payload: {
-          release_requested_at: requestTimestamp,
-          release_requested_by: user.id,
-        },
-      });
-
-      const updateResult = await supabase
-        .from("opportunity_slot_bookings")
-        .update({
-          release_requested_at: requestTimestamp,
-          release_requested_by: user.id,
-        })
-        .eq("id", booking.id)
-        .eq("user_id", user.id)
-        .is("release_requested_at", null)
-        .select("id,slot_id,opportunity_id,user_id,release_requested_at,release_requested_by")
-        .maybeSingle();
-
-      console.log("Own slot release request: fallback response", {
-        opportunityId,
-        slotId,
-        userId: user.id,
-        data: updateResult.data,
-        error: updateResult.error,
-      });
-
-      if (updateResult.error) {
-        console.error("Own slot release request fallback failed", {
-          opportunityId,
-          slotId,
-          userId: user.id,
-          code: updateResult.error.code,
-          message: updateResult.error.message,
-          details: updateResult.error.details,
-          hint: updateResult.error.hint,
-        });
-        return {
-          ok: false,
-          message:
-            rpcResult.error?.message ||
-            updateResult.error.message ||
-            "Could not send release request.",
-        };
-      }
-    }
-
-    const verificationClient = createSupabaseAdminClient() ?? supabase;
-    const { data: persistedBooking, error: refreshError } = await verificationClient
-      .from("opportunity_slot_bookings")
-      .select(
-        "id,slot_id,opportunity_id,user_id,release_requested_at,release_requested_by",
-      )
-      .eq("id", booking.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    console.log("Own slot release request: persistence check", {
-      opportunityId,
-      slotId,
-      userId: user.id,
-      verificationClient: verificationClient === supabase ? "server" : "admin",
-      persistedBooking,
-      refreshError,
-    });
-
-    if (refreshError || !persistedBooking?.release_requested_at) {
-      console.error("Own slot release request did not persist", {
-        opportunityId,
-        slotId,
-        userId: user.id,
-        code: refreshError?.code,
-        message: refreshError?.message,
-        details: refreshError?.details,
-        hint: refreshError?.hint,
-        persistedBooking,
+        code: requestResult.error.code,
+        message: requestResult.error.message,
+        details: requestResult.error.details,
+        hint: requestResult.error.hint,
       });
       return {
         ok: false,
-        message:
-          refreshError?.message ||
-          "Release request did not persist after the database write.",
+        message: requestResult.error.message || "Could not send release request.",
       };
     }
 
@@ -1121,6 +1034,51 @@ export async function releaseOwnOpportunitySlot(
     ok: true,
     message: "Slot released.",
   };
+}
+
+export async function requestOwnOpportunitySlotReleases(
+  opportunityId: string,
+  slotIds: string[],
+): Promise<ActionResult> {
+  const uniqueSlotIds = [...new Set(slotIds)].filter(Boolean);
+
+  if (uniqueSlotIds.length === 0) {
+    return { ok: false, message: "Choose at least one slot to release." };
+  }
+
+  if (uniqueSlotIds.length > 100) {
+    return { ok: false, message: "Choose no more than 100 slots at once." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("request_own_opportunity_slot_releases", {
+    target_opportunity_id: opportunityId,
+    target_slot_ids: uniqueSlotIds,
+  });
+
+  if (error) {
+    console.error("Own slot release batch failed", {
+      opportunityId,
+      slotCount: uniqueSlotIds.length,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return {
+      ok: false,
+      message: error.message || "Could not send release request.",
+    };
+  }
+
+  revalidatePath(`/app/opportunities/${opportunityId}`);
+  revalidatePath(`/app/opportunities/${opportunityId}/times`);
+  revalidatePath(`/app/organizer/opportunities/${opportunityId}`);
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/coach-dashboard");
+  revalidatePath("/app/applications");
+
+  return { ok: true, message: "Release request submitted." };
 }
 
 async function saveTunnelTimeStatus(

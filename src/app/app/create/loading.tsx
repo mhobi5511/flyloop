@@ -1,8 +1,8 @@
-import { AppShell } from "@/components/AppShell";
+import { AppLoadingFrame } from "@/components/AppLoadingFrame";
 
 export default function CreateLoading() {
   return (
-    <AppShell active="create">
+    <AppLoadingFrame>
       <div className="mx-auto max-w-3xl">
         <div className="h-9 w-56 animate-pulse rounded-xl bg-slate-200" />
         <div className="mt-3 h-5 w-full max-w-lg animate-pulse rounded-lg bg-slate-200" />
@@ -20,6 +20,6 @@ export default function CreateLoading() {
           ))}
         </div>
       </div>
-    </AppShell>
+    </AppLoadingFrame>
   );
 }

@@ -6,15 +6,10 @@ import {
   formatOpportunityDate,
   formatPriceAppliesToMinutes,
 } from "@/lib/opportunities";
-import {
-  getFlyloopProfileHistory,
-} from "@/lib/flyloop-history";
+import { getFlyloopProfileHistories } from "@/lib/flyloop-history";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { coachNotificationTypes } from "@/lib/notifications";
-import {
-  normalizeCampTunnelTimeMode,
-  supportsCampTunnelTimeModeColumn,
-} from "@/lib/camp-tunnel-time-mode";
+import { normalizeCampTunnelTimeMode } from "@/lib/camp-tunnel-time-mode";
 import { getTimetableSummary } from "@/lib/timetable";
 import type {
   BookingMode,
@@ -38,6 +33,7 @@ type CoachOpportunityRow = {
   title: string;
   type: OpportunityType;
   booking_mode: BookingMode;
+  tunnel_time_mode: string | null;
   status: OpportunityStatus;
   start_date: string;
   end_date: string;
@@ -173,16 +169,12 @@ export default async function CoachWorkspaceCampPage({
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,booking_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
+          "id,title,type,booking_mode,tunnel_time_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,is_final,finalized_at,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number)))",
         )
         .eq("id", id)
         .eq("created_by", user.id)
         .maybeSingle(),
     ]);
-
-  const campTunnelTimeMode = (await supportsCampTunnelTimeModeColumn(supabase))
-    ? await getTunnelTimeMode(supabase, id)
-    : "athletes_may_use_own_tunnel_time";
 
   if (profileResult.error) {
     const profileError = formatSupabaseError(profileResult.error);
@@ -224,11 +216,7 @@ export default async function CoachWorkspaceCampPage({
     notFound();
   }
 
-  const selectedCamp = await toCampWorkspace(
-    opportunity,
-    supabase,
-    campTunnelTimeMode,
-  );
+  const selectedCamp = await toCampWorkspace(opportunity, supabase);
 
   const camps = [selectedCamp];
   return (
@@ -245,7 +233,6 @@ export default async function CoachWorkspaceCampPage({
 async function toCampWorkspace(
   row: CoachOpportunityRow,
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  campTunnelTimeMode: "athletes_may_use_own_tunnel_time" | "tunnel_time_must_be_purchased_through_coach",
 ): Promise<CampWorkspace> {
   const tunnel = firstRelation(row.tunnel_profiles);
   const interests = (row.opportunity_interests ?? []).filter(
@@ -258,26 +245,35 @@ async function toCampWorkspace(
         .filter((userId): userId is string => Boolean(userId)),
     ),
   ];
-  const [publicProfilesResult, participantHistoryEntries] = await Promise.all([
-    participantIds.length > 0
-      ? supabase
-          .from("public_user_profiles")
-          .select(
-            "id,full_name,country,city,bio,profile_image_url,instagram_handle,website_url,youtube_url,home_tunnel_name,home_tunnel_city,home_tunnel_country",
-          )
-          .in("id", participantIds)
-      : Promise.resolve({ data: [], error: null }),
-    Promise.all(
-      participantIds.map(
-        async (userId) => [userId, await getFlyloopProfileHistory(supabase, userId)] as const,
-      ),
-    ),
-  ]);
+  const [publicProfilesResult, historyByParticipantId, preferencesResult] =
+    await Promise.all([
+      participantIds.length > 0
+        ? supabase
+            .from("public_user_profiles")
+            .select(
+              "id,full_name,country,city,bio,profile_image_url,instagram_handle,website_url,youtube_url,home_tunnel_name,home_tunnel_city,home_tunnel_country",
+            )
+            .in("id", participantIds)
+        : Promise.resolve({ data: [], error: null }),
+      getFlyloopProfileHistories(supabase, participantIds),
+      supabase
+        .from("camp_day_preferences")
+        .select("opportunity_id,participant_id,day_id,preferred_minutes")
+        .eq("opportunity_id", row.id)
+        .order("day_id", { ascending: true }),
+    ]);
 
   if (publicProfilesResult.error) {
     console.error(
       "Coach workspace public profile lookup failed",
       publicProfilesResult.error,
+    );
+  }
+
+  if (preferencesResult.error) {
+    console.error(
+      "Coach workspace day preference lookup failed",
+      preferencesResult.error,
     );
   }
 
@@ -287,7 +283,6 @@ async function toCampWorkspace(
       profile,
     ]),
   );
-  const historyByParticipantId = new Map(participantHistoryEntries);
 
   const participants = interests
     .map((interest) => {
@@ -323,11 +318,7 @@ async function toCampWorkspace(
     })
     .sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name));
 
-  const preferenceRows = (await supabase
-    .from("camp_day_preferences")
-    .select("opportunity_id,participant_id,day_id,preferred_minutes")
-    .eq("opportunity_id", row.id)
-    .order("day_id", { ascending: true })).data ?? [];
+  const preferenceRows = (preferencesResult.data ?? []) as PreferenceRow[];
 
   const timetableSource = row.opportunity_time_slots ?? [];
   const timetableSlots = timetableSource.map((slot) => ({
@@ -379,13 +370,13 @@ async function toCampWorkspace(
     priceAppliesToMinutes: formatPriceAppliesToMinutes(row.min_minutes_or_hours),
     description: row.description ?? "",
     tunnelId: row.tunnel_id ?? "",
-    tunnelTimeMode: campTunnelTimeMode,
+    tunnelTimeMode: normalizeCampTunnelTimeMode(row.tunnel_time_mode),
     tunnelSharedAt: row.tunnel_shared_at,
     tunnelName: tunnel?.name ?? "Tunnel to be confirmed",
     tunnelLocation: formatLocation(tunnel?.city, tunnel?.country),
     dateLabel: formatOpportunityDate(row.type, row.start_date, row.end_date),
     participants,
-    preferences: preferenceRows.map((preference: PreferenceRow) => ({
+    preferences: preferenceRows.map((preference) => ({
       opportunityId: preference.opportunity_id,
       participantId: preference.participant_id,
       dayId: preference.day_id,
@@ -402,25 +393,6 @@ async function toCampWorkspace(
       estimatedRevenue: summary.estimatedRevenue,
     },
   };
-}
-
-async function getTunnelTimeMode(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  opportunityId: string,
-) {
-  const { data, error } = await supabase
-    .from("opportunities")
-    .select("tunnel_time_mode")
-    .eq("id", opportunityId)
-    .maybeSingle();
-
-  if (error) {
-    return "athletes_may_use_own_tunnel_time";
-  }
-
-  return normalizeCampTunnelTimeMode(
-    (data as { tunnel_time_mode?: string | null } | null)?.tunnel_time_mode ?? null,
-  );
 }
 
 function firstRelation<T>(value: T | T[] | null | undefined) {

@@ -87,7 +87,7 @@ export default function LandingPage() {
               alt="Flyloop"
               width={40}
               height={40}
-              priority
+              preload
               className="size-10 rounded-2xl shadow-sm"
             />
             <div>
@@ -168,7 +168,7 @@ export default function LandingPage() {
             description="This is the first place athletes see opportunities and the clearest entry point into Flyloop."
             frameClassName="max-w-[900px] mx-auto"
             mediaClassName="aspect-[1005/1122]"
-            priority
+            preload
           />
         </div>
       </section>
@@ -469,7 +469,7 @@ function ScreenshotPanel({
   dark = false,
   frameClassName = "",
   mediaClassName = "",
-  priority = false,
+  preload = false,
 }: {
   src: string;
   alt: string;
@@ -479,7 +479,7 @@ function ScreenshotPanel({
   dark?: boolean;
   frameClassName?: string;
   mediaClassName?: string;
-  priority?: boolean;
+  preload?: boolean;
 }) {
   return (
     <div
@@ -505,7 +505,7 @@ function ScreenshotPanel({
           src={src}
           alt={alt}
           fill
-          priority={priority}
+          preload={preload}
           sizes="(max-width: 1024px) 100vw, 60vw"
           className="object-contain bg-slate-50 p-3"
         />

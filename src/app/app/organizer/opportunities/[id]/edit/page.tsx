@@ -10,6 +10,7 @@ import {
   supportsCampTunnelTimeModeColumn,
 } from "@/lib/camp-tunnel-time-mode";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { BookingMode, OpportunityType } from "@/lib/types";
 
 type OpportunityEditRow = {
@@ -42,7 +43,7 @@ export default async function EditOrganizerOpportunityPage({
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
 
   const [{ data: profile }, { data: tunnelRows }, { data: opportunity }] =
     await Promise.all([

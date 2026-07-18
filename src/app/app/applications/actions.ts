@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { sendPendingPushNotificationsForUsers } from "@/lib/push";
+import { schedulePendingPushNotificationsForUsers } from "@/lib/push";
 
 type ActionResult =
   | { ok: true; message: string }
@@ -102,10 +102,14 @@ export async function withdrawApplication(interestId: string): Promise<ActionRes
       if (notificationError) {
         console.error("Application withdrawal notification failed", notificationError);
       } else if (shouldPush) {
-        await sendPendingPushNotificationsForUsers([opportunity.created_by], {
-          opportunityId: opportunity.id,
-          types: ["application_withdrawn"],
-        });
+        schedulePendingPushNotificationsForUsers(
+          [opportunity.created_by],
+          {
+            opportunityId: opportunity.id,
+            types: ["application_withdrawn"],
+          },
+          "application_withdrawn",
+        );
       }
     }
   }
@@ -213,10 +217,14 @@ export async function requestCampRemoval(
   if (notificationError) {
     console.error("Camp removal organizer notification failed", notificationError);
   } else if (shouldPush) {
-    await sendPendingPushNotificationsForUsers([opportunity.created_by], {
-      opportunityId: opportunity.id,
-      types: ["participant_removal_requested"],
-    });
+    schedulePendingPushNotificationsForUsers(
+      [opportunity.created_by],
+      {
+        opportunityId: opportunity.id,
+        types: ["participant_removal_requested"],
+      },
+      "participant_removal_requested",
+    );
   }
 
   revalidatePath(`/app/opportunities/${opportunity.id}`);

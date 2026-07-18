@@ -36,18 +36,21 @@ export default async function PublicUserProfilePage({
 }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("public_user_profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const [profileResult, flyloopHistory] = await Promise.all([
+    supabase
+      .from("public_user_profiles")
+      .select("id,full_name,country,city,bio,disciplines,profile_image_url,instagram_handle,home_tunnel_id,home_tunnel_name,home_tunnel_city,home_tunnel_country,website_url,youtube_url,wants_to_create_opportunities,created_at")
+      .eq("id", id)
+      .maybeSingle(),
+    getFlyloopProfileHistory(supabase, id),
+  ]);
+  const data = profileResult.data;
 
   if (!data) {
     notFound();
   }
 
   const profile = data as PublicUserProfile;
-  const flyloopHistory = await getFlyloopProfileHistory(supabase, profile.id);
   const location = formatLocation(profile.city, profile.country);
   const homeTunnelLocation = formatLocation(
     profile.home_tunnel_city,

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { NotificationReadSignal } from "@/components/NotificationReadSignal";
 import {
@@ -99,7 +100,14 @@ export default async function CoachDashboardPage() {
     redirect("/login?next=/app/coach-dashboard");
   }
 
-  const [profileResult, opportunityResult, unreadNotificationResult, activityNotificationResult] =
+  const [
+    profileResult,
+    opportunityResult,
+    unreadNotificationResult,
+    activityNotificationResult,
+    coachProfileResult,
+    tunnelResult,
+  ] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -129,6 +137,15 @@ export default async function CoachDashboardPage() {
         .in("type", [...activityFeedTypes])
         .order("created_at", { ascending: false })
         .limit(12),
+      supabase
+        .from("coach_profiles")
+        .select("languages,disciplines")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("tunnel_profiles")
+        .select("id,name,city,country")
+        .order("name", { ascending: true }),
     ]);
 
   if (profileResult.error) {
@@ -162,28 +179,18 @@ export default async function CoachDashboardPage() {
     redirect("/app/dashboard");
   }
 
-  const { error: markReadError } = await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("user_id", user.id)
-    .eq("read", false)
-    .in("type", [...coachNotificationTypes]);
-
-  if (markReadError) {
-    console.error("Coach dashboard read-state update failed", markReadError);
-  }
-
-  const [coachProfileResult, tunnelResult] = await Promise.all([
-    supabase
-      .from("coach_profiles")
-      .select("languages,disciplines")
+  after(async () => {
+    const { error: markReadError } = await supabase
+      .from("notifications")
+      .update({ read: true })
       .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("tunnel_profiles")
-      .select("id,name,city,country")
-      .order("name", { ascending: true }),
-  ]);
+      .eq("read", false)
+      .in("type", [...coachNotificationTypes]);
+
+    if (markReadError) {
+      console.error("Coach dashboard read-state update failed", markReadError);
+    }
+  });
 
   if (coachProfileResult.error) {
     console.error("Coach dashboard coach profile lookup failed", coachProfileResult.error);

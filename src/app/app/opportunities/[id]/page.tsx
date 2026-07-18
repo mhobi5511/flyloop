@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -29,6 +30,7 @@ import {
   isCoachManagedTunnelTimeOpportunity,
 } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { mapOpportunity, type HomeFeedRow } from "@/lib/supabase/mappers";
 import {
   calculateEstimatedCost,
@@ -58,6 +60,9 @@ type BookingRow = {
     | null;
 };
 
+const opportunityDetailSelect =
+  "id,type,booking_mode,title,coach_id,tunnel_id,start_date,end_date,registration_deadline,tunnel_time_mode,session_start,session_end,price,currency,total_capacity,available_spots,min_minutes_or_hours,description,languages,disciplines,skill_level,status,contact_method,created_by,created_at,updated_at,is_last_minute,tunnel_name,tunnel_country,tunnel_city,coach_name,coach_follow_id,coach_profile_image_url,tunnel_region,tunnel_latitude,tunnel_longitude,has_published_timetable";
+
 export default async function OpportunityDetailPage({
   params,
 }: {
@@ -66,34 +71,108 @@ export default async function OpportunityDetailPage({
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const { data: row } = await supabase
-    .from("published_opportunities_with_context")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const [opportunityResult, userResult] = await Promise.all([
+    supabase
+      .from("published_opportunities_with_context")
+      .select(opportunityDetailSelect)
+      .eq("id", id)
+      .maybeSingle(),
+    getCurrentUser(),
+  ]);
+  const row = opportunityResult.data;
 
   if (!row) {
     notFound();
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = userResult.data.user;
   const opportunityRow = row as OpportunityDetailRow;
   const opportunity = mapOpportunity(opportunityRow);
   const isHuckJam = opportunity.type === "huck_jam";
   const isCamp = opportunity.type === "camp";
   const requiresCoachManagedTunnelTime =
     isCoachManagedTunnelTimeOpportunity(opportunity);
-  const { data: viewerInterest } =
-    user && user.id !== opportunity.createdBy
-      ? await supabase
+  const isOrganizer = user?.id === opportunity.createdBy;
+  if (isOrganizer) {
+    redirect(`/app/organizer/opportunities/${opportunity.id}`);
+  }
+
+  const followTargets = [
+    { target_type: "tunnel", target_id: opportunity.tunnelId },
+    opportunity.coachFollowId
+      ? { target_type: "coach", target_id: opportunity.coachFollowId }
+      : null,
+  ].filter(
+    (target): target is { target_type: "tunnel" | "coach"; target_id: string } =>
+      Boolean(target),
+  );
+  const [
+    viewerInterestResult,
+    campPreferencesResult,
+    bookingResult,
+    followResult,
+  ] = user
+    ? await Promise.all([
+        supabase
           .from("opportunity_interests")
           .select("id,status,interest_type,self_booking_enabled,removal_requested_at,tunnel_time_status,tunnel_account_email")
           .eq("opportunity_id", opportunity.id)
           .eq("athlete_id", user.id)
-          .maybeSingle()
-      : { data: null };
+          .maybeSingle(),
+        isCamp
+          ? supabase
+              .from("camp_day_preferences")
+              .select("day_id,preferred_minutes")
+              .eq("opportunity_id", opportunity.id)
+              .eq("participant_id", user.id)
+              .order("day_id", { ascending: true })
+          : Promise.resolve({ data: [], error: null }),
+        !isHuckJam
+          ? supabase
+              .from("opportunity_slot_bookings")
+              .select(
+                "id,slot_id,minutes,is_final,opportunity_time_slots(slot_date,start_time)",
+              )
+              .eq("opportunity_id", opportunity.id)
+              .eq("user_id", user.id)
+              .eq("is_final", true)
+              .order("created_at", { ascending: true })
+          : Promise.resolve({ data: [], error: null }),
+        followTargets.length > 0
+          ? supabase
+              .from("follows")
+              .select("target_type,target_id")
+              .eq("follower_id", user.id)
+              .in(
+                "target_id",
+                followTargets.map((target) => target.target_id),
+              )
+          : Promise.resolve({ data: [], error: null }),
+      ])
+    : [
+        { data: null, error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
+
+  if (viewerInterestResult.error) {
+    console.error("Opportunity viewer interest lookup failed", viewerInterestResult.error);
+  }
+  if (campPreferencesResult.error) {
+    console.error("Opportunity camp preference lookup failed", campPreferencesResult.error);
+  }
+  if (bookingResult.error) {
+    console.error("Opportunity booking lookup failed", bookingResult.error);
+  }
+  if (followResult.error) {
+    console.error("Opportunity follow lookup failed", followResult.error);
+  }
+
+  const viewerInterest = viewerInterestResult.data;
+  const campPreferenceRows = campPreferencesResult.data ?? [];
+  const bookingRows = bookingResult.data ?? [];
+  const followRows = followResult.data ?? [];
   const viewerInterestStatus =
     (viewerInterest?.status as InterestStatus | undefined) ?? undefined;
   const viewerHasTimetableReminder =
@@ -110,70 +189,21 @@ export default async function OpportunityDetailPage({
     : viewerInterestStatus === "withdrawn"
       ? undefined
       : viewerInterestStatus;
-  const isOrganizer = user?.id === opportunity.createdBy;
-  if (isOrganizer) {
-    redirect(`/app/organizer/opportunities/${opportunity.id}`);
-  }
-
   if (user) {
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("opportunity_id", opportunity.id)
-      .in("type", [...participantActivityNotificationTypes])
-      .eq("read", false);
+    after(async () => {
+      const { error: markReadError } = await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("user_id", user.id)
+        .eq("opportunity_id", opportunity.id)
+        .in("type", [...participantActivityNotificationTypes])
+        .eq("read", false);
+
+      if (markReadError) {
+        console.error("Opportunity notification read update failed", markReadError);
+      }
+    });
   }
-
-  const { data: campPreferenceRows } =
-    user && isCamp
-      ? await supabase
-          .from("camp_day_preferences")
-          .select("day_id,preferred_minutes")
-          .eq("opportunity_id", opportunity.id)
-          .eq("participant_id", user.id)
-          .order("day_id", { ascending: true })
-      : { data: [] };
-
-  const [{ count: publishedSlotCount }, { data: bookingRows }] =
-    user && !isHuckJam
-      ? await Promise.all([
-          supabase
-            .from("opportunity_time_slots")
-            .select("id", { count: "exact", head: true })
-            .eq("opportunity_id", opportunity.id)
-            .eq("is_published", true),
-          supabase
-            .from("opportunity_slot_bookings")
-            .select(
-              "id,slot_id,minutes,is_final,opportunity_time_slots(slot_date,start_time)",
-            )
-            .eq("opportunity_id", opportunity.id)
-            .eq("user_id", user.id)
-            .eq("is_final", true)
-            .order("created_at", { ascending: true }),
-        ])
-      : [{ count: 0 }, { data: [] }];
-  const followTargets = [
-    { target_type: "tunnel", target_id: opportunity.tunnelId },
-    opportunity.coachFollowId
-      ? { target_type: "coach", target_id: opportunity.coachFollowId }
-      : null,
-  ].filter(
-    (target): target is { target_type: "tunnel" | "coach"; target_id: string } =>
-      Boolean(target),
-  );
-  const { data: followRows } =
-    user && followTargets.length > 0
-      ? await supabase
-          .from("follows")
-          .select("target_type,target_id")
-          .eq("follower_id", user.id)
-          .in(
-            "target_id",
-            followTargets.map((target) => target.target_id),
-          )
-      : { data: [] };
   const followedKeys = new Set(
     (followRows ?? []).map(
       (follow) => `${follow.target_type}:${follow.target_id}`,
@@ -183,7 +213,7 @@ export default async function OpportunityDetailPage({
   const followsCoach = opportunity.coachFollowId
     ? followedKeys.has(`coach:${opportunity.coachFollowId}`)
     : false;
-  const hasPublishedTimetable = (publishedSlotCount ?? 0) > 0;
+  const hasPublishedTimetable = opportunity.hasPublishedTimetable === true;
   const isAccepted = viewerApplicationStatus === "accepted";
   const canRequestCampRemoval =
     !isHuckJam && isAccepted && Boolean(viewerInterest?.id);
@@ -534,9 +564,10 @@ export default async function OpportunityDetailPage({
             ) : !isCamp && opportunity.bookingMode === "approval_required" ? (
               <div className="mt-4">
                 <InterestButton
+                  key={opportunity.id}
                   opportunityId={opportunity.id}
                   disabled={false}
-                  initialStatus={viewerApplicationStatus}
+                  initialStatus={viewerApplicationStatus ?? null}
                   compact
                   isFull={isFull}
                 />
@@ -575,9 +606,12 @@ export default async function OpportunityDetailPage({
             {opportunity.coachFollowId && !isOrganizer ? (
               <div className="shrink-0">
                 <FollowButton
+                  key={`coach:${opportunity.coachFollowId}`}
                   targetType="coach"
                   targetId={opportunity.coachFollowId}
                   label={personLabel === "Coach" ? "Follow Coach" : "Follow Organizer"}
+                  initialFollowing={followsCoach}
+                  userId={user?.id}
                 />
               </div>
             ) : null}
@@ -601,9 +635,12 @@ export default async function OpportunityDetailPage({
             {!isOrganizer ? (
               <div className="shrink-0">
                 <FollowButton
+                  key={`tunnel:${opportunity.tunnelId}`}
                   targetType="tunnel"
                   targetId={opportunity.tunnelId}
                   label="Follow Tunnel"
+                  initialFollowing={followsTunnel}
+                  userId={user?.id}
                 />
               </div>
             ) : null}

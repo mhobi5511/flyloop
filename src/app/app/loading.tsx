@@ -1,8 +1,8 @@
-import { AppShell } from "@/components/AppShell";
+import { AppLoadingFrame } from "@/components/AppLoadingFrame";
 
 export default function AppLoading() {
   return (
-    <AppShell>
+    <AppLoadingFrame>
       <div className="grid gap-5">
         <div className="h-40 animate-pulse rounded-3xl bg-slate-200" />
         <div className="grid gap-3 md:grid-cols-2">
@@ -14,6 +14,6 @@ export default function AppLoading() {
           ))}
         </div>
       </div>
-    </AppShell>
+    </AppLoadingFrame>
   );
 }

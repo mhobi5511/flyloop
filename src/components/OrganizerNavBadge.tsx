@@ -1,155 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { countBadgeNotifications } from "@/lib/notifications";
 import { NotificationCountBadge } from "./NotificationCountBadge";
-
-type OrganizerNavBadgeProps = {
-  initialCount: number;
-  compact?: boolean;
-  notificationTypes?: readonly string[];
-};
-
-type BadgeSubscription = {
-  channel: RealtimeChannel;
-  listeners: Set<() => void>;
-  refCount: number;
-};
-
-const badgeSubscriptions = new Map<string, BadgeSubscription>();
+import { useNotificationCenter } from "./NotificationCenter";
 
 export function OrganizerNavBadge({
-  initialCount,
-  notificationTypes = ["new_interest"],
-}: OrganizerNavBadgeProps) {
-  const [count, setCount] = useState(initialCount);
-  const notificationTypesKey = notificationTypes.join("|");
-
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    let disposed = false;
-    let currentUserId: string | null = null;
-    let subscriptionKey: string | null = null;
-
-    async function loadCount() {
-      if (!currentUserId) {
-        return;
-      }
-
-      try {
-        const shouldFilterDeclined =
-          notificationTypesKey.split("|").includes("application_status");
-        const { count: unreadCount, data, error: countError } = shouldFilterDeclined
-          ? await supabase
-              .from("notifications")
-              .select("type,body")
-              .eq("user_id", currentUserId)
-              .eq("read", false)
-              .in("type", notificationTypesKey.split("|").filter(Boolean))
-          : await supabase
-          .from("notifications")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", currentUserId)
-          .eq("read", false)
-          .in("type", notificationTypesKey.split("|").filter(Boolean));
-
-        if (countError) {
-          console.error("Organizer nav badge count failed", countError);
-          return;
-        }
-
-        if (!disposed) {
-          setCount(
-            shouldFilterDeclined
-              ? countBadgeNotifications(data ?? [])
-              : (unreadCount ?? 0),
-          );
-        }
-      } catch (countError) {
-        console.error("Organizer nav badge count failed", countError);
-      }
-    }
-
-    function handleRead() {
-      void loadCount();
-    }
-
-    window.addEventListener("flyloop-notifications-read", handleRead);
-    const userPromise = supabase.auth.getUser().then(({ data }) => data.user?.id ?? null);
-
-    void userPromise.then((userId) => {
-      if (!userId || disposed) {
-        return;
-      }
-
-      currentUserId = userId;
-      void loadCount();
-
-      const key = `${userId}:${notificationTypesKey}`;
-      subscriptionKey = key;
-
-      const existingSubscription = badgeSubscriptions.get(key);
-
-      if (existingSubscription) {
-        existingSubscription.refCount += 1;
-        existingSubscription.listeners.add(loadCount);
-        return;
-      }
-
-      const listeners = new Set<() => void>([loadCount]);
-      const channel = supabase.channel(`organizer-notifications:${key}`);
-
-      channel.on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          for (const listener of listeners) {
-            listener();
-          }
-        },
-      );
-
-      badgeSubscriptions.set(key, {
-        channel,
-        listeners,
-        refCount: 1,
-      });
-
-      void channel.subscribe();
-    });
-
-    const interval = window.setInterval(() => void loadCount(), 15_000);
-
-    return () => {
-      disposed = true;
-      window.removeEventListener("flyloop-notifications-read", handleRead);
-      window.clearInterval(interval);
-      if (!subscriptionKey) {
-        return;
-      }
-
-      const subscription = badgeSubscriptions.get(subscriptionKey);
-
-      if (!subscription) {
-        return;
-      }
-
-      subscription.listeners.delete(loadCount);
-      subscription.refCount -= 1;
-
-      if (subscription.refCount <= 0) {
-        badgeSubscriptions.delete(subscriptionKey);
-        void supabase.removeChannel(subscription.channel);
-      }
-    };
-  }, [notificationTypesKey]);
+  kind,
+}: {
+  kind: "organizer" | "participant";
+}) {
+  const { organizerUnreadCount, participantUnreadCount } =
+    useNotificationCenter();
+  const count =
+    kind === "organizer" ? organizerUnreadCount : participantUnreadCount;
 
   if (count === 0) {
     return null;

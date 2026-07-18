@@ -14,6 +14,7 @@ import {
 } from "@/lib/notifications";
 import { isOpportunityCompleted } from "@/lib/opportunity-lifecycle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
 type DashboardTab = "camps" | "huck-jams" | "past";
@@ -110,7 +111,7 @@ export default async function OrganizerDashboardPage({
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUser();
   const { data: profile } = await supabase
     .from("profiles")
     .select("is_organizer,wants_to_create_opportunities")

@@ -17,6 +17,20 @@ export type PwaInstallState = {
 
 let installPromptEvent: BeforeInstallPromptEvent | null = null;
 const listeners = new Set<() => void>();
+let installListenerConsumers = 0;
+let installWindowListenersAttached = false;
+
+function handleBeforeInstallPrompt(event: Event) {
+  event.preventDefault();
+  installPromptEvent = event as BeforeInstallPromptEvent;
+  notifyInstallListeners();
+}
+
+function handleAppInstalled() {
+  installPromptEvent = null;
+  clearInstallGuidanceDismissal();
+  notifyInstallListeners();
+}
 
 export function isPwaInstalled() {
   if (typeof window === "undefined") {
@@ -76,20 +90,36 @@ export function subscribeToPwaInstallChanges(listener: () => void) {
 
 export function setupPwaInstallListeners() {
   if (typeof window === "undefined") {
-    return;
+    return () => undefined;
   }
 
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    installPromptEvent = event as BeforeInstallPromptEvent;
-    notifyInstallListeners();
-  });
+  installListenerConsumers += 1;
 
-  window.addEventListener("appinstalled", () => {
-    installPromptEvent = null;
-    clearInstallGuidanceDismissal();
-    notifyInstallListeners();
-  });
+  if (!installWindowListenersAttached) {
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+    installWindowListenersAttached = true;
+  }
+
+  let disposed = false;
+
+  return () => {
+    if (disposed) {
+      return;
+    }
+
+    disposed = true;
+    installListenerConsumers = Math.max(installListenerConsumers - 1, 0);
+
+    if (installListenerConsumers === 0 && installWindowListenersAttached) {
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
+      window.removeEventListener("appinstalled", handleAppInstalled);
+      installWindowListenersAttached = false;
+    }
+  };
 }
 
 export async function promptPwaInstall() {
