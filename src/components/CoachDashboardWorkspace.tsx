@@ -315,7 +315,7 @@ export function CoachDashboardWorkspace({
     );
   }
 
-  const desktopDayCount = isSidebarCollapsed ? 5 : 4;
+  const desktopDayCount = Math.min(visibleDays.length, 5);
   const clampedDesktopDayStart = Math.min(
     desktopDayStart,
     Math.max(visibleDays.length - desktopDayCount, 0),

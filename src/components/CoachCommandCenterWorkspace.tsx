@@ -391,9 +391,10 @@ function CoachCommandCenter({
         <div className="grid gap-2">
           {inboxAttentionItems.length > 0 ? (
             inboxAttentionItems.map((item) => (
-              <article
+              <Link
                 key={item.id}
-                className="group grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition hover:border-sky-200 hover:bg-sky-50/60 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
+                href={`/app/coach-dashboard/${item.campId}`}
+                className="group grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-sky-200 hover:bg-sky-50/60 focus:outline-none focus:ring-2 focus:ring-sky-300 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
               >
                 <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${getAttentionTone()}`}>
                   {getAttentionIcon()}
@@ -424,14 +425,13 @@ function CoachCommandCenter({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 md:justify-self-end">
-                  <Link
-                    href={`/app/coach-dashboard/${item.campId}`}
-                    className="inline-flex h-8 items-center rounded-lg bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-sky-700 hover:text-white"
+                  <span
+                    className="inline-flex h-8 items-center rounded-lg bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition group-hover:bg-sky-700 group-hover:text-white"
                   >
                     Open Schedule
-                  </Link>
+                  </span>
                 </div>
-              </article>
+              </Link>
             ))
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
