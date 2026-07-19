@@ -132,7 +132,11 @@ export function AppTabNavigation({
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950">
       <PrimaryTabPrefetcher hrefs={prefetchHrefs} />
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+      <header
+        className={`sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur ${
+          isWideWorkspaceRoute ? "md:hidden" : ""
+        }`}
+      >
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <Link href="/app" prefetch className="flex items-center gap-2">
             <Image
@@ -172,7 +176,7 @@ export function AppTabNavigation({
       <main
         className={
           isWideWorkspaceRoute
-            ? "mx-auto min-h-[calc(100dvh-138px)] w-[calc(100vw-1.5rem)] max-w-full pb-28 md:w-[80vw] md:pb-8"
+            ? "mx-auto min-h-[calc(100dvh-138px)] w-[calc(100vw-1.5rem)] max-w-full pb-28 md:min-h-dvh md:w-[80vw] md:pb-8"
             : "mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5 md:pb-8"
         }
       >
