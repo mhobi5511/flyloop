@@ -30,6 +30,7 @@ type CreateOpportunityFormProps = {
   initialType?: OpportunityType;
   mode?: "create" | "edit";
   onCancel?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   onSuccess?: (opportunityId: string) => void;
 };
 
@@ -192,6 +193,7 @@ export function CreateOpportunityForm({
   initialType,
   mode = "create",
   onCancel,
+  onDirtyChange,
   onSuccess,
 }: CreateOpportunityFormProps) {
   const router = useRouter();
@@ -294,6 +296,34 @@ export function CreateOpportunityForm({
   const priceAppliesToError =
     type === "camp" ? getPriceAppliesToError(minMinutesOrHours) : "";
   const flowName = type === "camp" ? "Camp" : "Huck Jam";
+  const hasUnsavedChanges =
+    type !== initialFormType ||
+    title !== (initialOpportunity?.title ?? "") ||
+    tunnelId !== (initialOpportunity?.tunnelId ?? "") ||
+    startDate !== initialStartDate ||
+    endDate !==
+      (initialOpportunity?.endDate ??
+        (initialFormType === "camp"
+          ? defaultCampEndDate
+          : addDays(initialStartDate, 5))) ||
+    registrationDeadline !==
+      (initialOpportunity?.registrationDeadline ?? initialStartDate) ||
+    tunnelTimeMode !== defaultTunnelTimeMode(initialOpportunity?.tunnelTimeMode) ||
+    deadlineMode !==
+      (initialOpportunity?.registrationDeadline &&
+      initialOpportunity.registrationDeadline !== initialStartDate
+        ? "custom"
+        : "start") ||
+    sessionStart !== (initialOpportunity?.sessionStart?.slice(0, 5) ?? "18:00") ||
+    sessionEnd !== (initialOpportunity?.sessionEnd?.slice(0, 5) ?? "20:00") ||
+    price !==
+      String(initialOpportunity?.price ?? (initialFormType === "huck_jam" ? "99" : "550")) ||
+    currency !== (initialOpportunity?.currency ?? "EUR") ||
+    totalCapacity !==
+      String(initialOpportunity?.totalCapacity ?? (initialFormType === "camp" ? "4" : "8")) ||
+    minMinutesOrHours !==
+      normalizeInitialPriceAppliesTo(initialOpportunity?.minMinutesOrHours) ||
+    description !== (initialOpportunity?.description ?? "");
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
@@ -309,6 +339,10 @@ export function CreateOpportunityForm({
       media.removeEventListener("change", updateViewport);
     };
   }, []);
+
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
 
   function goToStep(nextIndex: number) {
     setError("");
@@ -581,6 +615,11 @@ export function CreateOpportunityForm({
               setTunnelId(tunnel.id);
               setTunnelSearch("");
               setIsTunnelListOpen(false);
+            }}
+            onChangeTunnel={() => {
+              setTunnelId("");
+              setTunnelSearch("");
+              setIsTunnelListOpen(true);
             }}
           />
         ) : null}
@@ -952,6 +991,7 @@ function LocationStep({
   onSearch,
   onFocus,
   onSelect,
+  onChangeTunnel,
 }: {
   matches: TunnelOption[];
   selectedTunnel?: TunnelOption;
@@ -960,6 +1000,7 @@ function LocationStep({
   onSearch: (value: string) => void;
   onFocus: () => void;
   onSelect: (tunnel: TunnelOption) => void;
+  onChangeTunnel: () => void;
 }) {
   return (
     <div className="grid gap-3">
@@ -976,6 +1017,7 @@ function LocationStep({
         onSearch={onSearch}
         onFocus={onFocus}
         onSelect={onSelect}
+        onChangeTunnel={onChangeTunnel}
       />
     </div>
   );
@@ -1572,6 +1614,7 @@ function TunnelCombobox({
   onSearch,
   onFocus,
   onSelect,
+  onChangeTunnel,
 }: {
   matches: TunnelOption[];
   selectedTunnel?: TunnelOption;
@@ -1580,6 +1623,7 @@ function TunnelCombobox({
   onSearch: (value: string) => void;
   onFocus: () => void;
   onSelect: (tunnel: TunnelOption) => void;
+  onChangeTunnel: () => void;
 }) {
   return (
     <div className="grid min-w-0 gap-1 text-sm font-bold text-slate-700">
@@ -1587,23 +1631,15 @@ function TunnelCombobox({
         Tunnel <span className="text-rose-600">*</span>
       </span>
       <div className="relative z-20">
-        <input
-          className={fieldClass}
-          value={tunnelSearch}
-          onChange={(event) => onSearch(event.target.value)}
-          onFocus={onFocus}
-          placeholder="Search tunnel, city or country"
-          role="combobox"
-          aria-expanded={isOpen}
-          aria-controls="tunnel-options"
-          autoComplete="off"
-        />
-        {selectedTunnel && !tunnelSearch ? (
-          <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-left shadow-sm">
+        {selectedTunnel ? (
+          <div className="flex max-w-full items-center gap-3 rounded-xl border border-sky-300 bg-sky-50 px-3 py-2.5 text-left shadow-sm">
             <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sky-600 text-xs font-black text-white">
               <Check size={15} />
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-black uppercase tracking-[0.14em] text-sky-700">
+                Selected tunnel
+              </span>
               <span className="block truncate text-sm font-black text-sky-950">
                 {selectedTunnel.name}
               </span>
@@ -1611,9 +1647,28 @@ function TunnelCombobox({
                 {selectedTunnel.city}, {selectedTunnel.country}
               </span>
             </span>
+            <button
+              type="button"
+              onClick={onChangeTunnel}
+              className="h-8 shrink-0 rounded-lg border border-sky-200 bg-white px-3 text-xs font-black text-sky-800 transition hover:bg-sky-100"
+            >
+              Change tunnel
+            </button>
           </div>
-        ) : null}
-        {isOpen ? (
+        ) : (
+          <input
+            className={fieldClass}
+            value={tunnelSearch}
+            onChange={(event) => onSearch(event.target.value)}
+            onFocus={onFocus}
+            placeholder="Search tunnel, city or country"
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-controls="tunnel-options"
+            autoComplete="off"
+          />
+        )}
+        {!selectedTunnel && isOpen ? (
           <div
             id="tunnel-options"
             role="listbox"
@@ -1625,7 +1680,7 @@ function TunnelCombobox({
                   key={tunnel.id}
                   type="button"
                   role="option"
-                  aria-selected={selectedTunnel?.id === tunnel.id}
+                  aria-selected={false}
                   className="grid w-full gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-sky-50"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => onSelect(tunnel)}

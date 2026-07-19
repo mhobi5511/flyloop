@@ -181,7 +181,7 @@ export function CoachCommandCenterWorkspace({
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
-      <div className="mx-auto grid max-w-[96rem] gap-4 p-3 sm:p-4 xl:p-5">
+      <div className="grid w-full gap-4 p-3 sm:p-4 xl:p-5">
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 xl:p-5">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-stretch">
             <div className="grid gap-3">
@@ -636,16 +636,37 @@ function CreationModal({
   onClose: () => void;
   onSuccess: (opportunityId: string) => void;
 }) {
+  const [hasUnsavedCreationData, setHasUnsavedCreationData] = useState(false);
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
+
+  function requestClose() {
+    if (hasUnsavedCreationData) {
+      setShowDiscardConfirmation(true);
+      return;
+    }
+
+    onClose();
+  }
+
+  function discardAndClose() {
+    setShowDiscardConfirmation(false);
+    onClose();
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 grid bg-slate-950/40 p-3 md:place-items-center md:p-5"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
     >
       <section
         className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl md:max-h-[calc(100dvh-2.5rem)]"
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
@@ -655,7 +676,7 @@ function CreationModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
             aria-label="Close creation panel"
           >
@@ -667,11 +688,53 @@ function CreationModal({
             tunnels={tunnels}
             inheritedCoachProfile={inheritedCoachProfile}
             organizerName={organizerName}
-            onCancel={onClose}
+            onCancel={requestClose}
+            onDirtyChange={setHasUnsavedCreationData}
             onSuccess={onSuccess}
           />
         </div>
       </section>
+      {showDiscardConfirmation ? (
+        <div
+          className="absolute inset-0 z-10 grid place-items-center bg-slate-950/50 p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="discard-opportunity-title"
+          aria-describedby="discard-opportunity-description"
+        >
+          <section className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+            <h3
+              id="discard-opportunity-title"
+              className="text-lg font-black tracking-tight text-slate-950"
+            >
+              Discard opportunity?
+            </h3>
+            <p
+              id="discard-opportunity-description"
+              className="mt-2 text-sm font-semibold leading-6 text-slate-600"
+            >
+              Your entered information will be lost.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setShowDiscardConfirmation(false)}
+                className="h-10 rounded-xl bg-slate-950 px-3 text-sm font-black text-white transition hover:bg-slate-800"
+              >
+                Continue editing
+              </button>
+              <button
+                type="button"
+                onClick={discardAndClose}
+                className="h-10 rounded-xl border border-rose-200 bg-white px-3 text-sm font-black text-rose-700 transition hover:bg-rose-50"
+              >
+                Discard and close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

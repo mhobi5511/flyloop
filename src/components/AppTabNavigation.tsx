@@ -125,6 +125,9 @@ export function AppTabNavigation({
     [navItems],
   );
   const profileSelected = active === profileNavItem.id;
+  const isWideWorkspaceRoute =
+    pathname.startsWith("/app/coach-dashboard") ||
+    pathname.startsWith("/app/organizer/opportunities");
 
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-950">
@@ -166,7 +169,13 @@ export function AppTabNavigation({
           </div>
         </div>
       </header>
-      <main className="mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5 md:pb-8">
+      <main
+        className={
+          isWideWorkspaceRoute
+            ? "min-h-[calc(100dvh-138px)] pb-28 md:pb-8"
+            : "mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5 md:pb-8"
+        }
+      >
         {children}
       </main>
       {isAuthenticated ? (

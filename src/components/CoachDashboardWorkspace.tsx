@@ -385,7 +385,7 @@ export function CoachDashboardWorkspace({
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
-      <div className="mx-auto grid max-w-[96rem] gap-4 p-3 sm:p-4 xl:p-5">
+      <div className="grid w-full gap-4 p-3 sm:p-4 xl:p-5">
         <header className="hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 xl:block">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)] xl:items-stretch">
             <div className="grid content-start">
