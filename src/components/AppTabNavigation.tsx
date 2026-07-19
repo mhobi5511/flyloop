@@ -172,7 +172,7 @@ export function AppTabNavigation({
       <main
         className={
           isWideWorkspaceRoute
-            ? "min-h-[calc(100dvh-138px)] pb-28 md:pb-8"
+            ? "mx-auto min-h-[calc(100dvh-138px)] w-[calc(100vw-1.5rem)] max-w-full pb-28 md:w-[80vw] md:pb-8"
             : "mx-auto min-h-[calc(100dvh-138px)] max-w-5xl px-4 pb-28 pt-5 md:pb-8"
         }
       >
