@@ -505,7 +505,7 @@ export function CoachDashboardWorkspace({
     setMassBookingParticipantId(participantId);
   }
 
-  function toggleBulkSlotSelection(slotId: string) {
+  function toggleBulkSlotSelection(openPositionKey: string, slotId: string) {
     if (!activeCamp) {
       return;
     }
@@ -513,11 +513,17 @@ export function CoachDashboardWorkspace({
     setBulkError("");
     setBulkMessage("");
     setBulkSelectionCampId(activeCamp.id);
-    setSelectedBulkSlotIds((current) =>
-      current.includes(slotId)
-        ? current.filter((id) => id !== slotId)
-        : [...current, slotId],
-    );
+    setSelectedBulkSlotIds((current) => {
+      if (current.includes(openPositionKey)) {
+        return current.filter((key) => key !== openPositionKey);
+      }
+
+      const slotPrefix = `${slotId}:`;
+      return [
+        ...current.filter((key) => !key.startsWith(slotPrefix)),
+        openPositionKey,
+      ];
+    });
   }
 
   function toggleBulkAssignmentSelection(bookingId: string) {
@@ -553,10 +559,13 @@ export function CoachDashboardWorkspace({
 
     startBulkTransition(async () => {
       try {
+        const selectedSlotIds = [
+          ...new Set(activeSelectedBulkSlotIds.map((key) => key.split(":")[0])),
+        ];
         const result = await bulkAssignParticipantToSlots({
           opportunityId: activeCamp.id,
           participantId,
-          slotIds: activeSelectedBulkSlotIds,
+          slotIds: selectedSlotIds,
         });
 
         if (!result.ok) {
@@ -948,7 +957,6 @@ export function CoachDashboardWorkspace({
                             slot.capacity - slot.bookings.length,
                             0,
                           );
-                          const slotSelected = selectedBulkSlotIdSet.has(slot.id);
 
                           return (
                             <article
@@ -1005,7 +1013,7 @@ export function CoachDashboardWorkspace({
                                   return (
                                     <div key={booking.id} className="grid gap-1.5">
                                       <div
-                                        className={`grid w-full gap-2 rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm transition ${
+                                        className={`grid min-h-12 w-full gap-1 rounded-md border-l-4 px-2.5 py-1.5 text-left shadow-sm transition ${
                                           assignmentSelected
                                             ? "ring-2 ring-sky-400 ring-offset-1"
                                             : ""
@@ -1020,8 +1028,23 @@ export function CoachDashboardWorkspace({
                                         }}
                                       >
                                         <div className="flex min-w-0 items-center justify-between gap-3">
-                                          <span className="block min-w-0 truncate text-sm font-black">
-                                            {booking.athleteName}
+                                          <span className="grid min-w-0 gap-0.5">
+                                            <span className="block min-w-0 truncate text-sm font-black leading-4">
+                                              {booking.athleteName}
+                                            </span>
+                                            <span className="flex flex-wrap items-center gap-1.5 text-xs font-bold leading-4 opacity-80">
+                                              <span>{booking.minutes} min</span>
+                                              {booking.isFinal === false ? (
+                                                <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.08em] text-orange-700">
+                                                  Draft
+                                                </span>
+                                              ) : null}
+                                              {releaseRequested ? (
+                                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.65rem] font-black uppercase text-amber-800">
+                                                  Release Requested
+                                                </span>
+                                              ) : null}
+                                            </span>
                                           </span>
                                           <FlyloopSelectionCheckbox
                                             checked={assignmentSelected}
@@ -1031,28 +1054,15 @@ export function CoachDashboardWorkspace({
                                             ariaLabel={`Select ${booking.athleteName}'s ${formatTimetableTime(slot.startTime)} assignment for release`}
                                           />
                                         </div>
-                                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold opacity-80">
-                                          <span>{booking.minutes} min</span>
-                                          {booking.isFinal === false ? (
-                                            <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                              Draft
-                                            </span>
-                                          ) : null}
-                                          {releaseRequested ? (
-                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-black uppercase text-amber-800">
-                                              Release Requested
-                                            </span>
-                                          ) : null}
-                                        </span>
-                                        <div className="flex flex-wrap items-center gap-1.5 px-1">
-                                          {releaseRequested ? (
+                                        {releaseRequested ? (
+                                          <div className="flex flex-wrap items-center gap-1.5 px-1">
                                             <SlotReleaseRequestActions
                                               opportunityId={activeCamp.id}
                                               bookingId={booking.id}
                                               compact
                                             />
-                                          ) : null}
-                                        </div>
+                                          </div>
+                                        ) : null}
                                       </div>
                                     </div>
                                   );
@@ -1062,31 +1072,43 @@ export function CoachDashboardWorkspace({
                                     slot.capacity - slot.bookings.length,
                                     0,
                                   ),
-                                }).map((_, index) => (
-                                  <div
-                                    key={`${slot.id}-open-${index}`}
-                                    className="grid gap-2"
-                                  >
-                                    <AssignSlotButton
-                                      opportunityId={activeCamp.id}
-                                      slotId={slot.id}
-                                      participants={
-                                        assignableParticipantsBySlotId?.get(slot.id) ??
-                                        emptyAssignableParticipants
-                                      }
-                                      selected={slotSelected}
-                                      selectionControl={
-                                        <FlyloopSelectionCheckbox
-                                          checked={slotSelected}
-                                          onCheckedChange={() =>
-                                            toggleBulkSlotSelection(slot.id)
-                                          }
-                                          ariaLabel={`Select open capacity at ${formatTimetableTime(slot.startTime)} for bulk assignment`}
-                                        />
-                                      }
-                                    />
-                                  </div>
-                                ))}
+                                }).map((_, index) => {
+                                  const openPositionKey = `${slot.id}:${index}`;
+                                  const openPositionSelected =
+                                    selectedBulkSlotIdSet.has(openPositionKey);
+                                  const slotHasDifferentSelection = activeSelectedBulkSlotIds.some(
+                                    (key) =>
+                                      key.startsWith(`${slot.id}:`) &&
+                                      key !== openPositionKey,
+                                  );
+
+                                  return (
+                                    <div
+                                      key={`${slot.id}-open-${index}`}
+                                      className="grid gap-1"
+                                    >
+                                      <AssignSlotButton
+                                        opportunityId={activeCamp.id}
+                                        slotId={slot.id}
+                                        participants={
+                                          assignableParticipantsBySlotId?.get(slot.id) ??
+                                          emptyAssignableParticipants
+                                        }
+                                        selected={openPositionSelected}
+                                        selectionControl={
+                                          <FlyloopSelectionCheckbox
+                                            checked={openPositionSelected}
+                                            disabled={slotHasDifferentSelection}
+                                            onCheckedChange={() =>
+                                              toggleBulkSlotSelection(openPositionKey, slot.id)
+                                            }
+                                            ariaLabel={`Select open capacity row ${index + 1} at ${formatTimetableTime(slot.startTime)} for bulk assignment`}
+                                          />
+                                        }
+                                      />
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </article>
                           );
@@ -1185,7 +1207,6 @@ export function CoachDashboardWorkspace({
                           day.slots.map((slot) => {
                             const isFull = slot.bookings.length >= slot.capacity;
                             const isDraftSlot = slot.isPublished === false;
-                            const slotSelected = selectedBulkSlotIdSet.has(slot.id);
 
                             return (
                               <article
@@ -1232,7 +1253,7 @@ export function CoachDashboardWorkspace({
                                     return (
                                       <div
                                         key={booking.id}
-                                        className={`grid gap-2 rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm transition ${
+                                        className={`grid min-h-12 gap-1 rounded-md border-l-4 px-2.5 py-1.5 text-left text-white shadow-sm transition ${
                                           assignmentSelected
                                             ? "ring-2 ring-sky-300 ring-offset-1"
                                             : ""
@@ -1258,10 +1279,18 @@ export function CoachDashboardWorkspace({
                                                 setTabletPanel("participant");
                                               }
                                             }}
-                                            className="min-w-0 flex-1 text-left"
+                                            className="grid min-w-0 flex-1 gap-0.5 text-left"
                                           >
-                                            <span className="block truncate text-sm font-black">
+                                            <span className="block truncate text-sm font-black leading-4">
                                               {booking.athleteName}
+                                            </span>
+                                            <span className="flex items-center gap-1.5 text-xs font-bold leading-4 text-white/80">
+                                              <span>{booking.minutes} min</span>
+                                              {booking.isFinal === false ? (
+                                                <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.08em] text-orange-700">
+                                                  Draft
+                                                </span>
+                                              ) : null}
                                             </span>
                                           </button>
                                           <FlyloopSelectionCheckbox
@@ -1272,44 +1301,49 @@ export function CoachDashboardWorkspace({
                                             ariaLabel={`Select ${booking.athleteName}'s ${formatTimetableTime(slot.startTime)} assignment for release`}
                                           />
                                         </div>
-                                        <span className="flex items-center gap-2 text-xs font-bold text-white/80">
-                                          <span>{booking.minutes} min</span>
-                                          {booking.isFinal === false ? (
-                                            <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                              Draft
-                                            </span>
-                                          ) : null}
-                                        </span>
                                       </div>
                                     );
                                   })}
                                   {Array.from({
                                     length: Math.max(slot.capacity - slot.bookings.length, 0),
-                                  }).map((_, index) => (
-                                    <div
-                                      key={`${slot.id}-tablet-open-${index}`}
-                                      className="grid gap-2"
-                                    >
-                                      <AssignSlotButton
-                                        opportunityId={activeCamp.id}
-                                        slotId={slot.id}
-                                        participants={
-                                          assignableParticipantsBySlotId?.get(slot.id) ??
-                                          emptyAssignableParticipants
-                                        }
-                                        selected={slotSelected}
-                                        selectionControl={
-                                          <FlyloopSelectionCheckbox
-                                            checked={slotSelected}
-                                            onCheckedChange={() =>
-                                              toggleBulkSlotSelection(slot.id)
-                                            }
-                                            ariaLabel={`Select open capacity at ${formatTimetableTime(slot.startTime)} for bulk assignment`}
-                                          />
-                                        }
-                                      />
-                                    </div>
-                                  ))}
+                                  }).map((_, index) => {
+                                    const openPositionKey = `${slot.id}:${index}`;
+                                    const openPositionSelected =
+                                      selectedBulkSlotIdSet.has(openPositionKey);
+                                    const slotHasDifferentSelection =
+                                      activeSelectedBulkSlotIds.some(
+                                        (key) =>
+                                          key.startsWith(`${slot.id}:`) &&
+                                          key !== openPositionKey,
+                                      );
+
+                                    return (
+                                      <div
+                                        key={`${slot.id}-tablet-open-${index}`}
+                                        className="grid gap-1"
+                                      >
+                                        <AssignSlotButton
+                                          opportunityId={activeCamp.id}
+                                          slotId={slot.id}
+                                          participants={
+                                            assignableParticipantsBySlotId?.get(slot.id) ??
+                                            emptyAssignableParticipants
+                                          }
+                                          selected={openPositionSelected}
+                                          selectionControl={
+                                            <FlyloopSelectionCheckbox
+                                              checked={openPositionSelected}
+                                              disabled={slotHasDifferentSelection}
+                                              onCheckedChange={() =>
+                                                toggleBulkSlotSelection(openPositionKey, slot.id)
+                                              }
+                                              ariaLabel={`Select open capacity row ${index + 1} at ${formatTimetableTime(slot.startTime)} for bulk assignment`}
+                                            />
+                                          }
+                                        />
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </article>
                             );
