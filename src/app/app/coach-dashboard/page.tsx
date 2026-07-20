@@ -15,6 +15,7 @@ import {
   coachNotificationTypes,
 } from "@/lib/notifications";
 import { formatOpportunityDate } from "@/lib/opportunities";
+import { calculateEstimatedCost } from "@/lib/timetable";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterestStatus, OpportunityStatus, OpportunityType } from "@/lib/types";
 
@@ -42,6 +43,9 @@ type CoachOpportunityRow = {
   end_date: string;
   registration_deadline: string | null;
   tunnel_shared_at: string | null;
+  price: number | string | null;
+  currency: string | null;
+  min_minutes_or_hours: string | null;
   created_at: string | null;
   updated_at: string | null;
   tunnel_profiles:
@@ -92,6 +96,7 @@ type CoachOpportunityRow = {
                       user_id: string | null;
                       participant_profile_id: string | null;
                       dummy_participant_id: string | null;
+                      minutes: number | null;
                       is_final: boolean;
                       release_requested_at: string | null;
                       profiles:
@@ -148,7 +153,7 @@ export default async function CoachDashboardPage() {
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,status)),opportunity_dummy_participants(id,display_name,created_at),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,participant_profile_id,dummy_participant_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name),opportunity_dummy_participants!opportunity_slot_bookings_dummy_participant_id_fkey(id,display_name)))",
+          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,price,currency,min_minutes_or_hours,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,status)),opportunity_dummy_participants(id,display_name,created_at),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,participant_profile_id,dummy_participant_id,minutes,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name),opportunity_dummy_participants!opportunity_slot_bookings_dummy_participant_id_fkey(id,display_name)))",
         )
         .eq("created_by", user.id)
         .neq("status", "cancelled")
@@ -355,9 +360,16 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
   const draftTimetableChanges = (row.opportunity_time_slots ?? []).filter(
     (slot) => !slot.is_published,
   ).length;
-  const draftParticipantAssignments = (row.opportunity_time_slots ?? []).flatMap(
+  const slotBookings = (row.opportunity_time_slots ?? []).flatMap(
     (slot) => slot.opportunity_slot_bookings ?? [],
-  ).filter((booking) => booking.is_final === false).length;
+  );
+  const draftParticipantAssignments = slotBookings.filter(
+    (booking) => booking.is_final === false,
+  ).length;
+  const plannedMinutes = slotBookings.reduce(
+    (total, booking) => total + Number(booking.minutes ?? 0),
+    0,
+  );
   const hasPublishedTimetable = (row.opportunity_time_slots ?? []).some(
     (slot) => slot.is_published,
   );
@@ -412,8 +424,47 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
       releaseRequests.length > 0,
     applicants,
     releaseRequests,
+    planningSummary: {
+      plannedMinutes,
+      participantCount: acceptedApplicants.length,
+      expectedRevenueLabel: formatExpectedRevenue({
+        plannedMinutes,
+        price: row.price,
+        currency: row.currency,
+        priceAppliesToMinutes: row.min_minutes_or_hours,
+      }),
+      includesDraftChanges: draftTimetableChanges > 0 || draftParticipantAssignments > 0,
+    },
     createdAt: row.created_at,
   };
+}
+
+function formatExpectedRevenue({
+  plannedMinutes,
+  price,
+  currency,
+  priceAppliesToMinutes,
+}: {
+  plannedMinutes: number;
+  price: number | string | null;
+  currency: string | null;
+  priceAppliesToMinutes: string | null;
+}) {
+  const numericPrice = Number(price);
+
+  if (!currency || !Number.isFinite(numericPrice) || numericPrice <= 0) {
+    return "N/A";
+  }
+
+  const expectedRevenue = calculateEstimatedCost(
+    numericPrice,
+    plannedMinutes,
+    priceAppliesToMinutes,
+  );
+
+  return `${new Intl.NumberFormat("en", {
+    maximumFractionDigits: 2,
+  }).format(expectedRevenue)} ${currency}`;
 }
 
 function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttentionItem[] {

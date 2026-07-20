@@ -40,6 +40,12 @@ export type CoachWorkspaceCamp = {
   hasAttention: boolean;
   applicants: CoachWorkspaceApplicant[];
   releaseRequests: CoachWorkspaceReleaseRequest[];
+  planningSummary: {
+    plannedMinutes: number;
+    participantCount: number;
+    expectedRevenueLabel: string;
+    includesDraftChanges: boolean;
+  };
   createdAt: string | null;
 };
 
@@ -531,6 +537,27 @@ function CoachCommandCenter({
                     </div>
 
                     <div className="mt-3 grid gap-2">
+                      {camp.type === "camp" ? (
+                        <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 sm:grid-cols-3">
+                          <SummaryMetric
+                            label="Planned Minutes"
+                            value={`${camp.planningSummary.plannedMinutes} min`}
+                          />
+                          <SummaryMetric
+                            label="Participants"
+                            value={camp.planningSummary.participantCount}
+                          />
+                          <SummaryMetric
+                            label="Expected Revenue"
+                            value={camp.planningSummary.expectedRevenueLabel}
+                          />
+                          {camp.planningSummary.includesDraftChanges ? (
+                            <span className="rounded-xl bg-white px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-amber-700 ring-1 ring-amber-100 sm:col-span-3">
+                              Includes draft changes
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                         <MetricPill label="Athletes" value={camp.athleteCount} tone="slate" />
                         <MetricPill
@@ -735,6 +762,23 @@ function CreationModal({
           </section>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SummaryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl bg-white px-2.5 py-2 ring-1 ring-slate-100">
+      <p className="truncate text-[0.65rem] font-black uppercase tracking-[0.08em] text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-black text-slate-950">{value}</p>
     </div>
   );
 }

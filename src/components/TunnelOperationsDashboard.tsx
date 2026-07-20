@@ -72,6 +72,9 @@ const participantColors = [
   { bg: "#c2410c", soft: "#ffedd5", text: "#9a3412" },
 ];
 
+const dashboardWidthClass =
+  "mx-auto w-full px-3 sm:w-[calc(100vw-2rem)] sm:px-0 lg:w-[80vw] 2xl:max-w-[120rem]";
+
 export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardProps) {
   const router = useRouter();
   const storageKey = `flyloop:tunnel-dashboard:${data.opportunity.id}:last-viewed`;
@@ -158,7 +161,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
     <main className="min-h-screen bg-slate-100 text-slate-950">
       {hasChanges ? (
         <div className="sticky top-0 z-30 border-b border-amber-200 bg-amber-50 px-5 py-3 shadow-sm">
-          <div className="mx-auto flex max-w-[96rem] items-center justify-between gap-4">
+          <div className={`${dashboardWidthClass} flex items-center justify-between gap-4`}>
             <p className="text-sm font-black text-amber-900">
               New changes available
             </p>
@@ -178,7 +181,7 @@ export function TunnelOperationsDashboard({ data }: TunnelOperationsDashboardPro
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-[96rem] gap-4 p-3 sm:p-4 xl:p-5">
+      <div className={`${dashboardWidthClass} grid gap-4 py-3 sm:py-4 xl:py-5`}>
         <header className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-stretch">
             <div className="grid content-start">
