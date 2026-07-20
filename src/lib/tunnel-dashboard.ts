@@ -170,7 +170,8 @@ type SlotRow = {
 type EventRow = {
   id: string;
   event_type: "booked" | "removed" | "rotation_changed";
-  user_id: string;
+  user_id: string | null;
+  dummy_participant_id: string | null;
   slot_date: string;
   start_time: string;
   minutes: number;
@@ -180,6 +181,10 @@ type EventRow = {
   profiles:
     | { full_name: string | null }
     | Array<{ full_name: string | null }>
+    | null;
+  opportunity_dummy_participants:
+    | { id: string; display_name: string | null }
+    | Array<{ id: string; display_name: string | null }>
     | null;
 };
 
@@ -288,7 +293,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .order("start_time", { ascending: true }),
     supabase
       .from("opportunity_slot_booking_events")
-      .select("id,event_type,user_id,slot_date,start_time,minutes,previous_rotation_minutes,new_rotation_minutes,created_at,profiles!opportunity_slot_booking_events_user_id_fkey(full_name)")
+      .select("id,event_type,user_id,dummy_participant_id,slot_date,start_time,minutes,previous_rotation_minutes,new_rotation_minutes,created_at,profiles!opportunity_slot_booking_events_user_id_fkey(full_name),opportunity_dummy_participants!opportunity_slot_booking_events_dummy_participant_id_fkey(id,display_name)")
       .eq("opportunity_id", link.opportunity_id)
       .order("created_at", { ascending: false })
       .limit(100),
@@ -510,12 +515,15 @@ function getTunnelTimeByParticipant(rows: InterestRow[]) {
 function normalizeEvents(rows: EventRow[]) {
   return rows.map((event): TunnelDashboardEvent => {
     const profile = Array.isArray(event.profiles) ? event.profiles[0] : event.profiles;
+    const dummy = Array.isArray(event.opportunity_dummy_participants)
+      ? event.opportunity_dummy_participants[0]
+      : event.opportunity_dummy_participants;
 
     return {
       id: event.id,
       eventType: event.event_type,
-      participantId: event.user_id,
-      participantName: profile?.full_name ?? "Participant",
+      participantId: event.dummy_participant_id ?? event.user_id ?? event.id,
+      participantName: dummy?.display_name ?? profile?.full_name ?? "Participant",
       slotDate: event.slot_date,
       startTime: event.start_time,
       minutes: event.minutes,

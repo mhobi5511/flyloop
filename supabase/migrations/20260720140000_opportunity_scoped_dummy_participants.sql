@@ -28,12 +28,21 @@ alter table public.camp_day_preferences
   add column if not exists dummy_participant_id uuid
     references public.opportunity_dummy_participants(id) on delete cascade;
 
+alter table public.opportunity_slot_booking_events
+  add column if not exists dummy_participant_id uuid
+    references public.opportunity_dummy_participants(id) on delete cascade,
+  alter column user_id drop not null;
+
 create unique index if not exists opportunity_slot_bookings_slot_dummy_uidx
 on public.opportunity_slot_bookings(slot_id, dummy_participant_id)
 where dummy_participant_id is not null;
 
 create index if not exists opportunity_slot_bookings_opportunity_dummy_idx
 on public.opportunity_slot_bookings(opportunity_id, dummy_participant_id)
+where dummy_participant_id is not null;
+
+create index if not exists opportunity_slot_booking_events_opportunity_dummy_idx
+on public.opportunity_slot_booking_events(opportunity_id, dummy_participant_id, created_at)
 where dummy_participant_id is not null;
 
 create unique index if not exists camp_day_preferences_dummy_day_uidx
@@ -62,6 +71,16 @@ alter table public.camp_day_preferences
   check (
     dummy_participant_id is null
     or participant_profile_id is null
+  ) not valid;
+
+alter table public.opportunity_slot_booking_events
+  drop constraint if exists opportunity_slot_booking_events_user_xor_dummy_check;
+
+alter table public.opportunity_slot_booking_events
+  add constraint opportunity_slot_booking_events_user_xor_dummy_check
+  check (
+    (user_id is not null and dummy_participant_id is null)
+    or (user_id is null and dummy_participant_id is not null)
   ) not valid;
 
 alter table public.opportunity_dummy_participants enable row level security;
@@ -242,6 +261,113 @@ begin
   if current_booking_count >= slot_record.capacity then
     raise exception 'Slot is full';
   end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.log_opportunity_slot_booking_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  slot_record public.opportunity_time_slots%rowtype;
+  booking_record public.opportunity_slot_bookings%rowtype;
+begin
+  if tg_op = 'INSERT' then
+    booking_record := new;
+  elsif tg_op = 'DELETE' then
+    booking_record := old;
+  else
+    return null;
+  end if;
+
+  select *
+  into slot_record
+  from public.opportunity_time_slots
+  where id = booking_record.slot_id;
+
+  if not found then
+    return null;
+  end if;
+
+  insert into public.opportunity_slot_booking_events (
+    opportunity_id,
+    user_id,
+    dummy_participant_id,
+    slot_id,
+    event_type,
+    slot_date,
+    start_time,
+    minutes,
+    new_rotation_minutes
+  ) values (
+    booking_record.opportunity_id,
+    booking_record.user_id,
+    booking_record.dummy_participant_id,
+    booking_record.slot_id,
+    case when tg_op = 'INSERT' then 'booked' else 'removed' end,
+    slot_record.slot_date,
+    slot_record.start_time,
+    booking_record.minutes,
+    case when tg_op = 'INSERT' then booking_record.rotation_minutes else null end
+  );
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.log_opportunity_slot_rotation_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  slot_record public.opportunity_time_slots%rowtype;
+begin
+  if old.rotation_minutes is not distinct from new.rotation_minutes then
+    return new;
+  end if;
+
+  select *
+  into slot_record
+  from public.opportunity_time_slots
+  where id = new.slot_id;
+
+  if not found then
+    return new;
+  end if;
+
+  insert into public.opportunity_slot_booking_events (
+    opportunity_id,
+    user_id,
+    dummy_participant_id,
+    slot_id,
+    event_type,
+    slot_date,
+    start_time,
+    minutes,
+    previous_rotation_minutes,
+    new_rotation_minutes
+  ) values (
+    new.opportunity_id,
+    new.user_id,
+    new.dummy_participant_id,
+    new.slot_id,
+    'rotation_changed',
+    slot_record.slot_date,
+    slot_record.start_time,
+    new.minutes,
+    old.rotation_minutes,
+    new.rotation_minutes
+  );
 
   return new;
 end;
