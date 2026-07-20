@@ -3,11 +3,19 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  type ChangeEvent,
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   CalendarDays,
+  Check,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
@@ -157,6 +165,59 @@ function LazyModalFallback({ label }: { label: string }) {
         {label}
       </div>
     </div>
+  );
+}
+
+function FlyloopSelectionCheckbox({
+  checked,
+  disabled = false,
+  ariaLabel,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  ariaLabel: string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  function stopParentAction(event: MouseEvent<HTMLLabelElement>) {
+    event.stopPropagation();
+  }
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    event.stopPropagation();
+    onCheckedChange(event.target.checked);
+  }
+
+  return (
+    <label
+      className={`grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg ${
+        disabled ? "cursor-not-allowed" : "cursor-pointer"
+      }`}
+      onClick={stopParentAction}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={handleChange}
+        className="peer sr-only"
+        aria-label={ariaLabel}
+      />
+      <span
+        className={`grid size-7 place-items-center rounded-lg border transition duration-150 ${
+          checked
+            ? "border-sky-600 bg-sky-600 text-white shadow-sm shadow-sky-600/25"
+            : "border-slate-300 bg-white text-transparent shadow-sm hover:border-sky-400 hover:bg-sky-50"
+        } ${
+          disabled
+            ? "border-slate-200 bg-slate-100 text-transparent opacity-50 shadow-none"
+            : "peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sky-500"
+        }`}
+        aria-hidden="true"
+      >
+        <Check size={18} strokeWidth={3.2} />
+      </span>
+    </label>
   );
 }
 
@@ -905,28 +966,18 @@ export function CoachDashboardWorkspace({
                                   isDraftSlot ? "bg-white" : "bg-slate-50"
                                 }`}
                               >
-                                <label className="inline-flex min-w-0 items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={slotSelected}
-                                    disabled={remainingCapacity === 0}
-                                    onChange={() => toggleBulkSlotSelection(slot.id)}
-                                    className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
-                                    aria-label={`Select ${formatTimetableTime(slot.startTime)} for bulk assignment`}
-                                  />
-                                  <span className="inline-flex min-w-0 items-center gap-1.5 text-base font-black text-slate-950">
-                                    <Clock3 size={15} className="shrink-0 text-sky-700" />
-                                    {formatTimetableTime(slot.startTime)}
-                                    {isDraftSlot ? (
-                                      <span className="text-slate-300">|</span>
-                                    ) : null}
-                                    {isDraftSlot ? (
-                                      <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                        Draft
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                </label>
+                                <span className="inline-flex min-w-0 items-center gap-1.5 text-base font-black text-slate-950">
+                                  <Clock3 size={15} className="shrink-0 text-sky-700" />
+                                  {formatTimetableTime(slot.startTime)}
+                                  {isDraftSlot ? (
+                                    <span className="text-slate-300">|</span>
+                                  ) : null}
+                                  {isDraftSlot ? (
+                                    <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                      Draft
+                                    </span>
+                                  ) : null}
+                                </span>
                                 <span className="inline-flex items-center gap-1.5">
                                   <span
                                     className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
@@ -954,8 +1005,10 @@ export function CoachDashboardWorkspace({
                                   return (
                                     <div key={booking.id} className="grid gap-1.5">
                                       <div
-                                        className={`grid w-full gap-2 rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm ${
-                                          assignmentSelected ? "ring-2 ring-sky-400" : ""
+                                        className={`grid w-full gap-2 rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm transition ${
+                                          assignmentSelected
+                                            ? "ring-2 ring-sky-400 ring-offset-1"
+                                            : ""
                                         }`}
                                         style={{
                                           backgroundColor: colors?.soft,
@@ -966,20 +1019,18 @@ export function CoachDashboardWorkspace({
                                           color: colors?.text,
                                         }}
                                       >
-                                        <label className="flex min-w-0 items-start gap-2">
-                                          <input
-                                            type="checkbox"
-                                            checked={assignmentSelected}
-                                            onChange={() =>
-                                              toggleBulkAssignmentSelection(booking.id)
-                                            }
-                                            className="mt-0.5 size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                            aria-label={`Select ${booking.athleteName} assignment for release`}
-                                          />
+                                        <div className="flex min-w-0 items-center justify-between gap-3">
                                           <span className="block min-w-0 truncate text-sm font-black">
                                             {booking.athleteName}
                                           </span>
-                                        </label>
+                                          <FlyloopSelectionCheckbox
+                                            checked={assignmentSelected}
+                                            onCheckedChange={() =>
+                                              toggleBulkAssignmentSelection(booking.id)
+                                            }
+                                            ariaLabel={`Select ${booking.athleteName}'s ${formatTimetableTime(slot.startTime)} assignment for release`}
+                                          />
+                                        </div>
                                         <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold opacity-80">
                                           <span>{booking.minutes} min</span>
                                           {booking.isFinal === false ? (
@@ -1014,17 +1065,24 @@ export function CoachDashboardWorkspace({
                                 }).map((_, index) => (
                                   <div
                                     key={`${slot.id}-open-${index}`}
-                                    className="grid gap-2 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2"
+                                    className="grid gap-2"
                                   >
-                                    <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                                      Open slot
-                                    </p>
                                     <AssignSlotButton
                                       opportunityId={activeCamp.id}
                                       slotId={slot.id}
                                       participants={
                                         assignableParticipantsBySlotId?.get(slot.id) ??
                                         emptyAssignableParticipants
+                                      }
+                                      selected={slotSelected}
+                                      selectionControl={
+                                        <FlyloopSelectionCheckbox
+                                          checked={slotSelected}
+                                          onCheckedChange={() =>
+                                            toggleBulkSlotSelection(slot.id)
+                                          }
+                                          ariaLabel={`Select open capacity at ${formatTimetableTime(slot.startTime)} for bulk assignment`}
+                                        />
                                       }
                                     />
                                   </div>
@@ -1127,10 +1185,6 @@ export function CoachDashboardWorkspace({
                           day.slots.map((slot) => {
                             const isFull = slot.bookings.length >= slot.capacity;
                             const isDraftSlot = slot.isPublished === false;
-                            const remainingCapacity = Math.max(
-                              slot.capacity - slot.bookings.length,
-                              0,
-                            );
                             const slotSelected = selectedBulkSlotIdSet.has(slot.id);
 
                             return (
@@ -1145,28 +1199,18 @@ export function CoachDashboardWorkspace({
                                 }`}
                               >
                                 <div className="mb-2 flex items-center justify-between gap-2">
-                                  <label className="inline-flex min-w-0 items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={slotSelected}
-                                      disabled={remainingCapacity === 0}
-                                      onChange={() => toggleBulkSlotSelection(slot.id)}
-                                      className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
-                                      aria-label={`Select ${formatTimetableTime(slot.startTime)} for bulk assignment`}
-                                    />
-                                    <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-black">
-                                      <Clock3 size={15} className="shrink-0 text-sky-700" />
-                                      {formatTimetableTime(slot.startTime)}
-                                      {isDraftSlot ? (
-                                        <span className="text-slate-300">|</span>
-                                      ) : null}
-                                      {isDraftSlot ? (
-                                        <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                          Draft
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  </label>
+                                  <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-black">
+                                    <Clock3 size={15} className="shrink-0 text-sky-700" />
+                                    {formatTimetableTime(slot.startTime)}
+                                    {isDraftSlot ? (
+                                      <span className="text-slate-300">|</span>
+                                    ) : null}
+                                    {isDraftSlot ? (
+                                      <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                        Draft
+                                      </span>
+                                    ) : null}
+                                  </span>
                                   <span className="inline-flex items-center gap-1.5">
                                     <span
                                       className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
@@ -1188,8 +1232,10 @@ export function CoachDashboardWorkspace({
                                     return (
                                       <div
                                         key={booking.id}
-                                        className={`grid gap-2 rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm ${
-                                          assignmentSelected ? "ring-2 ring-sky-300" : ""
+                                        className={`grid gap-2 rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm transition ${
+                                          assignmentSelected
+                                            ? "ring-2 ring-sky-300 ring-offset-1"
+                                            : ""
                                         }`}
                                         style={{
                                           backgroundColor: colors?.bg,
@@ -1199,16 +1245,7 @@ export function CoachDashboardWorkspace({
                                               : colors?.bg,
                                         }}
                                       >
-                                        <div className="flex min-w-0 items-start gap-2">
-                                          <input
-                                            type="checkbox"
-                                            checked={assignmentSelected}
-                                            onChange={() =>
-                                              toggleBulkAssignmentSelection(booking.id)
-                                            }
-                                            className="mt-0.5 size-4 rounded border-white/60 text-sky-600 focus:ring-sky-500"
-                                            aria-label={`Select ${booking.athleteName} assignment for release`}
-                                          />
+                                        <div className="flex min-w-0 items-center justify-between gap-3">
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -1227,6 +1264,13 @@ export function CoachDashboardWorkspace({
                                               {booking.athleteName}
                                             </span>
                                           </button>
+                                          <FlyloopSelectionCheckbox
+                                            checked={assignmentSelected}
+                                            onCheckedChange={() =>
+                                              toggleBulkAssignmentSelection(booking.id)
+                                            }
+                                            ariaLabel={`Select ${booking.athleteName}'s ${formatTimetableTime(slot.startTime)} assignment for release`}
+                                          />
                                         </div>
                                         <span className="flex items-center gap-2 text-xs font-bold text-white/80">
                                           <span>{booking.minutes} min</span>
@@ -1244,17 +1288,24 @@ export function CoachDashboardWorkspace({
                                   }).map((_, index) => (
                                     <div
                                       key={`${slot.id}-tablet-open-${index}`}
-                                      className="grid gap-2 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2"
+                                      className="grid gap-2"
                                     >
-                                      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                                        Open slot
-                                      </p>
                                       <AssignSlotButton
                                         opportunityId={activeCamp.id}
                                         slotId={slot.id}
                                         participants={
                                           assignableParticipantsBySlotId?.get(slot.id) ??
                                           emptyAssignableParticipants
+                                        }
+                                        selected={slotSelected}
+                                        selectionControl={
+                                          <FlyloopSelectionCheckbox
+                                            checked={slotSelected}
+                                            onCheckedChange={() =>
+                                              toggleBulkSlotSelection(slot.id)
+                                            }
+                                            ariaLabel={`Select open capacity at ${formatTimetableTime(slot.startTime)} for bulk assignment`}
+                                          />
                                         }
                                       />
                                     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 import { UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { assignParticipantSlotBooking } from "@/app/app/organizer/opportunities/actions";
@@ -28,12 +28,16 @@ type AssignSlotButtonProps = {
   opportunityId: string;
   slotId: string;
   participants: AssignSlotParticipant[];
+  selectionControl?: ReactNode;
+  selected?: boolean;
 };
 
 export function AssignSlotButton({
   opportunityId,
   slotId,
   participants,
+  selectionControl,
+  selected = false,
 }: AssignSlotButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -86,14 +90,23 @@ export function AssignSlotButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openModal}
-        disabled={participants.length === 0}
-        className="inline-flex h-8 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+      <div
+        className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border px-2.5 py-1.5 transition ${
+          selected
+            ? "border-sky-400 bg-sky-50 ring-2 ring-sky-200"
+            : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+        } ${participants.length === 0 ? "border-slate-200 bg-slate-100" : ""}`}
       >
-        <UserPlus size={14} /> Assign Slot
-      </button>
+        <button
+          type="button"
+          onClick={openModal}
+          disabled={participants.length === 0}
+          className="inline-flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-xs font-black text-emerald-700 transition disabled:cursor-not-allowed disabled:text-slate-400"
+        >
+          <UserPlus size={15} className="shrink-0" /> <span className="truncate">Assign Slot</span>
+        </button>
+        {selectionControl ? <div className="shrink-0">{selectionControl}</div> : null}
+      </div>
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
