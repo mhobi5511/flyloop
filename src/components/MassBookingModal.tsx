@@ -66,6 +66,20 @@ export function MassBookingModal({
   const visibleDayCount = 3;
 
   const selectedSlotSet = useMemo(() => new Set(selectedSlotIds), [selectedSlotIds]);
+  const slotCapacityById = useMemo(
+    () =>
+      new Map(
+        camp.timetableSlots.map((slot) => [
+          slot.id,
+          {
+            bookingCount: slot.bookings.length,
+            capacity: slot.capacity,
+            remainingCapacity: Math.max(slot.capacity - slot.bookings.length, 0),
+          },
+        ]),
+      ),
+    [camp.timetableSlots],
+  );
   const dayColumns = useMemo(
     () =>
       campDays.map((day) => {
@@ -377,11 +391,20 @@ export function MassBookingModal({
 
                       <div className="mt-3 grid gap-2">
                         {day.slots.map((slot) => {
-                          const hasOtherAthleteBooking = slot.bookings.some(
-                            (booking) => booking.userId !== participant.userId,
-                          );
                           const isAssigned = selectedSlotSet.has(slot.id);
-                          const isUnavailable = !isAssigned && hasOtherAthleteBooking;
+                          const capacityState = slotCapacityById.get(slot.id);
+                          const remainingCapacity =
+                            capacityState?.remainingCapacity ??
+                            Math.max(slot.capacity - slot.bookings.length, 0);
+                          const isFull = remainingCapacity <= 0;
+                          const isUnavailable = !isAssigned && isFull;
+                          const capacityLabel = isAssigned
+                            ? "Already assigned"
+                            : isFull
+                              ? "Full"
+                              : remainingCapacity === 1
+                                ? "1 space left"
+                                : `${remainingCapacity} spaces left`;
 
                           return (
                             <button
@@ -402,7 +425,7 @@ export function MassBookingModal({
                                 {formatTimetableTime(slot.startTime)}
                               </p>
                               <p className="text-xs font-bold text-slate-500">
-                                {slot.durationMinutes} min
+                                {slot.durationMinutes} min · {capacityLabel}
                               </p>
                             </div>
                               <span
@@ -414,7 +437,7 @@ export function MassBookingModal({
                                       : 'bg-slate-100 text-slate-500'
                                 }`}
                               >
-                                {isAssigned ? 'Assigned' : isUnavailable ? 'Unavailable' : 'Available'}
+                                {isAssigned ? 'Assigned' : isUnavailable ? 'Full' : 'Available'}
                               </span>
                             </button>
                           );
