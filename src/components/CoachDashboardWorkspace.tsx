@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   CalendarDays,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -23,6 +24,7 @@ import {
   Settings,
   Share2,
   Send,
+  Trash2,
   UserPlus,
   Users,
   WalletCards,
@@ -34,7 +36,12 @@ import {
   type OpportunityFormInput,
 } from "@/app/app/create/actions";
 import { deleteOpportunity } from "@/app/app/opportunities/actions";
-import { saveCampTimetable, type TimetableSlotInput } from "@/app/app/organizer/opportunities/actions";
+import {
+  bulkAssignParticipantToSlots,
+  bulkReleaseSlotAssignments,
+  saveCampTimetable,
+  type TimetableSlotInput,
+} from "@/app/app/organizer/opportunities/actions";
 import { CampBuilderCopyDayButton } from "@/components/CampBuilderCopyDayButton";
 import { CampBuilderEditDayModal } from "@/components/CampBuilderEditDayModal";
 import { ApplicantStatusActions } from "@/components/ApplicantStatusActions";
@@ -157,6 +164,7 @@ export function CoachDashboardWorkspace({
   selectedCampId,
   camps,
 }: CoachDashboardWorkspaceProps) {
+  const router = useRouter();
   const workspaceViewport = useWorkspaceViewport();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<"share" | null>(null);
@@ -177,6 +185,15 @@ export function CoachDashboardWorkspace({
     () => new Set(),
   );
   const [selfBookingError, setSelfBookingError] = useState("");
+  const [selectedBulkSlotIds, setSelectedBulkSlotIds] = useState<string[]>([]);
+  const [selectedBulkAssignmentIds, setSelectedBulkAssignmentIds] = useState<string[]>([]);
+  const [bulkSelectionCampId, setBulkSelectionCampId] = useState("");
+  const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
+  const [isBulkReleaseOpen, setIsBulkReleaseOpen] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkError, setBulkError] = useState("");
+  const [pendingBulkParticipantId, setPendingBulkParticipantId] = useState("");
+  const [isBulkPending, startBulkTransition] = useTransition();
   const sourceActiveCamp = useMemo(
     () => camps.find((camp) => camp.id === selectedCampId) ?? camps[0],
     [camps, selectedCampId],
@@ -287,6 +304,30 @@ export function CoachDashboardWorkspace({
     workspaceViewport === null || workspaceViewport === "desktop";
   const renderTabletWorkspace =
     workspaceViewport === null || workspaceViewport === "tablet";
+  const isBulkSelectionForActiveCamp = bulkSelectionCampId === activeCamp?.id;
+  const activeSelectedBulkSlotIds = useMemo(
+    () => (isBulkSelectionForActiveCamp ? selectedBulkSlotIds : []),
+    [isBulkSelectionForActiveCamp, selectedBulkSlotIds],
+  );
+  const activeSelectedBulkAssignmentIds = useMemo(
+    () => (isBulkSelectionForActiveCamp ? selectedBulkAssignmentIds : []),
+    [isBulkSelectionForActiveCamp, selectedBulkAssignmentIds],
+  );
+  const selectedBulkSlotIdSet = useMemo(
+    () => new Set(activeSelectedBulkSlotIds),
+    [activeSelectedBulkSlotIds],
+  );
+  const selectedBulkAssignmentIdSet = useMemo(
+    () => new Set(activeSelectedBulkAssignmentIds),
+    [activeSelectedBulkAssignmentIds],
+  );
+  const bulkAssignableParticipants = useMemo(
+    () =>
+      (activeCamp?.participants ?? [])
+        .filter((participant) => participant.status === "accepted" && participant.userId)
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [activeCamp?.participants],
+  );
 
   function focusApplicants() {
     setSelectedParticipantId("");
@@ -401,6 +442,108 @@ export function CoachDashboardWorkspace({
 
   function openMassBooking(participantId: string) {
     setMassBookingParticipantId(participantId);
+  }
+
+  function toggleBulkSlotSelection(slotId: string) {
+    if (!activeCamp) {
+      return;
+    }
+
+    setBulkError("");
+    setBulkMessage("");
+    setBulkSelectionCampId(activeCamp.id);
+    setSelectedBulkSlotIds((current) =>
+      current.includes(slotId)
+        ? current.filter((id) => id !== slotId)
+        : [...current, slotId],
+    );
+  }
+
+  function toggleBulkAssignmentSelection(bookingId: string) {
+    if (!activeCamp) {
+      return;
+    }
+
+    setBulkError("");
+    setBulkMessage("");
+    setBulkSelectionCampId(activeCamp.id);
+    setSelectedBulkAssignmentIds((current) =>
+      current.includes(bookingId)
+        ? current.filter((id) => id !== bookingId)
+        : [...current, bookingId],
+    );
+  }
+
+  function clearBulkSelection() {
+    setBulkSelectionCampId(activeCamp.id);
+    setSelectedBulkSlotIds([]);
+    setSelectedBulkAssignmentIds([]);
+    setBulkError("");
+    setBulkMessage("");
+  }
+
+  function assignBulkSlots(participantId: string) {
+    if (!activeCamp || activeSelectedBulkSlotIds.length === 0) {
+      return;
+    }
+
+    setBulkError("");
+    setPendingBulkParticipantId(participantId);
+
+    startBulkTransition(async () => {
+      try {
+        const result = await bulkAssignParticipantToSlots({
+          opportunityId: activeCamp.id,
+          participantId,
+          slotIds: activeSelectedBulkSlotIds,
+        });
+
+        if (!result.ok) {
+          setBulkError(result.message);
+          return;
+        }
+
+        setSelectedBulkSlotIds([]);
+        setIsBulkAssignOpen(false);
+        setBulkMessage(result.message);
+        router.refresh();
+      } catch (error) {
+        console.error("Bulk slot assignment failed", error);
+        setBulkError("Could not assign selected slots.");
+      } finally {
+        setPendingBulkParticipantId("");
+      }
+    });
+  }
+
+  function releaseBulkAssignments() {
+    if (!activeCamp || activeSelectedBulkAssignmentIds.length === 0) {
+      return;
+    }
+
+    setBulkError("");
+
+    startBulkTransition(async () => {
+      try {
+        const result = await bulkReleaseSlotAssignments({
+          opportunityId: activeCamp.id,
+          bookingIds: activeSelectedBulkAssignmentIds,
+        });
+
+        if (!result.ok) {
+          setBulkError(result.message);
+          return;
+        }
+
+        setSelectedBulkAssignmentIds([]);
+        setIsBulkReleaseOpen(false);
+        setBulkMessage(result.message);
+        router.refresh();
+      } catch (error) {
+        console.error("Bulk slot release failed", error);
+        setBulkError("Could not release selected assignments.");
+      }
+    });
   }
 
   function handleParticipantAdded(participant: Participant) {
@@ -740,6 +883,11 @@ export function CoachDashboardWorkspace({
                         day.slots.map((slot) => {
                           const isFull = slot.bookings.length >= slot.capacity;
                           const isDraftSlot = slot.isPublished === false;
+                          const remainingCapacity = Math.max(
+                            slot.capacity - slot.bookings.length,
+                            0,
+                          );
+                          const slotSelected = selectedBulkSlotIdSet.has(slot.id);
 
                           return (
                             <article
@@ -757,18 +905,28 @@ export function CoachDashboardWorkspace({
                                   isDraftSlot ? "bg-white" : "bg-slate-50"
                                 }`}
                               >
-                                <p className="inline-flex items-center gap-1.5 text-base font-black text-slate-950">
-                                  <Clock3 size={15} className="text-sky-700" />
-                                  {formatTimetableTime(slot.startTime)}
-                                  {isDraftSlot ? (
-                                    <span className="text-slate-300">|</span>
-                                  ) : null}
-                                  {isDraftSlot ? (
-                                    <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                      Draft
-                                    </span>
-                                  ) : null}
-                                </p>
+                                <label className="inline-flex min-w-0 items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={slotSelected}
+                                    disabled={remainingCapacity === 0}
+                                    onChange={() => toggleBulkSlotSelection(slot.id)}
+                                    className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                    aria-label={`Select ${formatTimetableTime(slot.startTime)} for bulk assignment`}
+                                  />
+                                  <span className="inline-flex min-w-0 items-center gap-1.5 text-base font-black text-slate-950">
+                                    <Clock3 size={15} className="shrink-0 text-sky-700" />
+                                    {formatTimetableTime(slot.startTime)}
+                                    {isDraftSlot ? (
+                                      <span className="text-slate-300">|</span>
+                                    ) : null}
+                                    {isDraftSlot ? (
+                                      <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                        Draft
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </label>
                                 <span className="inline-flex items-center gap-1.5">
                                   <span
                                     className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
@@ -779,17 +937,26 @@ export function CoachDashboardWorkspace({
                                   >
                                     {slot.bookings.length}/{slot.capacity}
                                   </span>
+                                  {!isFull ? (
+                                    <span className="hidden text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-400 2xl:inline">
+                                      {remainingCapacity} open
+                                    </span>
+                                  ) : null}
                                 </span>
                               </div>
                               <div className="grid gap-1">
                                 {slot.bookings.map((booking) => {
                                   const colors = participantColorMap.get(booking.userId);
                                   const releaseRequested = Boolean(booking.releaseRequestedAt);
+                                  const assignmentSelected =
+                                    selectedBulkAssignmentIdSet.has(booking.id);
 
                                   return (
                                     <div key={booking.id} className="grid gap-1.5">
                                       <div
-                                        className="grid w-full rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm"
+                                        className={`grid w-full gap-2 rounded-md border-l-4 px-2.5 py-2 text-left shadow-sm ${
+                                          assignmentSelected ? "ring-2 ring-sky-400" : ""
+                                        }`}
                                         style={{
                                           backgroundColor: colors?.soft,
                                           borderColor:
@@ -799,9 +966,20 @@ export function CoachDashboardWorkspace({
                                           color: colors?.text,
                                         }}
                                       >
-                                        <span className="block truncate text-sm font-black">
-                                          {booking.athleteName}
-                                        </span>
+                                        <label className="flex min-w-0 items-start gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={assignmentSelected}
+                                            onChange={() =>
+                                              toggleBulkAssignmentSelection(booking.id)
+                                            }
+                                            className="mt-0.5 size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                            aria-label={`Select ${booking.athleteName} assignment for release`}
+                                          />
+                                          <span className="block min-w-0 truncate text-sm font-black">
+                                            {booking.athleteName}
+                                          </span>
+                                        </label>
                                         <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold opacity-80">
                                           <span>{booking.minutes} min</span>
                                           {booking.isFinal === false ? (
@@ -949,6 +1127,11 @@ export function CoachDashboardWorkspace({
                           day.slots.map((slot) => {
                             const isFull = slot.bookings.length >= slot.capacity;
                             const isDraftSlot = slot.isPublished === false;
+                            const remainingCapacity = Math.max(
+                              slot.capacity - slot.bookings.length,
+                              0,
+                            );
+                            const slotSelected = selectedBulkSlotIdSet.has(slot.id);
 
                             return (
                               <article
@@ -962,18 +1145,28 @@ export function CoachDashboardWorkspace({
                                 }`}
                               >
                                 <div className="mb-2 flex items-center justify-between gap-2">
-                                  <p className="inline-flex items-center gap-1.5 text-sm font-black">
-                                    <Clock3 size={15} className="text-sky-700" />
-                                    {formatTimetableTime(slot.startTime)}
-                                    {isDraftSlot ? (
-                                      <span className="text-slate-300">|</span>
-                                    ) : null}
-                                    {isDraftSlot ? (
-                                      <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
-                                        Draft
-                                      </span>
-                                    ) : null}
-                                  </p>
+                                  <label className="inline-flex min-w-0 items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={slotSelected}
+                                      disabled={remainingCapacity === 0}
+                                      onChange={() => toggleBulkSlotSelection(slot.id)}
+                                      className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                      aria-label={`Select ${formatTimetableTime(slot.startTime)} for bulk assignment`}
+                                    />
+                                    <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-black">
+                                      <Clock3 size={15} className="shrink-0 text-sky-700" />
+                                      {formatTimetableTime(slot.startTime)}
+                                      {isDraftSlot ? (
+                                        <span className="text-slate-300">|</span>
+                                      ) : null}
+                                      {isDraftSlot ? (
+                                        <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                          Draft
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </label>
                                   <span className="inline-flex items-center gap-1.5">
                                     <span
                                       className={`rounded-full px-2 py-0.5 text-[0.68rem] font-black ${
@@ -989,22 +1182,15 @@ export function CoachDashboardWorkspace({
                                 <div className="grid gap-1">
                                   {slot.bookings.map((booking) => {
                                     const colors = participantColorMap.get(booking.userId);
+                                    const assignmentSelected =
+                                      selectedBulkAssignmentIdSet.has(booking.id);
 
                                     return (
-                                      <button
+                                      <div
                                         key={booking.id}
-                                        type="button"
-                                        onClick={() => {
-                                          const match =
-                                            workspaceIndexes?.participantsByUserId.get(
-                                              booking.userId,
-                                            );
-                                          if (match) {
-                                            setSelectedParticipantId(match.id);
-                                            setTabletPanel("participant");
-                                          }
-                                        }}
-                                        className="grid rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm"
+                                        className={`grid gap-2 rounded-md border-l-4 px-2.5 py-2 text-left text-white shadow-sm ${
+                                          assignmentSelected ? "ring-2 ring-sky-300" : ""
+                                        }`}
                                         style={{
                                           backgroundColor: colors?.bg,
                                           borderColor:
@@ -1013,9 +1199,35 @@ export function CoachDashboardWorkspace({
                                               : colors?.bg,
                                         }}
                                       >
-                                        <span className="block truncate text-sm font-black">
-                                          {booking.athleteName}
-                                        </span>
+                                        <div className="flex min-w-0 items-start gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={assignmentSelected}
+                                            onChange={() =>
+                                              toggleBulkAssignmentSelection(booking.id)
+                                            }
+                                            className="mt-0.5 size-4 rounded border-white/60 text-sky-600 focus:ring-sky-500"
+                                            aria-label={`Select ${booking.athleteName} assignment for release`}
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const match =
+                                                workspaceIndexes?.participantsByUserId.get(
+                                                  booking.userId,
+                                                );
+                                              if (match) {
+                                                setSelectedParticipantId(match.id);
+                                                setTabletPanel("participant");
+                                              }
+                                            }}
+                                            className="min-w-0 flex-1 text-left"
+                                          >
+                                            <span className="block truncate text-sm font-black">
+                                              {booking.athleteName}
+                                            </span>
+                                          </button>
+                                        </div>
                                         <span className="flex items-center gap-2 text-xs font-bold text-white/80">
                                           <span>{booking.minutes} min</span>
                                           {booking.isFinal === false ? (
@@ -1024,7 +1236,7 @@ export function CoachDashboardWorkspace({
                                             </span>
                                           ) : null}
                                         </span>
-                                      </button>
+                                      </div>
                                     );
                                   })}
                                   {Array.from({
@@ -1133,6 +1345,149 @@ export function CoachDashboardWorkspace({
           </p>
         </div>
       </main>
+      {activeSelectedBulkSlotIds.length > 0 || activeSelectedBulkAssignmentIds.length > 0 ? (
+        <div className="fixed inset-x-3 bottom-5 z-50 md:left-1/2 md:w-[min(44rem,calc(100vw-2rem))] md:-translate-x-1/2">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-2xl">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500">
+              {activeSelectedBulkSlotIds.length > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                  <CheckSquare size={14} /> {activeSelectedBulkSlotIds.length} slots
+                </span>
+              ) : null}
+              {activeSelectedBulkAssignmentIds.length > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">
+                  <Trash2 size={14} /> {activeSelectedBulkAssignmentIds.length} assignments
+                </span>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkAssignOpen(true)}
+                disabled={activeSelectedBulkSlotIds.length === 0 || isBulkPending}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-sky-600 px-3 text-xs font-black text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <UserPlus size={15} /> Assign
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBulkReleaseOpen(true)}
+                disabled={activeSelectedBulkAssignmentIds.length === 0 || isBulkPending}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-rose-600 px-3 text-xs font-black text-white shadow-sm transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <Trash2 size={15} /> Release
+              </button>
+              <button
+                type="button"
+                onClick={clearBulkSelection}
+                disabled={isBulkPending}
+                className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                Clear
+              </button>
+            </div>
+            {bulkError || bulkMessage ? (
+              <p
+                className={`basis-full rounded-xl px-3 py-2 text-sm font-bold ${
+                  bulkError ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {bulkError || bulkMessage}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {isBulkAssignOpen && isBulkSelectionForActiveCamp ? (
+        <CenteredModal title="Assign selected slots" onClose={() => setIsBulkAssignOpen(false)}>
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+              <p className="text-sm font-black text-sky-900">
+                {activeSelectedBulkSlotIds.length} selected slots
+              </p>
+              <p className="mt-1 text-sm font-semibold text-sky-700">
+                Choose an accepted camp participant. Planning dummy participants stay internal.
+              </p>
+            </div>
+            <div className="grid max-h-[60dvh] gap-2 overflow-y-auto pr-1">
+              {bulkAssignableParticipants.map((participant) => {
+                const isAssigning = pendingBulkParticipantId === participant.userId;
+
+                return (
+                  <button
+                    key={participant.id}
+                    type="button"
+                    onClick={() => assignBulkSlots(participant.userId)}
+                    disabled={isBulkPending}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-black text-slate-950">
+                        {participant.name}
+                      </span>
+                      {participant.isDummy ? (
+                        <span className="mt-1 block text-[0.68rem] font-black uppercase tracking-[0.1em] text-sky-700">
+                          Planning only
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 text-xs font-black text-slate-500">
+                      {isAssigning ? "Assigning..." : "Select"}
+                    </span>
+                  </button>
+                );
+              })}
+              {bulkAssignableParticipants.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm font-bold text-slate-500">
+                  No accepted camp participants available.
+                </p>
+              ) : null}
+            </div>
+            {bulkError ? (
+              <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                {bulkError}
+              </p>
+            ) : null}
+          </div>
+        </CenteredModal>
+      ) : null}
+      {isBulkReleaseOpen && isBulkSelectionForActiveCamp ? (
+        <CenteredModal title="Release selected assignments" onClose={() => setIsBulkReleaseOpen(false)}>
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3">
+              <p className="text-sm font-black text-rose-900">
+                Release exactly {activeSelectedBulkAssignmentIds.length} selected assignments?
+              </p>
+              <p className="mt-1 text-sm font-semibold text-rose-700">
+                This only affects the checked assignment rows.
+              </p>
+            </div>
+            {bulkError ? (
+              <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                {bulkError}
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkReleaseOpen(false)}
+                disabled={isBulkPending}
+                className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={releaseBulkAssignments}
+                disabled={isBulkPending}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-3 text-sm font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Trash2 size={16} /> {isBulkPending ? "Releasing..." : "Release"}
+              </button>
+            </div>
+          </div>
+        </CenteredModal>
+      ) : null}
       {headerPanel === "share" ? (
         <CenteredModal title="Utilities" onClose={() => setHeaderPanel(null)}>
           <div className="grid gap-2">

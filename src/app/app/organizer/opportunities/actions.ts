@@ -75,6 +75,20 @@ type SlotBookingDraftSyncResult = {
   notification_created?: unknown;
 };
 
+type BulkSlotAssignmentRpcResult = {
+  requested_count?: unknown;
+  assigned_count?: unknown;
+  skipped_invalid_count?: unknown;
+  skipped_full_count?: unknown;
+  skipped_already_assigned_count?: unknown;
+};
+
+type BulkSlotReleaseRpcResult = {
+  requested_count?: unknown;
+  released_count?: unknown;
+  skipped_invalid_count?: unknown;
+};
+
 type TunnelDashboardShareResult =
   | { ok: true; message: string; tunnelDashboardUrl: string }
   | { ok: false; message: string };
@@ -1572,6 +1586,161 @@ export async function assignParticipantSlotBooking(
   revalidatePath("/app/applications");
 
   return { ok: true, message: "Slot assigned." };
+}
+
+export async function bulkAssignParticipantToSlots(input: {
+  opportunityId: string;
+  participantId: string;
+  slotIds: string[];
+}): Promise<ActionResult> {
+  const normalizedSlotIds = [
+    ...new Set(
+      Array.isArray(input.slotIds)
+        ? input.slotIds.filter((slotId) => typeof slotId === "string" && slotId)
+        : [],
+    ),
+  ];
+
+  if (!input.opportunityId || !input.participantId || normalizedSlotIds.length === 0) {
+    return { ok: false, message: "Choose a participant and at least one slot." };
+  }
+
+  if (normalizedSlotIds.length > 500) {
+    return { ok: false, message: "Too many slots were selected at once." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data, error } = await supabase.rpc("bulk_assign_participant_to_slots", {
+    target_opportunity_id: input.opportunityId,
+    target_participant_id: input.participantId,
+    target_slot_ids: normalizedSlotIds,
+  });
+
+  if (error) {
+    console.error("Bulk slot assignment failed", {
+      opportunityId: input.opportunityId,
+      participantId: input.participantId,
+      organizerId: user.id,
+      selectedSlotCount: normalizedSlotIds.length,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Could not assign selected slots.",
+    };
+  }
+
+  const result =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as BulkSlotAssignmentRpcResult)
+      : null;
+  const assignedCount = Number(result?.assigned_count ?? 0);
+  const skippedFullCount = Number(result?.skipped_full_count ?? 0);
+  const skippedAlreadyAssignedCount = Number(
+    result?.skipped_already_assigned_count ?? 0,
+  );
+  const skippedInvalidCount = Number(result?.skipped_invalid_count ?? 0);
+  const skippedCount =
+    skippedFullCount + skippedAlreadyAssignedCount + skippedInvalidCount;
+
+  revalidatePath(`/app/coach-dashboard/${input.opportunityId}`);
+  revalidatePath("/app/coach-dashboard");
+
+  return {
+    ok: true,
+    message:
+      skippedCount > 0
+        ? `${assignedCount} slots assigned. ${skippedCount} skipped.`
+        : assignedCount > 0
+          ? `${assignedCount} slots assigned.`
+          : "No new slots were assigned.",
+  };
+}
+
+export async function bulkReleaseSlotAssignments(input: {
+  opportunityId: string;
+  bookingIds: string[];
+}): Promise<ActionResult> {
+  const normalizedBookingIds = [
+    ...new Set(
+      Array.isArray(input.bookingIds)
+        ? input.bookingIds.filter((bookingId) => typeof bookingId === "string" && bookingId)
+        : [],
+    ),
+  ];
+
+  if (!input.opportunityId || normalizedBookingIds.length === 0) {
+    return { ok: false, message: "Choose at least one assignment to release." };
+  }
+
+  if (normalizedBookingIds.length > 500) {
+    return { ok: false, message: "Too many assignments were selected at once." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data, error } = await supabase.rpc("bulk_release_slot_assignments", {
+    target_opportunity_id: input.opportunityId,
+    target_booking_ids: normalizedBookingIds,
+  });
+
+  if (error) {
+    console.error("Bulk slot release failed", {
+      opportunityId: input.opportunityId,
+      organizerId: user.id,
+      selectedBookingCount: normalizedBookingIds.length,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Could not release selected assignments.",
+    };
+  }
+
+  const result =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as BulkSlotReleaseRpcResult)
+      : null;
+  const releasedCount = Number(result?.released_count ?? 0);
+  const skippedInvalidCount = Number(result?.skipped_invalid_count ?? 0);
+
+  revalidatePath(`/app/coach-dashboard/${input.opportunityId}`);
+  revalidatePath("/app/coach-dashboard");
+
+  return {
+    ok: true,
+    message:
+      skippedInvalidCount > 0
+        ? `${releasedCount} assignments released. ${skippedInvalidCount} skipped.`
+        : releasedCount > 0
+          ? `${releasedCount} assignments released.`
+          : "No assignments were released.",
+  };
 }
 
 export async function syncParticipantSlotBookingDraft(

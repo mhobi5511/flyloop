@@ -799,10 +799,262 @@ begin
 end;
 $$;
 
+create or replace function public.bulk_assign_participant_to_slots(
+  target_opportunity_id uuid,
+  target_participant_id uuid,
+  target_slot_ids uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  opportunity_record public.opportunities%rowtype;
+  participant_record public.participant_profiles%rowtype;
+  dummy_record public.opportunity_dummy_participants%rowtype;
+  slot_record public.opportunity_time_slots%rowtype;
+  normalized_slot_ids uuid[] := '{}'::uuid[];
+  requested_count integer := 0;
+  valid_slot_count integer := 0;
+  current_booking_count integer := 0;
+  assigned_count integer := 0;
+  skipped_full_count integer := 0;
+  skipped_already_assigned_count integer := 0;
+  skipped_invalid_count integer := 0;
+  is_dummy boolean := false;
+  assigned_slot_ids uuid[] := '{}'::uuid[];
+begin
+  if current_user_id is null then
+    raise exception 'Please log in again'
+      using errcode = '42501';
+  end if;
+
+  if coalesce(cardinality(target_slot_ids), 0) > 500 then
+    raise exception 'Choose no more than 500 slots at once';
+  end if;
+
+  select coalesce(array_agg(slot_id order by slot_id), '{}'::uuid[])
+  into normalized_slot_ids
+  from (
+    select distinct requested_slot_id as slot_id
+    from unnest(coalesce(target_slot_ids, '{}'::uuid[]))
+      as requested_slots(requested_slot_id)
+    where requested_slot_id is not null
+  ) requested_slots;
+
+  requested_count := cardinality(normalized_slot_ids);
+
+  if requested_count = 0 then
+    raise exception 'Choose at least one slot';
+  end if;
+
+  select *
+  into opportunity_record
+  from public.opportunities
+  where id = target_opportunity_id
+  for share;
+
+  if not found or opportunity_record.created_by <> current_user_id then
+    raise exception 'Opportunity not found'
+      using errcode = '42501';
+  end if;
+
+  select *
+  into dummy_record
+  from public.opportunity_dummy_participants
+  where id = target_participant_id
+    and opportunity_id = target_opportunity_id
+  for share;
+
+  if found then
+    is_dummy := true;
+  else
+    select *
+    into participant_record
+    from public.participant_profiles
+    where id = target_participant_id
+      and archived_at is null
+    for share;
+
+    if not found or participant_record.user_id = opportunity_record.created_by then
+      raise exception 'Choose a valid participant';
+    end if;
+
+    if not exists (
+      select 1
+      from public.opportunity_interests oi
+      where oi.opportunity_id = target_opportunity_id
+        and oi.participant_profile_id = target_participant_id
+        and oi.status = 'accepted'
+        and oi.interest_type <> 'timetable_reminder'
+    ) then
+      raise exception 'Only accepted participants can be assigned'
+        using errcode = '42501';
+    end if;
+  end if;
+
+  select count(*)::integer
+  into valid_slot_count
+  from public.opportunity_time_slots ots
+  where ots.opportunity_id = target_opportunity_id
+    and ots.id = any(normalized_slot_ids);
+
+  skipped_invalid_count := requested_count - valid_slot_count;
+
+  for slot_record in
+    select *
+    from public.opportunity_time_slots ots
+    where ots.opportunity_id = target_opportunity_id
+      and ots.id = any(normalized_slot_ids)
+    order by ots.slot_date, ots.start_time, ots.id
+    for update
+  loop
+    if exists (
+      select 1
+      from public.opportunity_slot_bookings existing_booking
+      where existing_booking.slot_id = slot_record.id
+        and (
+          (is_dummy and existing_booking.dummy_participant_id = target_participant_id)
+          or (not is_dummy and existing_booking.participant_profile_id = target_participant_id)
+        )
+    ) then
+      skipped_already_assigned_count := skipped_already_assigned_count + 1;
+      continue;
+    end if;
+
+    select count(*)::integer
+    into current_booking_count
+    from public.opportunity_slot_bookings osb
+    where osb.slot_id = slot_record.id;
+
+    if current_booking_count >= slot_record.capacity then
+      skipped_full_count := skipped_full_count + 1;
+      continue;
+    end if;
+
+    insert into public.opportunity_slot_bookings (
+      slot_id,
+      opportunity_id,
+      user_id,
+      participant_profile_id,
+      dummy_participant_id,
+      minutes,
+      is_final,
+      finalized_at,
+      release_requested_at,
+      release_requested_by
+    )
+    values (
+      slot_record.id,
+      target_opportunity_id,
+      case when is_dummy then null else participant_record.user_id end,
+      case when is_dummy then null else participant_record.id end,
+      case when is_dummy then dummy_record.id else null end,
+      slot_record.duration_minutes,
+      false,
+      null,
+      null,
+      null
+    );
+
+    assigned_count := assigned_count + 1;
+    assigned_slot_ids := array_append(assigned_slot_ids, slot_record.id);
+  end loop;
+
+  return jsonb_build_object(
+    'requested_count', requested_count,
+    'assigned_count', assigned_count,
+    'skipped_invalid_count', skipped_invalid_count,
+    'skipped_full_count', skipped_full_count,
+    'skipped_already_assigned_count', skipped_already_assigned_count,
+    'assigned_slot_ids', assigned_slot_ids
+  );
+end;
+$$;
+
+create or replace function public.bulk_release_slot_assignments(
+  target_opportunity_id uuid,
+  target_booking_ids uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  opportunity_record public.opportunities%rowtype;
+  normalized_booking_ids uuid[] := '{}'::uuid[];
+  requested_count integer := 0;
+  released_count integer := 0;
+  released_booking_ids uuid[] := '{}'::uuid[];
+begin
+  if current_user_id is null then
+    raise exception 'Please log in again'
+      using errcode = '42501';
+  end if;
+
+  if coalesce(cardinality(target_booking_ids), 0) > 500 then
+    raise exception 'Choose no more than 500 assignments at once';
+  end if;
+
+  select coalesce(array_agg(booking_id order by booking_id), '{}'::uuid[])
+  into normalized_booking_ids
+  from (
+    select distinct requested_booking_id as booking_id
+    from unnest(coalesce(target_booking_ids, '{}'::uuid[]))
+      as requested_bookings(requested_booking_id)
+    where requested_booking_id is not null
+  ) requested_bookings;
+
+  requested_count := cardinality(normalized_booking_ids);
+
+  if requested_count = 0 then
+    raise exception 'Choose at least one assignment';
+  end if;
+
+  select *
+  into opportunity_record
+  from public.opportunities
+  where id = target_opportunity_id
+  for share;
+
+  if not found or opportunity_record.created_by <> current_user_id then
+    raise exception 'Opportunity not found'
+      using errcode = '42501';
+  end if;
+
+  with deleted_bookings as (
+    delete from public.opportunity_slot_bookings osb
+    where osb.opportunity_id = target_opportunity_id
+      and osb.id = any(normalized_booking_ids)
+    returning osb.id
+  )
+  select coalesce(array_agg(id order by id), '{}'::uuid[]), count(*)::integer
+  into released_booking_ids, released_count
+  from deleted_bookings;
+
+  return jsonb_build_object(
+    'requested_count', requested_count,
+    'released_count', released_count,
+    'skipped_invalid_count', requested_count - released_count,
+    'released_assignment_ids', released_booking_ids
+  );
+end;
+$$;
+
 revoke execute on function public.create_opportunity_dummy_participant(uuid, text, text, text, text, text) from public;
 revoke execute on function public.create_opportunity_dummy_participant(uuid, text, text, text, text, text) from anon;
 grant execute on function public.create_opportunity_dummy_participant(uuid, text, text, text, text, text) to authenticated;
 
+revoke execute on function public.bulk_assign_participant_to_slots(uuid, uuid, uuid[]) from public;
+revoke execute on function public.bulk_assign_participant_to_slots(uuid, uuid, uuid[]) from anon;
+revoke execute on function public.bulk_release_slot_assignments(uuid, uuid[]) from public;
+revoke execute on function public.bulk_release_slot_assignments(uuid, uuid[]) from anon;
 grant execute on function public.assign_opportunity_slot_booking(uuid, uuid, uuid) to authenticated;
+grant execute on function public.bulk_assign_participant_to_slots(uuid, uuid, uuid[]) to authenticated;
+grant execute on function public.bulk_release_slot_assignments(uuid, uuid[]) to authenticated;
 grant execute on function public.sync_participant_slot_booking_draft(uuid, uuid, uuid[]) to authenticated;
 grant execute on function public.release_participant_slot_bookings(uuid, uuid) to authenticated;
