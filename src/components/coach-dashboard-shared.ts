@@ -11,6 +11,9 @@ export type Participant = {
   id: string;
   interestId: string;
   userId: string;
+  accountUserId: string | null;
+  participantProfileId: string;
+  participantStatus: "registered" | "guest" | "claim_pending" | "archived";
   name: string;
   email: string;
   phone: string;

@@ -104,6 +104,24 @@ type ApplicantRow = {
         profile_image_url: string | null;
       }>
     | null;
+  participant_profiles:
+    | {
+        id: string;
+        user_id: string | null;
+        full_name: string | null;
+        normalized_email: string | null;
+        phone: string | null;
+        status: "registered" | "guest" | "claim_pending" | "archived";
+      }
+    | Array<{
+        id: string;
+        user_id: string | null;
+        full_name: string | null;
+        normalized_email: string | null;
+        phone: string | null;
+        status: "registered" | "guest" | "claim_pending" | "archived";
+      }>
+    | null;
 };
 
 type TimetableSlotRow = {
@@ -118,7 +136,8 @@ type TimetableSlotRow = {
         id: string;
         minutes: number;
         rotation_minutes: number | string | null;
-        user_id: string;
+        user_id: string | null;
+        participant_profile_id: string | null;
         profiles:
           | {
               full_name: string;
@@ -129,6 +148,20 @@ type TimetableSlotRow = {
               full_name: string;
               phone: string | null;
               whatsapp_number: string | null;
+            }>
+          | null;
+        participant_profiles:
+          | {
+              id: string;
+              user_id: string | null;
+              full_name: string | null;
+              phone: string | null;
+            }
+          | Array<{
+              id: string;
+              user_id: string | null;
+              full_name: string | null;
+              phone: string | null;
             }>
           | null;
       }>
@@ -182,13 +215,13 @@ export default async function OrganizerOpportunityPage({
 
   const { data: applicants } = await supabase
     .from("opportunity_interests")
-    .select("id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url)")
+    .select("id,status,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,normalized_email,phone,status)")
     .eq("opportunity_id", id)
     .neq("interest_type", "timetable_reminder")
     .order("created_at", { ascending: false });
   const { data: timetableRows } = await supabase
     .from("opportunity_time_slots")
-    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+    .select("id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,participant_profile_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone))")
     .eq("opportunity_id", id)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
@@ -209,6 +242,9 @@ export default async function OrganizerOpportunityPage({
         const profile = Array.isArray(booking.profiles)
           ? booking.profiles[0]
           : booking.profiles;
+        const participantProfile = Array.isArray(booking.participant_profiles)
+          ? booking.participant_profiles[0]
+          : booking.participant_profiles;
 
         return {
           id: booking.id,
@@ -217,9 +253,13 @@ export default async function OrganizerOpportunityPage({
             booking.rotation_minutes === null
               ? null
               : Number(booking.rotation_minutes),
-          userId: booking.user_id,
-          athleteName: profile?.full_name ?? "Participant",
-          athletePhone: profile?.whatsapp_number ?? profile?.phone ?? "",
+          userId: booking.participant_profile_id ?? participantProfile?.id ?? booking.user_id ?? "",
+          athleteName:
+            participantProfile?.full_name ??
+            profile?.full_name ??
+            "Participant",
+          athletePhone:
+            participantProfile?.phone ?? profile?.whatsapp_number ?? profile?.phone ?? "",
         };
       }),
     }),
@@ -252,10 +292,15 @@ export default async function OrganizerOpportunityPage({
       const profile = Array.isArray(applicant.profiles)
         ? applicant.profiles[0]
         : applicant.profiles;
+      const participantProfile = Array.isArray(applicant.participant_profiles)
+        ? applicant.participant_profiles[0]
+        : applicant.participant_profiles;
+      const participantId = participantProfile?.id ?? profile?.id;
 
       if (
-        !profile?.id ||
-        profile.id === user?.id ||
+        !participantId ||
+        participantProfile?.user_id === user?.id ||
+        profile?.id === user?.id ||
         applicant.status !== "accepted"
       ) {
         return [];
@@ -263,9 +308,9 @@ export default async function OrganizerOpportunityPage({
 
       return [
         {
-          id: profile.id,
-          name: profile.full_name ?? "Participant",
-          bookedMinutes: bookedMinutesByParticipant.get(profile.id) ?? 0,
+          id: participantId,
+          name: participantProfile?.full_name ?? profile?.full_name ?? "Participant",
+          bookedMinutes: bookedMinutesByParticipant.get(participantId) ?? 0,
         },
       ];
     })
@@ -588,7 +633,13 @@ export default async function OrganizerOpportunityPage({
             const profile = Array.isArray(applicant.profiles)
               ? applicant.profiles[0]
               : applicant.profiles;
+            const participantProfile = Array.isArray(applicant.participant_profiles)
+              ? applicant.participant_profiles[0]
+              : applicant.participant_profiles;
             const phone = profile?.whatsapp_number ?? profile?.phone ?? "";
+            const displayPhone = participantProfile?.phone ?? phone;
+            const displayName =
+              participantProfile?.full_name ?? profile?.full_name ?? "Applicant";
             const instagram = profile?.instagram_handle ?? "";
             const hasRemovalRequest =
               !isHuckJam &&
@@ -603,10 +654,10 @@ export default async function OrganizerOpportunityPage({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex min-w-0 gap-2.5">
-                      {profile?.id ? (
-                        <Link href={`/app/users/${profile.id}`}>
+                          {profile?.id ? (
+                            <Link href={`/app/users/${profile.id}`}>
                           <Avatar
-                            name={profile?.full_name}
+                            name={displayName}
                             imageUrl={profile?.profile_image_url}
                             size="sm"
                           />
@@ -625,14 +676,20 @@ export default async function OrganizerOpportunityPage({
                               href={`/app/users/${profile.id}`}
                               className="font-black text-slate-950 hover:text-sky-700"
                             >
-                              {profile?.full_name ?? "Applicant"}
+                              {displayName}
                             </Link>
                           ) : (
                             <h3 className="font-black text-slate-950">
-                              {profile?.full_name ?? "Applicant"}
+                              {displayName}
                             </h3>
                           )}
                           <ApplicationStatusBadge status={applicant.status} />
+                          {participantProfile?.status &&
+                          participantProfile.status !== "registered" ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-black text-slate-500">
+                              Guest
+                            </span>
+                          ) : null}
                           {hasRemovalRequest ? (
                             <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-black text-rose-700">
                               Removal requested
@@ -641,7 +698,7 @@ export default async function OrganizerOpportunityPage({
                         </div>
                         <div className="mt-1 grid gap-0.5 text-xs text-slate-600">
                           <p>{profile?.country ?? "Country not set"}</p>
-                          <p>Phone: {phone || "Not provided"}</p>
+                          <p>Phone: {displayPhone || "Not provided"}</p>
                           {!isHuckJam && applicant.status === "accepted" ? (
                             <>
                               <p>
@@ -668,8 +725,10 @@ export default async function OrganizerOpportunityPage({
                         </div>
                         {applicant.status === "accepted" &&
                         hasPublishedTimetable &&
-                        Boolean(profile?.id) &&
-                        !participantsWithBookings.has(profile?.id ?? "") ? (
+                        Boolean(participantProfile?.id ?? profile?.id) &&
+                        !participantsWithBookings.has(
+                          participantProfile?.id ?? profile?.id ?? "",
+                        ) ? (
                           <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                             <p className="text-xs font-black uppercase tracking-[0.12em] text-amber-700">
                               Requires attention
@@ -684,9 +743,9 @@ export default async function OrganizerOpportunityPage({
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {phone ? (
+                      {displayPhone ? (
                         <a
-                          href={`https://wa.me/${phoneToWhatsAppPath(phone)}`}
+                          href={`https://wa.me/${phoneToWhatsAppPath(displayPhone)}`}
                           className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 text-xs font-bold text-white"
                         >
                           <MessageCircle size={14} /> WhatsApp

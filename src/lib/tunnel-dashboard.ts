@@ -120,7 +120,8 @@ type SlotRow = {
   opportunity_slot_bookings:
     | Array<{
         id: string;
-        user_id: string;
+        user_id: string | null;
+        participant_profile_id: string | null;
         minutes: number;
         rotation_minutes: number | string | null;
         profiles:
@@ -133,6 +134,20 @@ type SlotRow = {
               full_name: string | null;
               phone: string | null;
               whatsapp_number: string | null;
+            }>
+          | null;
+        participant_profiles:
+          | {
+              id: string;
+              user_id: string | null;
+              full_name: string | null;
+              phone: string | null;
+            }
+          | Array<{
+              id: string;
+              user_id: string | null;
+              full_name: string | null;
+              phone: string | null;
             }>
           | null;
       }>
@@ -156,7 +171,8 @@ type EventRow = {
 };
 
 type InterestRow = {
-  athlete_id: string;
+  athlete_id: string | null;
+  participant_profile_id: string | null;
   tunnel_time_status: "owns_tunnel_time" | "needs_tunnel_time" | null;
   tunnel_account_email: string | null;
   updated_at: string;
@@ -252,7 +268,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .maybeSingle(),
     supabase
       .from("opportunity_time_slots")
-      .select("id,slot_date,start_time,duration_minutes,opportunity_slot_bookings(id,user_id,minutes,rotation_minutes,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+      .select("id,slot_date,start_time,duration_minutes,opportunity_slot_bookings(id,user_id,participant_profile_id,minutes,rotation_minutes,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone))")
       .eq("opportunity_id", link.opportunity_id)
       .eq("is_published", true)
       .order("slot_date", { ascending: true })
@@ -265,7 +281,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .limit(100),
     supabase
       .from("opportunity_interests")
-      .select("athlete_id,tunnel_time_status,tunnel_account_email,updated_at")
+      .select("athlete_id,participant_profile_id,tunnel_time_status,tunnel_account_email,updated_at")
       .eq("opportunity_id", link.opportunity_id)
       .eq("status", "accepted")
       .neq("interest_type", "timetable_reminder"),
@@ -365,13 +381,20 @@ function normalizeSlots(rows: SlotRow[], participantEmails: Map<string, string>)
         const profile = Array.isArray(booking.profiles)
           ? booking.profiles[0]
           : booking.profiles;
+        const participantProfile = Array.isArray(booking.participant_profiles)
+          ? booking.participant_profiles[0]
+          : booking.participant_profiles;
+        const participantId =
+          booking.participant_profile_id ?? participantProfile?.id ?? booking.user_id ?? "";
 
         return {
           id: booking.id,
-          userId: booking.user_id,
-          participantName: profile?.full_name ?? "Participant",
-          participantEmail: participantEmails.get(booking.user_id) ?? "",
-          participantPhone: profile?.whatsapp_number ?? profile?.phone ?? "",
+          userId: participantId,
+          participantName:
+            participantProfile?.full_name ?? profile?.full_name ?? "Participant",
+          participantEmail: booking.user_id ? participantEmails.get(booking.user_id) ?? "" : "",
+          participantPhone:
+            participantProfile?.phone ?? profile?.whatsapp_number ?? profile?.phone ?? "",
           minutes: booking.minutes,
           rotationMinutes:
             booking.rotation_minutes === null
@@ -436,13 +459,29 @@ function getParticipants(
 
 function getTunnelTimeByParticipant(rows: InterestRow[]) {
   return new Map(
-    rows.map((row) => [
-      row.athlete_id,
-      {
-        tunnelTimeStatus: row.tunnel_time_status,
-        tunnelAccountEmail: row.tunnel_account_email ?? "",
-      },
-    ]),
+    rows
+      .map((row) => {
+        const participantId = row.participant_profile_id ?? row.athlete_id;
+
+        if (!participantId) {
+          return null;
+        }
+
+        return [
+          participantId,
+          {
+            tunnelTimeStatus: row.tunnel_time_status,
+            tunnelAccountEmail: row.tunnel_account_email ?? "",
+          },
+        ] as const;
+      })
+      .filter((entry): entry is readonly [
+        string,
+        {
+          tunnelTimeStatus: TunnelDashboardParticipant["tunnelTimeStatus"];
+          tunnelAccountEmail: string;
+        },
+      ] => Boolean(entry)),
   );
 }
 
@@ -475,7 +514,9 @@ function collectParticipantIds(rows: SlotRow[]) {
   return [
     ...new Set(
       rows.flatMap((slot) =>
-        (slot.opportunity_slot_bookings ?? []).map((booking) => booking.user_id),
+        (slot.opportunity_slot_bookings ?? [])
+          .map((booking) => booking.user_id)
+          .filter((userId): userId is string => Boolean(userId)),
       ),
     ),
   ];

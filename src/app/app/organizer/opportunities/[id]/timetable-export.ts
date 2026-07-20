@@ -36,7 +36,8 @@ type ExportSlotRow = {
         id: string;
         minutes: number;
         rotation_minutes: number | string | null;
-        user_id: string;
+        user_id: string | null;
+        participant_profile_id: string | null;
         profiles:
           | {
               full_name: string;
@@ -47,6 +48,20 @@ type ExportSlotRow = {
               full_name: string;
               phone: string | null;
               whatsapp_number: string | null;
+            }>
+          | null;
+        participant_profiles:
+          | {
+              id: string;
+              user_id: string | null;
+              full_name: string | null;
+              phone: string | null;
+            }
+          | Array<{
+              id: string;
+              user_id: string | null;
+              full_name: string | null;
+              phone: string | null;
             }>
           | null;
       }>
@@ -76,7 +91,7 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
 
   const { data: slotRows } = await supabase
     .from("opportunity_time_slots")
-    .select("id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number))")
+    .select("id,slot_date,start_time,duration_minutes,capacity,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,participant_profile_id,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone))")
     .eq("opportunity_id", opportunityId)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true });
@@ -110,6 +125,9 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
         const profile = Array.isArray(booking.profiles)
           ? booking.profiles[0]
           : booking.profiles;
+        const participantProfile = Array.isArray(booking.participant_profiles)
+          ? booking.participant_profiles[0]
+          : booking.participant_profiles;
 
         return {
           id: booking.id,
@@ -118,9 +136,10 @@ export async function getOrganizerTimetableExport(opportunityId: string) {
             booking.rotation_minutes === null
               ? null
               : Number(booking.rotation_minutes),
-          userId: booking.user_id,
-          athleteName: profile?.full_name ?? "",
-          athletePhone: profile?.whatsapp_number ?? profile?.phone ?? "",
+          userId: booking.participant_profile_id ?? participantProfile?.id ?? booking.user_id ?? "",
+          athleteName: participantProfile?.full_name ?? profile?.full_name ?? "",
+          athletePhone:
+            participantProfile?.phone ?? profile?.whatsapp_number ?? profile?.phone ?? "",
         };
       }),
     }),

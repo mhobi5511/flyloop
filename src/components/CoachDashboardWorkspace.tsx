@@ -12,14 +12,19 @@ import {
   ChevronRight,
   Clock3,
   CircleDollarSign,
+  Copy,
+  Link as LinkIcon,
   MapPin,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Save,
+  Search,
   Settings,
   Share2,
   Send,
+  UserPlus,
   Users,
   WalletCards,
   X,
@@ -59,6 +64,9 @@ import {
   formatCampPreferenceMinutes,
 } from "@/lib/camp-days";
 import {
+  addExistingParticipantProfileToOpportunity,
+  createGuestParticipantForOpportunity,
+  createParticipantClaimLink,
   setCampParticipantSelfBooking,
 } from "@/app/app/organizer/opportunities/actions";
 import {
@@ -159,6 +167,10 @@ export function CoachDashboardWorkspace({
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [profileModalParticipantId, setProfileModalParticipantId] = useState("");
   const [massBookingParticipantId, setMassBookingParticipantId] = useState("");
+  const [isAddParticipantOpen, setIsAddParticipantOpen] = useState(false);
+  const [participantAdditions, setParticipantAdditions] = useState<
+    Record<string, Participant[]>
+  >({});
   const [selfBookingOverrides, setSelfBookingOverrides] = useState<
     Record<string, boolean>
   >({});
@@ -171,22 +183,31 @@ export function CoachDashboardWorkspace({
     [camps, selectedCampId],
   );
   const activeCamp = useMemo(() => {
-    if (!sourceActiveCamp || Object.keys(selfBookingOverrides).length === 0) {
+    if (!sourceActiveCamp) {
       return sourceActiveCamp;
     }
 
+    const additions = participantAdditions[sourceActiveCamp.id] ?? [];
+    const existingParticipantIds = new Set(
+      sourceActiveCamp.participants.map((participant) => participant.id),
+    );
+    const mergedParticipants = [
+      ...sourceActiveCamp.participants,
+      ...additions.filter((participant) => !existingParticipantIds.has(participant.id)),
+    ];
+
     return {
       ...sourceActiveCamp,
-      participants: sourceActiveCamp.participants.map((participant) =>
+      participants: mergedParticipants.map((participant) =>
         Object.prototype.hasOwnProperty.call(selfBookingOverrides, participant.id)
           ? {
               ...participant,
               selfBookingEnabled: selfBookingOverrides[participant.id],
             }
           : participant,
-      ),
+        ),
     };
-  }, [selfBookingOverrides, sourceActiveCamp]);
+  }, [participantAdditions, selfBookingOverrides, sourceActiveCamp]);
   const workspaceIndexes = useMemo(
     () => (activeCamp ? buildWorkspaceIndexes(activeCamp) : null),
     [activeCamp],
@@ -383,6 +404,23 @@ export function CoachDashboardWorkspace({
     setMassBookingParticipantId(participantId);
   }
 
+  function handleParticipantAdded(participant: Participant) {
+    if (!activeCamp) {
+      return;
+    }
+
+    setParticipantAdditions((current) => {
+      const existing = current[activeCamp.id] ?? [];
+      const withoutDuplicate = existing.filter((item) => item.id !== participant.id);
+      return {
+        ...current,
+        [activeCamp.id]: [...withoutDuplicate, participant],
+      };
+    });
+    setSelectedParticipantId(participant.id);
+    setTabletPanel("participant");
+  }
+
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-950">
       <div className="grid w-full gap-4 p-3 sm:p-4 xl:p-5">
@@ -569,6 +607,13 @@ export function CoachDashboardWorkspace({
                 {isHuckJam ? (
                   <HuckjamSidebarSummary overview={huckjamOverview!} />
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsAddParticipantOpen(true)}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-700"
+                >
+                  <Plus size={17} /> Add Participant
+                </button>
                 <ParticipantColumns
                   participants={activeCamp.participants}
                   selectedParticipantId={selectedParticipantId}
@@ -1051,6 +1096,13 @@ export function CoachDashboardWorkspace({
               ) : (
                 <AttentionPanel items={attention} onAction={handleAttentionClick} />
               )}
+              <button
+                type="button"
+                onClick={() => setIsAddParticipantOpen(true)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-700"
+              >
+                <Plus size={17} /> Add Participant
+              </button>
               <ParticipantColumns
                 participants={activeCamp.participants}
                 selectedParticipantId={selectedParticipantId}
@@ -1148,7 +1200,14 @@ export function CoachDashboardWorkspace({
           />
         </CenteredModal>
       ) : null}
-          {profileModalParticipant ? (
+      {isAddParticipantOpen ? (
+        <AddParticipantModal
+          opportunityId={activeCamp.id}
+          onClose={() => setIsAddParticipantOpen(false)}
+          onAdded={handleParticipantAdded}
+        />
+      ) : null}
+      {profileModalParticipant ? (
         <ParticipantProfileModal
           participant={profileModalParticipant}
           onClose={() => setProfileModalParticipantId("")}
@@ -1165,6 +1224,387 @@ export function CoachDashboardWorkspace({
       </div>
     </div>
   );
+}
+
+type ParticipantSearchResult = {
+  participantProfileId: string;
+  userId: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  status: "registered" | "guest" | "claim_pending" | "archived";
+  alreadyInOpportunity: boolean;
+};
+
+function AddParticipantModal({
+  opportunityId,
+  onClose,
+  onAdded,
+}: {
+  opportunityId: string;
+  onClose: () => void;
+  onAdded: (participant: Participant) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ParticipantSearchResult[]>([]);
+  const [searchError, setSearchError] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [coachNote, setCoachNote] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [createdParticipant, setCreatedParticipant] = useState<Participant | null>(null);
+  const [claimLink, setClaimLink] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+
+    if (trimmedQuery.length < 2) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearching(true);
+
+      try {
+        const params = new URLSearchParams({
+          opportunityId,
+          q: trimmedQuery,
+        });
+        const response = await fetch(`/api/participant-profiles/search?${params}`, {
+          signal: controller.signal,
+        });
+        const payload = (await response.json()) as {
+          results?: ParticipantSearchResult[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          setSearchError(payload.error || "Search failed.");
+          setResults([]);
+          return;
+        }
+
+        setResults(payload.results ?? []);
+      } catch (searchFailure) {
+        if ((searchFailure as Error).name !== "AbortError") {
+          console.error("Participant search failed", searchFailure);
+          setSearchError("Search failed.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [opportunityId, query]);
+
+  function addExisting(result: ParticipantSearchResult) {
+    if (result.alreadyInOpportunity) {
+      setError("This participant is already in the opportunity.");
+      return;
+    }
+
+    setMessage("");
+    setError("");
+
+    startTransition(async () => {
+      const actionResult = await addExistingParticipantProfileToOpportunity({
+        opportunityId,
+        participantProfileId: result.participantProfileId,
+        coachNote,
+      });
+
+      if (!actionResult.ok || !actionResult.participant) {
+        setError(actionResult.message);
+        return;
+      }
+
+      const participant = createParticipantFromAction(actionResult.participant);
+      setCreatedParticipant(participant);
+      onAdded(participant);
+      setMessage(actionResult.message);
+    });
+  }
+
+  function createGuest() {
+    setMessage("");
+    setError("");
+    setClaimLink("");
+
+    startTransition(async () => {
+      const actionResult = await createGuestParticipantForOpportunity({
+        opportunityId,
+        firstName,
+        lastName,
+        email,
+        phone,
+        coachNote,
+      });
+
+      if (!actionResult.ok || !actionResult.participant) {
+        setError(actionResult.message);
+        return;
+      }
+
+      const participant = createParticipantFromAction(actionResult.participant);
+      setCreatedParticipant(participant);
+      onAdded(participant);
+      setMessage(actionResult.message);
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPhone("");
+      setCoachNote("");
+    });
+  }
+
+  function copyInvitationLink() {
+    const participant = createdParticipant;
+
+    if (!participant) {
+      return;
+    }
+
+    setError("");
+
+    startTransition(async () => {
+      const result = await createParticipantClaimLink({
+        opportunityId,
+        participantProfileId: participant.participantProfileId,
+        email: participant.email,
+      });
+
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      const absoluteUrl = new URL(result.claimUrl, window.location.origin).toString();
+      try {
+        await navigator.clipboard.writeText(absoluteUrl);
+        setClaimLink(absoluteUrl);
+        setMessage("Invitation link copied.");
+      } catch {
+        setClaimLink(absoluteUrl);
+        setMessage("Invitation link ready.");
+      }
+    });
+  }
+
+  const canCreateGuest = firstName.trim().length > 0 && lastName.trim().length > 0;
+
+  return (
+    <CenteredModal title="Add Participant" onClose={onClose}>
+      <div className="grid gap-4">
+        <label className="grid gap-1">
+          <span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">
+            Search existing participants
+          </span>
+          <div className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
+            <Search size={17} className="shrink-0 text-slate-400" />
+            <input
+              value={query}
+              onChange={(event) => {
+                setSearchError("");
+                setQuery(event.target.value);
+              }}
+              autoFocus
+              placeholder="Name or email"
+              className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-950 outline-none"
+            />
+          </div>
+        </label>
+
+        {query.trim().length >= 2 ? (
+          <section className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                Matches
+              </h3>
+              <span className="text-xs font-bold text-slate-400">
+                {isSearching ? "Searching..." : `${results.length} found`}
+              </span>
+            </div>
+            {results.map((result) => (
+              <article
+                key={result.participantProfileId}
+                className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-950">
+                      {result.name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      {result.email || result.phone || "No contact detail"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">
+                    {result.status === "registered" ? "Registered" : "Guest"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={isPending || result.alreadyInOpportunity}
+                  onClick={() => addExisting(result)}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:bg-slate-300"
+                >
+                  <UserPlus size={15} />
+                  {result.alreadyInOpportunity ? "Already Added" : "Add Existing"}
+                </button>
+              </article>
+            ))}
+            {!isSearching && results.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 px-3 py-3 text-sm font-bold text-slate-500">
+                No existing participant found.
+              </p>
+            ) : null}
+            {searchError ? (
+              <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                {searchError}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        <section className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            Create Guest Participant
+          </h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <DashboardField label="First Name">
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                className={dashboardInputClass}
+              />
+            </DashboardField>
+            <DashboardField label="Last Name">
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                className={dashboardInputClass}
+              />
+            </DashboardField>
+          </div>
+          <DashboardField label="Email recommended">
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className={dashboardInputClass}
+            />
+          </DashboardField>
+          <DashboardField label="Phone optional">
+            <input
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              className={dashboardInputClass}
+            />
+          </DashboardField>
+          <DashboardField label="Coach Note optional">
+            <textarea
+              value={coachNote}
+              onChange={(event) => setCoachNote(event.target.value)}
+              rows={3}
+              className="min-h-20 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-950 outline-none focus:border-sky-400"
+            />
+          </DashboardField>
+          <button
+            type="button"
+            disabled={isPending || !canCreateGuest}
+            onClick={createGuest}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+          >
+            <Plus size={17} />
+            {isPending ? "Adding..." : "Add Without Invitation"}
+          </button>
+        </section>
+
+        {createdParticipant ? (
+          <section className="grid gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-slate-950">
+                  {createdParticipant.name}
+                </p>
+                <p className="text-xs font-bold text-slate-600">
+                  Added to this opportunity.
+                </p>
+              </div>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
+                {createdParticipant.participantStatus === "registered"
+                  ? "Registered"
+                  : "Guest"}
+              </span>
+            </div>
+            {createdParticipant.participantStatus !== "registered" ? (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={copyInvitationLink}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3 text-sm font-black text-sky-700 transition hover:bg-sky-100 disabled:text-slate-400"
+              >
+                <LinkIcon size={16} /> Copy Invitation Link
+              </button>
+            ) : null}
+            {claimLink ? (
+              <p className="break-all rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-600">
+                {claimLink}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {message ? (
+          <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+            {message}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </CenteredModal>
+  );
+}
+
+function createParticipantFromAction(
+  participant: NonNullable<
+    Awaited<ReturnType<typeof createGuestParticipantForOpportunity>>["participant"]
+  >,
+): Participant {
+  return {
+    ...participant,
+    country: "",
+    city: null,
+    bio: null,
+    instagramHandle: null,
+    websiteUrl: null,
+    youtubeUrl: null,
+    homeTunnelName: null,
+    homeTunnelCity: null,
+    homeTunnelCountry: null,
+    profileImageUrl: "",
+    removalRequestedAt: null,
+    tunnelTimeStatus: null,
+    tunnelAccountEmail: null,
+    selfBookingEnabled: false,
+    profileStats: null,
+  };
 }
 
 function CenteredModal({
@@ -1440,12 +1880,17 @@ function ParticipantColumns({
                             <p className="truncate text-sm font-black text-slate-950">
                               {participant.name}
                             </p>
+                            {participant.participantStatus !== "registered" ? (
+                              <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] text-slate-500">
+                                Guest
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </div>
                       {participant.status === "accepted" ? (
                         <div className="mt-2 grid justify-items-center gap-1.5">
-                          {isCamp ? (
+                          {isCamp && participant.accountUserId ? (
                             <button
                               type="button"
                               disabled={selfBookingPendingIds.has(participant.id)}
@@ -1842,7 +2287,11 @@ function ParticipantPanel({
   );
   const [toggleMessage, setToggleMessage] = useState("");
   const [toggleError, setToggleError] = useState("");
+  const [claimMessage, setClaimMessage] = useState("");
+  const [claimError, setClaimError] = useState("");
+  const [claimLink, setClaimLink] = useState("");
   const [isTogglePending, startToggleTransition] = useTransition();
+  const [isClaimPending, startClaimTransition] = useTransition();
 
   const bookedSlots = camp.timetableSlots.flatMap((slot) =>
     slot.bookings
@@ -1894,6 +2343,35 @@ function ParticipantPanel({
     });
   }
 
+  function copyClaimLink() {
+    setClaimMessage("");
+    setClaimError("");
+
+    startClaimTransition(async () => {
+      const result = await createParticipantClaimLink({
+        opportunityId: camp.id,
+        participantProfileId: participant.participantProfileId,
+        email: participant.email,
+      });
+
+      if (!result.ok) {
+        setClaimError(result.message);
+        return;
+      }
+
+      const absoluteUrl = new URL(result.claimUrl, window.location.origin).toString();
+
+      try {
+        await navigator.clipboard.writeText(absoluteUrl);
+        setClaimMessage("Invitation link copied.");
+      } catch {
+        setClaimMessage("Invitation link ready.");
+      }
+
+      setClaimLink(absoluteUrl);
+    });
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -1912,6 +2390,11 @@ function ParticipantPanel({
               {participant.name}
             </h2>
             <p className="truncate text-sm font-bold text-sky-700">View profile</p>
+            {participant.participantStatus !== "registered" ? (
+              <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">
+                Guest
+              </span>
+            ) : null}
           </div>
         </button>
         <button
@@ -1942,7 +2425,9 @@ function ParticipantPanel({
                 Self-booking
               </p>
               <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
-                Allow this accepted athlete to choose their own flight times.
+                {participant.accountUserId
+                  ? "Allow this accepted athlete to choose their own flight times."
+                  : "Available after this guest claims a Flyloop account."}
               </p>
             </div>
             <span
@@ -1958,7 +2443,7 @@ function ParticipantPanel({
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <button
               type="button"
-              disabled={isTogglePending || selfBookingEnabled}
+              disabled={isTogglePending || selfBookingEnabled || !participant.accountUserId}
               onClick={() => updateSelfBooking(true)}
               className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
             >
@@ -1966,7 +2451,7 @@ function ParticipantPanel({
             </button>
             <button
               type="button"
-              disabled={isTogglePending || !selfBookingEnabled}
+              disabled={isTogglePending || !selfBookingEnabled || !participant.accountUserId}
               onClick={() => updateSelfBooking(false)}
               className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:text-slate-400"
             >
@@ -1989,6 +2474,47 @@ function ParticipantPanel({
           {toggleError ? (
             <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
               {toggleError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {participant.participantStatus !== "registered" ? (
+        <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-sky-700">
+                Guest Invitation
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                Copy a secure claim link and send it through your own channel.
+              </p>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
+              Guest
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={isClaimPending}
+            onClick={copyClaimLink}
+            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-black text-sky-700 ring-1 ring-sky-200 transition hover:bg-sky-100 disabled:text-slate-400"
+          >
+            <Copy size={16} />
+            {isClaimPending ? "Creating..." : "Copy Invitation Link"}
+          </button>
+          {claimLink ? (
+            <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-600">
+              {claimLink}
+            </p>
+          ) : null}
+          {claimMessage ? (
+            <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+              {claimMessage}
+            </p>
+          ) : null}
+          {claimError ? (
+            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+              {claimError}
             </p>
           ) : null}
         </div>
