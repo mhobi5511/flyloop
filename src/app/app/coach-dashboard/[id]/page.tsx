@@ -103,6 +103,17 @@ type CoachOpportunityRow = {
           | null;
       }>
     | null;
+  opportunity_dummy_participants:
+    | Array<{
+        id: string;
+        display_name: string;
+        phone: string | null;
+        email: string | null;
+        coach_note: string | null;
+        label: string | null;
+        created_at: string;
+      }>
+    | null;
   opportunity_time_slots:
     | Array<{
         id: string;
@@ -121,6 +132,7 @@ type CoachOpportunityRow = {
               finalized_at: string | null;
               release_requested_at: string | null;
               participant_profile_id: string | null;
+              dummy_participant_id: string | null;
               profiles:
                 | {
                     full_name: string;
@@ -144,6 +156,18 @@ type CoachOpportunityRow = {
                     id: string;
                     user_id: string | null;
                     full_name: string | null;
+                    phone: string | null;
+                  }>
+                | null;
+              opportunity_dummy_participants:
+                | {
+                    id: string;
+                    display_name: string | null;
+                    phone: string | null;
+                  }
+                | Array<{
+                    id: string;
+                    display_name: string | null;
                     phone: string | null;
                   }>
                 | null;
@@ -172,6 +196,7 @@ type PreferenceRow = {
   opportunity_id: string;
   participant_id: string;
   participant_profile_id: string | null;
+  dummy_participant_id: string | null;
   day_id: number;
   preferred_minutes: number;
 };
@@ -203,7 +228,7 @@ export default async function CoachWorkspaceCampPage({
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,booking_mode,tunnel_time_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,normalized_email,phone,status)),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,participant_profile_id,is_final,finalized_at,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone)))",
+          "id,title,type,booking_mode,tunnel_time_mode,status,start_date,end_date,session_start,session_end,registration_deadline,total_capacity,available_spots,price,currency,min_minutes_or_hours,description,tunnel_id,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,tunnel_time_status,tunnel_account_email,profiles!opportunity_interests_athlete_id_fkey(id,full_name,country,phone,whatsapp_number,instagram_handle,profile_image_url),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,normalized_email,phone,status)),opportunity_dummy_participants(id,display_name,phone,email,coach_note,label,created_at),opportunity_time_slots(id,slot_date,start_time,duration_minutes,capacity,is_published,opportunity_slot_bookings(id,minutes,rotation_minutes,user_id,participant_profile_id,dummy_participant_id,is_final,finalized_at,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone),opportunity_dummy_participants!opportunity_slot_bookings_dummy_participant_id_fkey(id,display_name,phone)))",
         )
         .eq("id", id)
         .eq("created_by", user.id)
@@ -292,7 +317,7 @@ async function toCampWorkspace(
       getFlyloopProfileHistories(supabase, participantIds),
       supabase
         .from("camp_day_preferences")
-        .select("opportunity_id,participant_id,participant_profile_id,day_id,preferred_minutes")
+        .select("opportunity_id,participant_id,participant_profile_id,dummy_participant_id,day_id,preferred_minutes")
         .eq("opportunity_id", row.id)
         .order("day_id", { ascending: true }),
     ]);
@@ -318,7 +343,7 @@ async function toCampWorkspace(
     ]),
   );
 
-  const participants = interests
+  const registeredParticipants: CampWorkspace["participants"] = interests
     .map((interest) => {
       const profile = firstRelation(interest.profiles);
       const participantProfile = firstRelation(interest.participant_profiles);
@@ -337,10 +362,14 @@ async function toCampWorkspace(
         userId: participantProfileId,
         accountUserId,
         participantProfileId,
+        dummyParticipantId: null,
         participantStatus: participantProfile?.status ?? "registered",
+        isDummy: false,
         name: displayName,
         email: participantProfile?.normalized_email ?? "",
         phone: participantProfile?.phone ?? profile?.whatsapp_number ?? profile?.phone ?? "",
+        coachNote: "",
+        label: "",
         country: publicProfile?.country ?? profile?.country ?? "",
         city: publicProfile?.city ?? null,
         bio: publicProfile?.bio ?? null,
@@ -359,7 +388,43 @@ async function toCampWorkspace(
         tunnelAccountEmail: interest.tunnel_account_email,
         profileStats: profileHistory?.stats ?? null,
       };
-    })
+    });
+  const dummyParticipants: CampWorkspace["participants"] = (
+    row.opportunity_dummy_participants ?? []
+  ).map((dummy) => ({
+    id: dummy.id,
+    interestId: dummy.id,
+    userId: dummy.id,
+    accountUserId: null,
+    participantProfileId: "",
+    dummyParticipantId: dummy.id,
+    participantStatus: "dummy",
+    isDummy: true,
+    name: dummy.display_name?.trim() || "Planning participant",
+    email: dummy.email ?? "",
+    phone: dummy.phone ?? "",
+    coachNote: dummy.coach_note ?? "",
+    label: dummy.label ?? "",
+    country: "",
+    city: null,
+    bio: null,
+    instagramHandle: null,
+    websiteUrl: null,
+    youtubeUrl: null,
+    homeTunnelName: null,
+    homeTunnelCity: null,
+    homeTunnelCountry: null,
+    profileImageUrl: "",
+    status: "accepted",
+    selfBookingEnabled: false,
+    createdAt: dummy.created_at,
+    removalRequestedAt: null,
+    tunnelTimeStatus: null,
+    tunnelAccountEmail: null,
+    profileStats: null,
+  }));
+
+  const participants = [...registeredParticipants, ...dummyParticipants]
     .sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name));
 
   const preferenceRows = (preferencesResult.data ?? []) as PreferenceRow[];
@@ -375,7 +440,9 @@ async function toCampWorkspace(
     bookings: (slot.opportunity_slot_bookings ?? []).map((booking) => {
       const bookingProfile = firstRelation(booking.profiles);
       const bookingParticipantProfile = firstRelation(booking.participant_profiles);
+      const bookingDummy = firstRelation(booking.opportunity_dummy_participants);
       const bookingParticipantProfileId =
+        booking.dummy_participant_id ??
         booking.participant_profile_id ??
         bookingParticipantProfile?.id ??
         booking.user_id ??
@@ -387,11 +454,15 @@ async function toCampWorkspace(
         rotationMinutes:
           booking.rotation_minutes === null ? null : Number(booking.rotation_minutes),
         userId: bookingParticipantProfileId,
+        dummyParticipantId: booking.dummy_participant_id,
+        isDummy: Boolean(booking.dummy_participant_id),
         athleteName:
+          bookingDummy?.display_name ??
           bookingParticipantProfile?.full_name ??
           bookingProfile?.full_name ??
           "Participant",
         athletePhone:
+          bookingDummy?.phone ??
           bookingParticipantProfile?.phone ??
           bookingProfile?.whatsapp_number ??
           bookingProfile?.phone ??
@@ -435,7 +506,10 @@ async function toCampWorkspace(
     participants,
     preferences: preferenceRows.map((preference) => ({
       opportunityId: preference.opportunity_id,
-      participantId: preference.participant_profile_id ?? preference.participant_id,
+      participantId:
+        preference.dummy_participant_id ??
+        preference.participant_profile_id ??
+        preference.participant_id,
       dayId: preference.day_id,
       preferredMinutes: preference.preferred_minutes,
     })),

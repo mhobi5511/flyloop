@@ -122,6 +122,7 @@ type SlotRow = {
         id: string;
         user_id: string | null;
         participant_profile_id: string | null;
+        dummy_participant_id: string | null;
         minutes: number;
         rotation_minutes: number | string | null;
         profiles:
@@ -147,6 +148,18 @@ type SlotRow = {
               id: string;
               user_id: string | null;
               full_name: string | null;
+              phone: string | null;
+            }>
+          | null;
+        opportunity_dummy_participants:
+          | {
+              id: string;
+              display_name: string | null;
+              phone: string | null;
+            }
+          | Array<{
+              id: string;
+              display_name: string | null;
               phone: string | null;
             }>
           | null;
@@ -268,7 +281,7 @@ async function loadDashboardForLink(link: DashboardLinkRow) {
       .maybeSingle(),
     supabase
       .from("opportunity_time_slots")
-      .select("id,slot_date,start_time,duration_minutes,opportunity_slot_bookings(id,user_id,participant_profile_id,minutes,rotation_minutes,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone))")
+      .select("id,slot_date,start_time,duration_minutes,opportunity_slot_bookings(id,user_id,participant_profile_id,dummy_participant_id,minutes,rotation_minutes,profiles!opportunity_slot_bookings_user_id_fkey(full_name,phone,whatsapp_number),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name,phone),opportunity_dummy_participants!opportunity_slot_bookings_dummy_participant_id_fkey(id,display_name,phone))")
       .eq("opportunity_id", link.opportunity_id)
       .eq("is_published", true)
       .order("slot_date", { ascending: true })
@@ -384,16 +397,25 @@ function normalizeSlots(rows: SlotRow[], participantEmails: Map<string, string>)
         const participantProfile = Array.isArray(booking.participant_profiles)
           ? booking.participant_profiles[0]
           : booking.participant_profiles;
+        const dummy = Array.isArray(booking.opportunity_dummy_participants)
+          ? booking.opportunity_dummy_participants[0]
+          : booking.opportunity_dummy_participants;
         const participantId =
-          booking.participant_profile_id ?? participantProfile?.id ?? booking.user_id ?? "";
+          booking.dummy_participant_id ??
+          booking.participant_profile_id ??
+          participantProfile?.id ??
+          booking.user_id ??
+          "";
 
         return {
           id: booking.id,
           userId: participantId,
           participantName:
+            dummy?.display_name ??
             participantProfile?.full_name ?? profile?.full_name ?? "Participant",
           participantEmail: booking.user_id ? participantEmails.get(booking.user_id) ?? "" : "",
           participantPhone:
+            dummy?.phone ??
             participantProfile?.phone ?? profile?.whatsapp_number ?? profile?.phone ?? "",
           minutes: booking.minutes,
           rotationMinutes:

@@ -8,6 +8,7 @@ import { assignParticipantSlotBooking } from "@/app/app/organizer/opportunities/
 export type AssignSlotParticipant = {
   id: string;
   name: string;
+  isDummy?: boolean;
   bookedMinutes: number;
   dayLabel?: string;
   dayAssignedMinutes?: number;
@@ -198,6 +199,11 @@ export function AssignSlotButton({
                             <p className="text-base font-black leading-5 tracking-tight text-slate-950">
                               {participant.name}
                             </p>
+                            {participant.isDummy ? (
+                              <p className="mt-1 text-[0.65rem] font-black uppercase tracking-[0.1em] text-sky-700">
+                                Planning only
+                              </p>
+                            ) : null}
                             <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
                               {participant.dayLabel ?? dayLabel}
                             </p>

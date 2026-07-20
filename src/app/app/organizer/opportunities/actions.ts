@@ -8,11 +8,6 @@ import { hasUnreadNotification } from "@/lib/notification-dedupe";
 import { getTunnelDashboardUrl } from "@/lib/tunnel-dashboard";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
-  createClaimToken,
-  hashClaimToken,
-  normalizeParticipantEmail,
-} from "@/lib/participant-profiles";
-import {
   schedulePendingPushNotificationsForOpportunity,
   schedulePendingPushNotificationsForUsers,
 } from "@/lib/push";
@@ -40,21 +35,39 @@ export type GuestParticipantResult = ActionResult & {
   };
 };
 
-type GuestParticipantRpcRow = {
-  interest_id: string;
-  participant_profile_id: string;
-  user_id: string | null;
-  full_name: string;
-  normalized_email: string | null;
-  phone: string | null;
-  status: InterestStatus;
-  participant_status: "registered" | "guest" | "claim_pending" | "archived";
-  created_at: string;
+export type DummyParticipantResult = ActionResult & {
+  participant?: {
+    id: string;
+    interestId: string;
+    userId: string;
+    accountUserId: null;
+    participantProfileId: string;
+    dummyParticipantId: string;
+    participantStatus: "dummy";
+    isDummy: true;
+    name: string;
+    email: string;
+    phone: string;
+    coachNote: string;
+    label: string;
+    status: InterestStatus;
+    createdAt: string;
+  };
 };
 
-type ParticipantClaimLinkResult =
-  | { ok: true; message: string; claimUrl: string; expiresAt: string }
+type OpportunityInviteLinkResult =
+  | { ok: true; message: string; inviteUrl: string }
   | { ok: false; message: string };
+
+type DummyParticipantRpcRow = {
+  dummy_participant_id: string;
+  display_name: string;
+  phone: string | null;
+  email: string | null;
+  coach_note: string | null;
+  label: string | null;
+  created_at: string;
+};
 
 type SlotBookingDraftSyncResult = {
   inserted_count?: unknown;
@@ -92,19 +105,134 @@ function scheduleServerPush(
   schedulePendingPushNotificationsForUsers(userIds, filter, context);
 }
 
-function mapGuestParticipantRow(row: GuestParticipantRpcRow) {
+function mapDummyParticipantRow(row: DummyParticipantRpcRow) {
   return {
-    id: row.participant_profile_id,
-    interestId: row.interest_id,
-    userId: row.participant_profile_id,
-    accountUserId: row.user_id,
-    participantProfileId: row.participant_profile_id,
-    participantStatus: row.participant_status,
-    name: row.full_name?.trim() || "Participant",
-    email: row.normalized_email ?? "",
+    id: row.dummy_participant_id,
+    interestId: row.dummy_participant_id,
+    userId: row.dummy_participant_id,
+    accountUserId: null,
+    participantProfileId: "",
+    dummyParticipantId: row.dummy_participant_id,
+    participantStatus: "dummy" as const,
+    isDummy: true as const,
+    name: row.display_name?.trim() || "Planning participant",
+    email: row.email ?? "",
     phone: row.phone ?? "",
-    status: row.status,
+    coachNote: row.coach_note ?? "",
+    label: row.label ?? "",
+    status: "accepted" as InterestStatus,
     createdAt: row.created_at,
+  };
+}
+
+export async function createOpportunityInviteLink(
+  opportunityId: string,
+): Promise<OpportunityInviteLinkResult> {
+  if (!opportunityId) {
+    return { ok: false, message: "Choose an opportunity." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data: opportunity, error } = await supabase
+    .from("opportunities")
+    .select("id,created_by")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Opportunity invite link lookup failed", {
+      opportunityId,
+      organizerId: user.id,
+      error,
+    });
+    return { ok: false, message: "Could not create invite link." };
+  }
+
+  if (!opportunity || opportunity.created_by !== user.id) {
+    return { ok: false, message: "Opportunity not found." };
+  }
+
+  return {
+    ok: true,
+    message: "Invite link ready.",
+    inviteUrl: `/opportunity/${opportunityId}?from=invite`,
+  };
+}
+
+export async function createDummyParticipantForOpportunity(input: {
+  opportunityId: string;
+  displayName: string;
+  phone?: string;
+  email?: string;
+  coachNote?: string;
+  label?: string;
+}): Promise<DummyParticipantResult> {
+  const displayName = input.displayName.trim();
+
+  if (!input.opportunityId || !displayName) {
+    return { ok: false, message: "Name is required." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Please log in again." };
+  }
+
+  const { data, error } = await supabase.rpc(
+    "create_opportunity_dummy_participant",
+    {
+      target_opportunity_id: input.opportunityId,
+      display_name_value: displayName,
+      phone_value: input.phone?.trim() || null,
+      email_value: input.email?.trim() || null,
+      coach_note_value: input.coachNote?.trim() || null,
+      label_value: input.label?.trim() || null,
+    },
+  );
+
+  if (error) {
+    console.error("Dummy participant creation failed", {
+      opportunityId: input.opportunityId,
+      organizerId: user.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return {
+      ok: false,
+      message: error.message || "Could not create dummy participant.",
+    };
+  }
+
+  const row = Array.isArray(data)
+    ? (data[0] as DummyParticipantRpcRow | undefined)
+    : null;
+
+  if (!row) {
+    return { ok: false, message: "Could not create dummy participant." };
+  }
+
+  revalidatePath(`/app/coach-dashboard/${input.opportunityId}`);
+
+  return {
+    ok: true,
+    message: "Planning dummy created.",
+    participant: mapDummyParticipantRow(row),
   };
 }
 
@@ -116,69 +244,10 @@ export async function createGuestParticipantForOpportunity(input: {
   phone?: string;
   coachNote?: string;
 }): Promise<GuestParticipantResult> {
-  const firstName = input.firstName.trim();
-  const lastName = input.lastName.trim();
-  const normalizedEmail = normalizeParticipantEmail(input.email);
-  const phone = input.phone?.trim() ?? "";
-  const coachNote = input.coachNote?.trim() ?? "";
-
-  if (!input.opportunityId || !firstName || !lastName) {
-    return { ok: false, message: "First and last name are required." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, message: "Please log in again." };
-  }
-
-  const { data, error } = await supabase.rpc(
-    "create_guest_participant_for_opportunity",
-    {
-      target_opportunity_id: input.opportunityId,
-      first_name_value: firstName,
-      last_name_value: lastName,
-      email_value: normalizedEmail,
-      phone_value: phone || null,
-      coach_note: coachNote || null,
-    },
-  );
-
-  if (error) {
-    console.error("Guest participant creation failed", {
-      opportunityId: input.opportunityId,
-      organizerId: user.id,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    return {
-      ok: false,
-      message: error.message || "Could not add guest participant.",
-    };
-  }
-
-  const row = Array.isArray(data) ? (data[0] as GuestParticipantRpcRow | undefined) : null;
-
-  if (!row) {
-    return { ok: false, message: "Could not add guest participant." };
-  }
-
-  revalidatePath(`/app/coach-dashboard/${input.opportunityId}`);
-  revalidatePath(`/app/organizer/opportunities/${input.opportunityId}`);
-
+  void input;
   return {
-    ok: true,
-    message:
-      row.participant_status === "registered"
-        ? "Existing registered participant added."
-        : "Guest participant added.",
-    participant: mapGuestParticipantRow(row),
+    ok: false,
+    message: "Guest profiles have been replaced by opportunity-scoped planning dummies.",
   };
 }
 
@@ -187,148 +256,11 @@ export async function addExistingParticipantProfileToOpportunity(input: {
   participantProfileId: string;
   coachNote?: string;
 }): Promise<GuestParticipantResult> {
-  if (!input.opportunityId || !input.participantProfileId) {
-    return { ok: false, message: "Choose a participant." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, message: "Please log in again." };
-  }
-
-  const { data, error } = await supabase.rpc(
-    "add_participant_profile_to_opportunity",
-    {
-      target_opportunity_id: input.opportunityId,
-      target_participant_profile_id: input.participantProfileId,
-      target_status: "accepted",
-      coach_note: input.coachNote?.trim() || null,
-    },
-  );
-
-  if (error) {
-    console.error("Existing participant add failed", {
-      opportunityId: input.opportunityId,
-      participantProfileId: input.participantProfileId,
-      organizerId: user.id,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    return { ok: false, message: error.message || "Could not add participant." };
-  }
-
-  const row = Array.isArray(data) ? (data[0] as GuestParticipantRpcRow | undefined) : null;
-
-  if (!row) {
-    return { ok: false, message: "Could not add participant." };
-  }
-
-  revalidatePath(`/app/coach-dashboard/${input.opportunityId}`);
-  revalidatePath(`/app/organizer/opportunities/${input.opportunityId}`);
-
+  void input;
   return {
-    ok: true,
-    message: "Participant added.",
-    participant: mapGuestParticipantRow(row),
+    ok: false,
+    message: "Global participant search is no longer available. Invite participants with an opportunity link instead.",
   };
-}
-
-export async function createParticipantClaimLink(input: {
-  opportunityId: string;
-  participantProfileId: string;
-  email?: string;
-}): Promise<ParticipantClaimLinkResult> {
-  if (!input.opportunityId || !input.participantProfileId) {
-    return { ok: false, message: "Choose a participant." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, message: "Please log in again." };
-  }
-
-  const token = createClaimToken();
-  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase.rpc("generate_participant_claim_token", {
-    target_opportunity_id: input.opportunityId,
-    target_participant_profile_id: input.participantProfileId,
-    token_hash_value: hashClaimToken(token),
-    email_value: normalizeParticipantEmail(input.email),
-    expires_in: "14 days",
-  });
-
-  if (error) {
-    console.error("Participant claim link generation failed", {
-      opportunityId: input.opportunityId,
-      participantProfileId: input.participantProfileId,
-      organizerId: user.id,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    return { ok: false, message: error.message || "Could not create claim link." };
-  }
-
-  revalidatePath(`/app/coach-dashboard/${input.opportunityId}`);
-  const claimUrl = `/claim-participant/${token}`;
-
-  return {
-    ok: true,
-    message: "Claim link copied.",
-    claimUrl,
-    expiresAt,
-  };
-}
-
-export async function claimParticipantProfile(rawToken: string): Promise<ActionResult> {
-  const token = rawToken.trim();
-
-  if (!token) {
-    return { ok: false, message: "Claim link is missing." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, message: "Please log in again." };
-  }
-
-  const { error } = await supabase.rpc("claim_participant_profile", {
-    token_hash_value: hashClaimToken(token),
-  });
-
-  if (error) {
-    console.error("Participant profile claim failed", {
-      userId: user.id,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    return { ok: false, message: error.message || "Could not claim profile." };
-  }
-
-  revalidatePath("/app/dashboard");
-  revalidatePath("/app/applications");
-
-  return { ok: true, message: "Participant profile claimed." };
 }
 
 export async function updateApplicantStatus(

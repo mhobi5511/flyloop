@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { Avatar } from "@/components/Avatar";
+import { ModalBackdrop } from "@/components/ModalBackdrop";
 import {
   formatInterestStatusLabel,
   type Participant,
@@ -18,15 +19,14 @@ export function ParticipantProfileModal({
 }) {
   return typeof document !== "undefined"
     ? createPortal(
-        <div
+        <ModalBackdrop
           className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4"
           role="dialog"
           aria-modal="true"
-          onClick={onClose}
+          onBackdropClick={onClose}
         >
           <section
             className="grid max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
               <div>
@@ -180,7 +180,7 @@ export function ParticipantProfileModal({
               </div>
             </div>
           </section>
-        </div>,
+        </ModalBackdrop>,
         document.body,
       )
     : null;
@@ -213,4 +213,3 @@ function CompactMetric({
 function cleanHandle(value: string) {
   return value.replace(/^@/, "").trim();
 }
-

@@ -13,10 +13,14 @@ export type Participant = {
   userId: string;
   accountUserId: string | null;
   participantProfileId: string;
-  participantStatus: "registered" | "guest" | "claim_pending" | "archived";
+  dummyParticipantId: string | null;
+  participantStatus: "registered" | "guest" | "claim_pending" | "archived" | "dummy";
+  isDummy: boolean;
   name: string;
   email: string;
   phone: string;
+  coachNote: string;
+  label: string;
   country: string;
   city: string | null;
   bio: string | null;

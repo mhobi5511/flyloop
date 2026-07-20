@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Save, X } from "lucide-react";
 
 import { syncParticipantSlotBookingDraft } from "@/app/app/organizer/opportunities/actions";
 import { Avatar } from "@/components/Avatar";
+import { ModalBackdrop } from "@/components/ModalBackdrop";
 import {
   formatLongDay,
   getDateRange,
@@ -170,15 +171,14 @@ export function MassBookingModal({
 
   return typeof document !== 'undefined'
     ? createPortal(
-        <div
+        <ModalBackdrop
           className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/50 p-4"
           role="dialog"
           aria-modal="true"
-          onClick={onClose}
+          onBackdropClick={onClose}
         >
           <section
             className="grid max-h-[calc(100dvh-2rem)] w-full max-w-7xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
               <div className="min-w-0">
@@ -456,9 +456,8 @@ export function MassBookingModal({
               </button>
             </div>
           </section>
-        </div>,
+        </ModalBackdrop>,
         document.body,
       )
     : null;
 }
-

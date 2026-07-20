@@ -3,6 +3,8 @@ export type TimetableBooking = {
   minutes: number;
   rotationMinutes: number | null;
   userId: string;
+  dummyParticipantId?: string | null;
+  isDummy?: boolean;
   athleteName: string;
   athletePhone: string;
   isFinal?: boolean;

@@ -75,6 +75,13 @@ type CoachOpportunityRow = {
           | null;
       }>
     | null;
+  opportunity_dummy_participants:
+    | Array<{
+        id: string;
+        display_name: string | null;
+        created_at: string | null;
+      }>
+    | null;
         opportunity_time_slots:
           | Array<{
               id: string;
@@ -84,6 +91,7 @@ type CoachOpportunityRow = {
                       id: string;
                       user_id: string | null;
                       participant_profile_id: string | null;
+                      dummy_participant_id: string | null;
                       is_final: boolean;
                       release_requested_at: string | null;
                       profiles:
@@ -93,6 +101,10 @@ type CoachOpportunityRow = {
                       participant_profiles:
                         | { id: string; user_id: string | null; full_name: string | null }
                         | Array<{ id: string; user_id: string | null; full_name: string | null }>
+                        | null;
+                      opportunity_dummy_participants:
+                        | { id: string; display_name: string | null }
+                        | Array<{ id: string; display_name: string | null }>
                         | null;
             }>
           | null;
@@ -136,7 +148,7 @@ export default async function CoachDashboardPage() {
       supabase
         .from("opportunities")
         .select(
-          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,status)),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,participant_profile_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name)))",
+          "id,title,type,status,start_date,end_date,registration_deadline,tunnel_shared_at,created_at,updated_at,tunnel_profiles(name,city,country),opportunity_interests(id,status,self_booking_enabled,created_at,removal_requested_at,profiles!opportunity_interests_athlete_id_fkey(id,full_name),participant_profiles!opportunity_interests_participant_profile_id_fkey(id,user_id,full_name,status)),opportunity_dummy_participants(id,display_name,created_at),opportunity_time_slots(id,is_published,opportunity_slot_bookings(id,user_id,participant_profile_id,dummy_participant_id,is_final,release_requested_at,profiles!opportunity_slot_bookings_user_id_fkey(id,full_name),participant_profiles!opportunity_slot_bookings_participant_profile_id_fkey(id,user_id,full_name),opportunity_dummy_participants!opportunity_slot_bookings_dummy_participant_id_fkey(id,display_name)))",
         )
         .eq("created_by", user.id)
         .neq("status", "cancelled")
@@ -313,6 +325,18 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
         campTitle: row.title,
       };
     })
+    .concat(
+      (row.opportunity_dummy_participants ?? []).map((dummy) => ({
+        id: dummy.id,
+        interestId: dummy.id,
+        name: dummy.display_name?.trim() || "Planning participant",
+        status: "accepted" as InterestStatus,
+        selfBookingEnabled: false,
+        removalRequestedAt: null,
+        tunnelTimeStatus: null,
+        campTitle: row.title,
+      })),
+    )
     .sort((a, b) => {
       const rankA = statusRank(a.status);
       const rankB = statusRank(b.status);
@@ -341,6 +365,11 @@ function toCampModel(row: CoachOpportunityRow): CoachWorkspaceCamp {
     (row.opportunity_time_slots ?? []).flatMap((slot) =>
       (slot.opportunity_slot_bookings ?? [])
         .map((booking) => booking.participant_profile_id ?? booking.user_id)
+        .concat(
+          (slot.opportunity_slot_bookings ?? [])
+            .map((booking) => booking.dummy_participant_id)
+            .filter(Boolean),
+        )
         .filter(Boolean),
     ),
   );
@@ -411,7 +440,15 @@ function buildAttentionItems(rows: CoachOpportunityRow[]): CoachWorkspaceAttenti
           (participantProfile ? participantProfile.user_id !== null : Boolean(profile?.id)) &&
           interest.self_booking_enabled === true,
       };
-    });
+    }).concat(
+      (row.opportunity_dummy_participants ?? []).map((dummy) => ({
+        id: dummy.id,
+        interestId: dummy.id,
+        name: dummy.display_name?.trim() || "Planning participant",
+        status: "accepted" as InterestStatus,
+        selfBookingEnabled: false,
+      })),
+    );
 
     const waitlistApplicants = applicants.filter(
       (applicant) => applicant.status === "waitlist",
@@ -508,10 +545,12 @@ function buildReleaseRequests(row: CoachOpportunityRow) {
 
       const profile = firstRelation(booking.profiles);
       const participantProfile = firstRelation(booking.participant_profiles);
+      const dummy = firstRelation(booking.opportunity_dummy_participants);
       requests.push({
         id: booking.id,
         bookingId: booking.id,
         name:
+          dummy?.display_name?.trim() ||
           participantProfile?.full_name?.trim() ||
           profile?.full_name?.trim() ||
           "An athlete",

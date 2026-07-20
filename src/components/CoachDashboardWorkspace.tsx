@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Clock3,
   CircleDollarSign,
-  Copy,
+  ExternalLink,
   Link as LinkIcon,
   MapPin,
   Menu,
@@ -20,7 +20,6 @@ import {
   PanelLeftOpen,
   Plus,
   Save,
-  Search,
   Settings,
   Share2,
   Send,
@@ -45,6 +44,7 @@ import {
 } from "@/components/AssignSlotButton";
 import { Avatar } from "@/components/Avatar";
 import { SlotReleaseRequestActions } from "@/components/SlotReleaseRequestActions";
+import { ModalBackdrop } from "@/components/ModalBackdrop";
 import { ShareOpportunityButton } from "@/components/ShareOpportunityButton";
 import { TunnelDashboardShareButton } from "@/components/TunnelDashboardShareButton";
 import {
@@ -64,9 +64,8 @@ import {
   formatCampPreferenceMinutes,
 } from "@/lib/camp-days";
 import {
-  addExistingParticipantProfileToOpportunity,
-  createGuestParticipantForOpportunity,
-  createParticipantClaimLink,
+  createDummyParticipantForOpportunity,
+  createOpportunityInviteLink,
   setCampParticipantSelfBooking,
 } from "@/app/app/organizer/opportunities/actions";
 import {
@@ -1203,6 +1202,8 @@ export function CoachDashboardWorkspace({
       {isAddParticipantOpen ? (
         <AddParticipantModal
           opportunityId={activeCamp.id}
+          opportunityTitle={activeCamp.title}
+          opportunityType={activeCamp.type}
           onClose={() => setIsAddParticipantOpen(false)}
           onAdded={handleParticipantAdded}
         />
@@ -1226,279 +1227,217 @@ export function CoachDashboardWorkspace({
   );
 }
 
-type ParticipantSearchResult = {
-  participantProfileId: string;
-  userId: string | null;
-  name: string;
-  email: string;
-  phone: string;
-  status: "registered" | "guest" | "claim_pending" | "archived";
-  alreadyInOpportunity: boolean;
-};
-
 function AddParticipantModal({
   opportunityId,
+  opportunityTitle,
+  opportunityType,
   onClose,
   onAdded,
 }: {
   opportunityId: string;
+  opportunityTitle: string;
+  opportunityType: "camp" | "huck_jam";
   onClose: () => void;
   onAdded: (participant: Participant) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ParticipantSearchResult[]>([]);
-  const [searchError, setSearchError] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [mode, setMode] = useState<"options" | "invite" | "dummy">("options");
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [coachNote, setCoachNote] = useState("");
+  const [label, setLabel] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [createdParticipant, setCreatedParticipant] = useState<Participant | null>(null);
-  const [claimLink, setClaimLink] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    const trimmedQuery = query.trim();
-
-    if (trimmedQuery.length < 2) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(async () => {
-      setIsSearching(true);
-
-      try {
-        const params = new URLSearchParams({
-          opportunityId,
-          q: trimmedQuery,
-        });
-        const response = await fetch(`/api/participant-profiles/search?${params}`, {
-          signal: controller.signal,
-        });
-        const payload = (await response.json()) as {
-          results?: ParticipantSearchResult[];
-          error?: string;
-        };
-
-        if (!response.ok) {
-          setSearchError(payload.error || "Search failed.");
-          setResults([]);
-          return;
-        }
-
-        setResults(payload.results ?? []);
-      } catch (searchFailure) {
-        if ((searchFailure as Error).name !== "AbortError") {
-          console.error("Participant search failed", searchFailure);
-          setSearchError("Search failed.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsSearching(false);
-        }
-      }
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [opportunityId, query]);
-
-  function addExisting(result: ParticipantSearchResult) {
-    if (result.alreadyInOpportunity) {
-      setError("This participant is already in the opportunity.");
-      return;
-    }
-
+  function generateInviteLink() {
     setMessage("");
     setError("");
 
     startTransition(async () => {
-      const actionResult = await addExistingParticipantProfileToOpportunity({
-        opportunityId,
-        participantProfileId: result.participantProfileId,
-        coachNote,
-      });
-
-      if (!actionResult.ok || !actionResult.participant) {
-        setError(actionResult.message);
-        return;
-      }
-
-      const participant = createParticipantFromAction(actionResult.participant);
-      setCreatedParticipant(participant);
-      onAdded(participant);
-      setMessage(actionResult.message);
-    });
-  }
-
-  function createGuest() {
-    setMessage("");
-    setError("");
-    setClaimLink("");
-
-    startTransition(async () => {
-      const actionResult = await createGuestParticipantForOpportunity({
-        opportunityId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        coachNote,
-      });
-
-      if (!actionResult.ok || !actionResult.participant) {
-        setError(actionResult.message);
-        return;
-      }
-
-      const participant = createParticipantFromAction(actionResult.participant);
-      setCreatedParticipant(participant);
-      onAdded(participant);
-      setMessage(actionResult.message);
-      setFirstName("");
-      setLastName("");
-      setEmail("");
-      setPhone("");
-      setCoachNote("");
-    });
-  }
-
-  function copyInvitationLink() {
-    const participant = createdParticipant;
-
-    if (!participant) {
-      return;
-    }
-
-    setError("");
-
-    startTransition(async () => {
-      const result = await createParticipantClaimLink({
-        opportunityId,
-        participantProfileId: participant.participantProfileId,
-        email: participant.email,
-      });
+      const result = await createOpportunityInviteLink(opportunityId);
 
       if (!result.ok) {
         setError(result.message);
         return;
       }
 
-      const absoluteUrl = new URL(result.claimUrl, window.location.origin).toString();
+      const absoluteUrl = new URL(result.inviteUrl, window.location.origin).toString();
+      setInviteLink(absoluteUrl);
       try {
         await navigator.clipboard.writeText(absoluteUrl);
-        setClaimLink(absoluteUrl);
-        setMessage("Invitation link copied.");
+        setMessage("Invite link copied.");
       } catch {
-        setClaimLink(absoluteUrl);
-        setMessage("Invitation link ready.");
+        setMessage("Invite link ready.");
       }
     });
   }
 
-  const canCreateGuest = firstName.trim().length > 0 && lastName.trim().length > 0;
+  async function shareInvite() {
+    const link = inviteLink || new URL(`/opportunity/${opportunityId}?from=invite`, window.location.origin).toString();
+    const typeLabel = opportunityType === "camp" ? "Camp" : "Huckjam";
+    const shareText = [
+      `Hi, here is the Flyloop link for ${opportunityTitle}:`,
+      "",
+      link,
+      "",
+      `Create your account and you will be taken directly to the ${typeLabel}.`,
+    ].join("\n");
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: opportunityTitle, text: shareText, url: link });
+        return;
+      } catch {
+        // Fall back to WhatsApp below when native sharing is cancelled or unavailable.
+      }
+    }
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+  }
+
+  function createDummy() {
+    setMessage("");
+    setError("");
+
+    startTransition(async () => {
+      const actionResult = await createDummyParticipantForOpportunity({
+        opportunityId,
+        displayName,
+        email,
+        phone,
+        coachNote,
+        label,
+      });
+
+      if (!actionResult.ok || !actionResult.participant) {
+        setError(actionResult.message);
+        return;
+      }
+
+      const participant = createParticipantFromAction(actionResult.participant);
+      onAdded(participant);
+      setMessage(actionResult.message);
+      setDisplayName("");
+      setEmail("");
+      setPhone("");
+      setCoachNote("");
+      setLabel("");
+    });
+  }
+
+  const canCreateDummy = displayName.trim().length > 0;
 
   return (
     <CenteredModal title="Add Participant" onClose={onClose}>
       <div className="grid gap-4">
-        <label className="grid gap-1">
-          <span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">
-            Search existing participants
-          </span>
-          <div className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
-            <Search size={17} className="shrink-0 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => {
-                setSearchError("");
-                setQuery(event.target.value);
-              }}
+        {mode === "options" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
               autoFocus
-              placeholder="Name or email"
-              className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-950 outline-none"
-            />
-          </div>
-        </label>
-
-        {query.trim().length >= 2 ? (
-          <section className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                Matches
-              </h3>
-              <span className="text-xs font-bold text-slate-400">
-                {isSearching ? "Searching..." : `${results.length} found`}
+              onClick={() => setMode("invite")}
+              className="grid min-h-44 gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-sky-300 hover:bg-sky-50"
+            >
+              <span className="grid size-10 place-items-center rounded-xl bg-sky-600 text-white">
+                <LinkIcon size={18} />
               </span>
-            </div>
-            {results.map((result) => (
-              <article
-                key={result.participantProfileId}
-                className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">
-                      {result.name}
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">
-                      {result.email || result.phone || "No contact detail"}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">
-                    {result.status === "registered" ? "Registered" : "Guest"}
-                  </span>
-                </div>
+              <span>
+                <span className="block text-base font-black text-slate-950">
+                  Invite participant to Flyloop
+                </span>
+                <span className="mt-2 block text-sm font-semibold leading-6 text-slate-600">
+                  Create a registration link that can be shared through WhatsApp or another messaging app.
+                </span>
+              </span>
+              <span className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-black text-white">
+                Create invite link
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("dummy")}
+              className="grid min-h-44 gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-sky-300 hover:bg-sky-50"
+            >
+              <span className="grid size-10 place-items-center rounded-xl bg-slate-950 text-white">
+                <UserPlus size={18} />
+              </span>
+              <span>
+                <span className="block text-base font-black text-slate-950">
+                  Add planning dummy
+                </span>
+                <span className="mt-2 block text-sm font-semibold leading-6 text-slate-600">
+                  Add a temporary participant for internal planning only.
+                </span>
+              </span>
+              <span className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white">
+                Create dummy
+              </span>
+            </button>
+          </div>
+        ) : null}
+
+        {mode === "invite" ? (
+          <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+            <button
+              type="button"
+              onClick={() => setMode("options")}
+              className="justify-self-start text-xs font-black text-slate-500"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={generateInviteLink}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
+            >
+              <LinkIcon size={17} />
+              {isPending ? "Creating..." : "Create invite link"}
+            </button>
+            {inviteLink ? (
+              <div className="grid gap-2">
+                <p className="break-all rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
+                  {inviteLink}
+                </p>
                 <button
                   type="button"
-                  disabled={isPending || result.alreadyInOpportunity}
-                  onClick={() => addExisting(result)}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:bg-slate-300"
+                  onClick={shareInvite}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                 >
-                  <UserPlus size={15} />
-                  {result.alreadyInOpportunity ? "Already Added" : "Add Existing"}
+                  <ExternalLink size={16} /> Share via WhatsApp
                 </button>
-              </article>
-            ))}
-            {!isSearching && results.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 px-3 py-3 text-sm font-bold text-slate-500">
-                No existing participant found.
-              </p>
-            ) : null}
-            {searchError ? (
-              <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
-                {searchError}
-              </p>
+              </div>
             ) : null}
           </section>
         ) : null}
 
-        <section className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <h3 className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-            Create Guest Participant
-          </h3>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <DashboardField label="First Name">
+        {mode === "dummy" ? (
+          <section className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <button
+              type="button"
+              onClick={() => setMode("options")}
+              className="justify-self-start text-xs font-black text-slate-500"
+            >
+              Back
+            </button>
+            <DashboardField label="Name">
               <input
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                autoFocus
                 className={dashboardInputClass}
               />
             </DashboardField>
-            <DashboardField label="Last Name">
+            <DashboardField label="Custom label optional">
               <input
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
+                value={label}
+                onChange={(event) => setLabel(event.target.value)}
                 className={dashboardInputClass}
               />
             </DashboardField>
-          </div>
-          <DashboardField label="Email recommended">
+          <DashboardField label="Email optional">
             <input
               type="email"
               value={email}
@@ -1523,48 +1462,14 @@ function AddParticipantModal({
           </DashboardField>
           <button
             type="button"
-            disabled={isPending || !canCreateGuest}
-            onClick={createGuest}
+            disabled={isPending || !canCreateDummy}
+            onClick={createDummy}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 text-sm font-black text-white transition hover:bg-sky-700 disabled:bg-slate-300"
           >
             <Plus size={17} />
-            {isPending ? "Adding..." : "Add Without Invitation"}
+            {isPending ? "Adding..." : "Add"}
           </button>
         </section>
-
-        {createdParticipant ? (
-          <section className="grid gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-slate-950">
-                  {createdParticipant.name}
-                </p>
-                <p className="text-xs font-bold text-slate-600">
-                  Added to this opportunity.
-                </p>
-              </div>
-              <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
-                {createdParticipant.participantStatus === "registered"
-                  ? "Registered"
-                  : "Guest"}
-              </span>
-            </div>
-            {createdParticipant.participantStatus !== "registered" ? (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={copyInvitationLink}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3 text-sm font-black text-sky-700 transition hover:bg-sky-100 disabled:text-slate-400"
-              >
-                <LinkIcon size={16} /> Copy Invitation Link
-              </button>
-            ) : null}
-            {claimLink ? (
-              <p className="break-all rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-600">
-                {claimLink}
-              </p>
-            ) : null}
-          </section>
         ) : null}
 
         {message ? (
@@ -1584,11 +1489,15 @@ function AddParticipantModal({
 
 function createParticipantFromAction(
   participant: NonNullable<
-    Awaited<ReturnType<typeof createGuestParticipantForOpportunity>>["participant"]
+    Awaited<ReturnType<typeof createDummyParticipantForOpportunity>>["participant"]
   >,
 ): Participant {
   return {
     ...participant,
+    dummyParticipantId: participant.dummyParticipantId,
+    isDummy: participant.isDummy,
+    coachNote: participant.coachNote,
+    label: participant.label,
     country: "",
     city: null,
     bio: null,
@@ -1617,15 +1526,14 @@ function CenteredModal({
   onClose: () => void;
 }) {
   return (
-    <div
-        className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
+    <ModalBackdrop
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onBackdropClick={onClose}
     >
       <section
         className="grid max-h-[calc(100dvh-2rem)] w-full max-w-xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
           <h2 className="inline-flex items-center gap-2 text-lg font-black tracking-tight">
@@ -1643,7 +1551,7 @@ function CenteredModal({
         </div>
         <div className="overflow-y-auto p-3">{children}</div>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 
@@ -2287,11 +2195,7 @@ function ParticipantPanel({
   );
   const [toggleMessage, setToggleMessage] = useState("");
   const [toggleError, setToggleError] = useState("");
-  const [claimMessage, setClaimMessage] = useState("");
-  const [claimError, setClaimError] = useState("");
-  const [claimLink, setClaimLink] = useState("");
   const [isTogglePending, startToggleTransition] = useTransition();
-  const [isClaimPending, startClaimTransition] = useTransition();
 
   const bookedSlots = camp.timetableSlots.flatMap((slot) =>
     slot.bookings
@@ -2343,35 +2247,6 @@ function ParticipantPanel({
     });
   }
 
-  function copyClaimLink() {
-    setClaimMessage("");
-    setClaimError("");
-
-    startClaimTransition(async () => {
-      const result = await createParticipantClaimLink({
-        opportunityId: camp.id,
-        participantProfileId: participant.participantProfileId,
-        email: participant.email,
-      });
-
-      if (!result.ok) {
-        setClaimError(result.message);
-        return;
-      }
-
-      const absoluteUrl = new URL(result.claimUrl, window.location.origin).toString();
-
-      try {
-        await navigator.clipboard.writeText(absoluteUrl);
-        setClaimMessage("Invitation link copied.");
-      } catch {
-        setClaimMessage("Invitation link ready.");
-      }
-
-      setClaimLink(absoluteUrl);
-    });
-  }
-
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -2390,7 +2265,11 @@ function ParticipantPanel({
               {participant.name}
             </h2>
             <p className="truncate text-sm font-bold text-sky-700">View profile</p>
-            {participant.participantStatus !== "registered" ? (
+            {participant.isDummy ? (
+              <span className="mt-1 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
+                Planning only
+              </span>
+            ) : participant.participantStatus !== "registered" ? (
               <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">
                 Guest
               </span>
@@ -2417,7 +2296,7 @@ function ParticipantPanel({
           tone={participant.tunnelTimeStatus === "owns_tunnel_time" ? "success" : "slate"}
         />
       </div>
-      {camp.type === "camp" && participant.status === "accepted" ? (
+      {camp.type === "camp" && participant.status === "accepted" && !participant.isDummy ? (
         <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -2478,45 +2357,37 @@ function ParticipantPanel({
           ) : null}
         </div>
       ) : null}
-      {participant.participantStatus !== "registered" ? (
+      {participant.isDummy ? (
         <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-sky-700">
-                Guest Invitation
+                Planning only
               </p>
               <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
-                Copy a secure claim link and send it through your own channel.
+                This dummy belongs only to this opportunity and has no Flyloop account.
+              </p>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
+              Dummy
+            </span>
+          </div>
+        </div>
+      ) : participant.participantStatus !== "registered" ? (
+        <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-sky-700">
+                Legacy guest
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                Claim links are no longer available. Invite this person with the opportunity link instead.
               </p>
             </div>
             <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-sky-700">
               Guest
             </span>
           </div>
-          <button
-            type="button"
-            disabled={isClaimPending}
-            onClick={copyClaimLink}
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-black text-sky-700 ring-1 ring-sky-200 transition hover:bg-sky-100 disabled:text-slate-400"
-          >
-            <Copy size={16} />
-            {isClaimPending ? "Creating..." : "Copy Invitation Link"}
-          </button>
-          {claimLink ? (
-            <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-600">
-              {claimLink}
-            </p>
-          ) : null}
-          {claimMessage ? (
-            <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-              {claimMessage}
-            </p>
-          ) : null}
-          {claimError ? (
-            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
-              {claimError}
-            </p>
-          ) : null}
         </div>
       ) : null}
       {participant.status !== "accepted" ? (
@@ -2555,6 +2426,12 @@ function ParticipantPanel({
           <div className="grid gap-1.5 border-t border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600">
             <p>Email: {participant.email || "No email"}</p>
             <p>Phone: {participant.phone || "Not provided"}</p>
+            {participant.isDummy ? (
+              <>
+                <p>Label: {participant.label || "None"}</p>
+                <p>Note: {participant.coachNote || "None"}</p>
+              </>
+            ) : null}
             <p>
               Tunnel Time:{" "}
               {participant.tunnelTimeStatus === "owns_tunnel_time"
@@ -3170,6 +3047,7 @@ function buildWorkspaceIndexes(camp: CampWorkspace) {
         return {
           id: participant.userId,
           name: participant.name,
+          isDummy: participant.isDummy,
           bookedMinutes: bookedMinutesByUserId.get(participant.userId) ?? 0,
           dayLabel,
           dayAssignedMinutes: assignedMinutes,

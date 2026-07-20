@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Copy, Mail, MessageCircleMore, Share2, X } from "lucide-react";
+import { ModalBackdrop } from "@/components/ModalBackdrop";
 
 type ShareOpportunityButtonProps = {
   label: string;
@@ -156,13 +157,12 @@ export function ShareOpportunityButton({
         <p className="text-center text-xs font-bold text-sky-700">{message}</p>
       ) : null}
       {isModalOpen ? (
-        <div
+        <ModalBackdrop
           className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
-          onClick={() => !isSharing && setIsModalOpen(false)}
+          onBackdropClick={() => !isSharing && setIsModalOpen(false)}
         >
           <section
             className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
               <div className="min-w-0">
@@ -233,7 +233,7 @@ export function ShareOpportunityButton({
               </button>
             </div>
           </section>
-        </div>
+        </ModalBackdrop>
       ) : null}
     </div>
   );
